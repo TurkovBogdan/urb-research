@@ -40,6 +40,9 @@ class Config(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=False,
+        # Пустое значение в .env/env (`SERVER_VITE_PORT=`) = «не задано» → берётся
+        # дефолт. Иначе "" ломает опциональные не-строки (`int | None`) на валидации.
+        env_ignore_empty=True,
     )
 
     # ── APP — идентичность процесса ────────────────────────────────────────

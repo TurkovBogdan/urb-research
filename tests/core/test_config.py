@@ -68,6 +68,16 @@ def test_cors_origins_from_vite_port():
 
 
 @pytest.mark.pure
+def test_empty_optional_int_in_dotenv_uses_default(tmp_path, monkeypatch):
+    """Пустое значение в .env (`SERVER_VITE_PORT=`) = «не задано» → дефолт, а не ""
+    (иначе валидация `int | None` падает). Насиженный .env содержит такие пустые поля."""
+    monkeypatch.delenv("SERVER_VITE_PORT", raising=False)
+    env = tmp_path / ".env"
+    env.write_text("DB_PROVIDER=sqlite\nSERVER_VITE_PORT=\n", encoding="utf-8")
+    assert Config(_env_file=str(env)).server_vite_port is None
+
+
+@pytest.mark.pure
 def test_worker_modules_set_parsing():
     """worker_modules (CSV) → frozenset; пусто → None."""
     assert _config(worker_modules="").worker_modules_set is None
