@@ -65,13 +65,14 @@ def test_seed_creates_env_with_defaults_when_absent(tmp_path, monkeypatch):
     created = env_file.seed_defaults_if_absent(config)
 
     assert created is True
-    values = env_file.read_values([f.key for f in FIELDS])
-    assert set(values) == {f.key for f in FIELDS}  # все поля формы записаны
+    values = env_file.read_values([f.key for f in FIELDS] + ["MCP_TOKEN"])
+    assert {f.key for f in FIELDS} <= set(values)  # все поля формы записаны
     assert values["DB_PROVIDER"] == "sqlite"
     assert values["DB_SSL"] == "true"  # bool → true/false
     assert values["SERVER_PORT"] == "13410"  # int → строка
     assert values["SERVER_VITE_PORT"] == ""  # None → пусто
     assert values["WORKER_ENABLED"] == "false"
+    assert len(values["MCP_TOKEN"]) >= 32  # сгенерирован bearer MCP-серверов
 
 
 @pytest.mark.pure

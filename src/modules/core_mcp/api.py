@@ -85,14 +85,15 @@ def _uv_binary() -> str:
     return shutil.which("uv") or "uv"
 
 
-def _stdio_config(code: str, pin_code: bool) -> str:
+def _stdio_config(code: str, pin_code: bool, token: str) -> str:
     """Конфиг подключения через stdio-обёртку (``app.py --mcp-stdio``).
 
     Клиент сам спавнит лёгкий демон-враппер по stdio — тот лениво поднимает backend и
     мостит вызовы инструментов на ``/mcp/<code>``. Вид единый для Claude Desktop и Claude
     Code. ``uv run --directory <root>`` фиксирует проект независимо от cwd клиента.
     ``MCP_STDIO_CODE`` пинуется только когда серверов несколько (иначе обёртка сама берёт
-    единственный смонтированный).
+    единственный смонтированный). ``MCP_TOKEN`` (bearer MCP-серверов) кладём в env, если
+    он задан — так подключение самодостаточно, не полагается на ``.env`` проекта.
     """
     server: dict[str, Any] = {
         "command": _uv_binary(),
@@ -105,8 +106,13 @@ def _stdio_config(code: str, pin_code: bool) -> str:
             "--mcp-stdio",
         ],
     }
+    env = {}
+    if token:
+        env["MCP_TOKEN"] = token
     if pin_code:
-        server["env"] = {"MCP_STDIO_CODE": code}
+        env["MCP_STDIO_CODE"] = code
+    if env:
+        server["env"] = env
     return json.dumps({"mcpServers": {code: server}}, indent=2, ensure_ascii=False)
 
 
@@ -141,7 +147,11 @@ async def get_server(code: str, request: Request) -> McpServerDetail:
         version=mcp.version,
         instructions=mcp.instructions,
         tools=await _tools(mcp),
-        connection_config=_stdio_config(code, pin_code=len(servers) > 1),
+        connection_config=_stdio_config(
+            code,
+            pin_code=len(servers) > 1,
+            token=request.app.state.config.mcp_token,
+        ),
     )
 
 

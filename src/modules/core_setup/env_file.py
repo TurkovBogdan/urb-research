@@ -9,11 +9,15 @@
 from __future__ import annotations
 
 import re
+import secrets
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 from src.core.config import Config, _env_file
 from src.modules.core_setup.keys import FIELDS, SetupField
+
+_MCP_TOKEN_KEY = "MCP_TOKEN"
+_MCP_TOKEN_BYTES = 32
 
 
 def env_path() -> Path:
@@ -34,10 +38,14 @@ def _config_default(field: SetupField, config: Config) -> str:
 def seed_defaults_if_absent(config: Config) -> bool:
     """Первый запуск без ``.env`` → создать его со значениями по умолчанию из
     ``Config`` (страница настроек показывает реальные дефолты, а не пустые поля).
+    Заодно генерирует ``MCP_TOKEN`` — статический bearer MCP-серверов (пусто =
+    allow-all), чтобы поверхность ``/mcp/<code>`` была защищена с первого старта.
     Возвращает True, если файл был создан."""
     if env_path().is_file():
         return False
-    write_values({f.key: _config_default(f, config) for f in FIELDS})
+    seeded = {f.key: _config_default(f, config) for f in FIELDS}
+    seeded[_MCP_TOKEN_KEY] = secrets.token_urlsafe(_MCP_TOKEN_BYTES)
+    write_values(seeded)
     return True
 
 
