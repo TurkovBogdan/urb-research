@@ -12,11 +12,33 @@ import re
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
-from src.core.config import _env_file
+from src.core.config import Config, _env_file
+from src.modules.core_setup.keys import FIELDS, SetupField
 
 
 def env_path() -> Path:
     return _env_file()
+
+
+def _config_default(field: SetupField, config: Config) -> str:
+    """Дефолт поля из ``Config``: ENV-ключ формы == поле Config в нижнем регистре
+    (конвенция pydantic-settings — имя поля задаёт ENV-переменную)."""
+    value = getattr(config, field.key.lower())
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None:
+        return ""
+    return str(value)
+
+
+def seed_defaults_if_absent(config: Config) -> bool:
+    """Первый запуск без ``.env`` → создать его со значениями по умолчанию из
+    ``Config`` (страница настроек показывает реальные дефолты, а не пустые поля).
+    Возвращает True, если файл был создан."""
+    if env_path().is_file():
+        return False
+    write_values({f.key: _config_default(f, config) for f in FIELDS})
+    return True
 
 
 def _assignment_key(line: str) -> str | None:
@@ -55,4 +77,4 @@ def write_values(updates: Mapping[str, str]) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-__all__ = ["env_path", "read_values", "write_values"]
+__all__ = ["env_path", "read_values", "seed_defaults_if_absent", "write_values"]

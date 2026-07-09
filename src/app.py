@@ -280,8 +280,11 @@ def main(argv: list[str] | None = None) -> int | None:
     _apply_env_overrides(args)
 
     from src.core.config import Config
+    from src.modules.core_setup.env_file import env_path, seed_defaults_if_absent
 
     config = Config()
+    if seed_defaults_if_absent(config):
+        print(f"первый запуск: создан {env_path()} со значениями по умолчанию")
     if not config.server_enabled and not config.worker_enabled:
         # Ни одной поверхности — не ошибка, а валидный no-op (например, процесс,
         # который запускали только под `migrate`). Чистый выход (код 0).
