@@ -1,0 +1,11 @@
+import{aj as p,ak as u,aN as h,af as l,ad as v,aH as f,aK as a,ae as g,ac as i,ai as r,t as _,aX as s,ah as m,aL as e,aS as y,aB as n,aa as M}from"./index-DucitkGq.js";import{_ as x}from"./PageLayout.vue_vue_type_script_setup_true_lang-BWR86Zx6.js";import{I as B}from"./IconArrowLeft-D6XlGFor.js";/**
+ * @license @tabler/icons-vue v3.44.0 - MIT
+ *
+ * This source code is licensed under the MIT license.
+ * See the LICENSE file in the root directory of this source tree.
+ */var C=p("outline","error-404","Error404",[["path",{d:"M3 8v3a1 1 0 0 0 1 1h3",key:"svg-0"}],["path",{d:"M7 8v8",key:"svg-1"}],["path",{d:"M17 8v3a1 1 0 0 0 1 1h3",key:"svg-2"}],["path",{d:"M21 8v8",key:"svg-3"}],["path",{d:"M10 10v4a2 2 0 1 0 4 0v-4a2 2 0 1 0 -4 0",key:"svg-4"}]]);/**
+ * @license @tabler/icons-vue v3.44.0 - MIT
+ *
+ * This source code is licensed under the MIT license.
+ * See the LICENSE file in the root directory of this source tree.
+ */var V=p("outline","home","Home",[["path",{d:"M5 12l-2 0l9 -9l9 9l-2 0",key:"svg-0"}],["path",{d:"M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7",key:"svg-1"}],["path",{d:"M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6",key:"svg-2"}]]);const I={class:"error-state"},N={key:0,class:"error-state__code"},z={class:"error-state__title"},E={class:"error-state__text"},F={class:"error-state__actions"},H=u({__name:"ErrorState",props:{code:{},icon:{type:[Function,Object]},title:{},description:{}},setup(t){const o=y(),{t:c}=h();function d(){o.back()}function k(){o.push("/home")}return(b,w)=>(n(),l("div",I,[(n(),v(f(t.icon),{class:"error-state__icon",size:56,stroke:"1.5"})),t.code?(n(),l("span",N,a(t.code),1)):g("",!0),i("h1",z,a(t.title),1),i("p",E,a(t.description),1),i("div",F,[r(_,{variant:"outlined",size:"large",onClick:d},{prepend:s(()=>[r(e(B),{size:18})]),default:s(()=>[m(" "+a(e(c)("common.errors.action.back")),1)]),_:1}),r(_,{color:"primary",size:"large",flat:"",onClick:k},{prepend:s(()=>[r(e(V),{size:18})]),default:s(()=>[m(" "+a(e(c)("common.errors.action.home")),1)]),_:1})])]))}}),S=M(H,[["__scopeId","data-v-2d45c826"]]),$=u({__name:"NotFoundView",setup(t){const{t:o}=h();return(c,d)=>(n(),v(x,null,{default:s(()=>[r(S,{icon:e(C),title:e(o)("common.errors.notFound.title"),description:e(o)("common.errors.notFound.description")},null,8,["icon","title","description"])]),_:1}))}});export{$ as default};

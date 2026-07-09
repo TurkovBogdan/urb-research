@@ -1,0 +1,85 @@
+{
+  "nav": "Веб-поиск",
+  "nav_queries": "Запросы",
+  "nav_pages": "Страницы",
+  "action": {
+    "refresh": "Обновить",
+    "clear_filters": "Сбросить фильтры",
+    "create": "Создать запрос"
+  },
+  "query": {
+    "status": {
+      "pending": "Ожидает",
+      "processing": "Выполняется",
+      "done": "Готово",
+      "error": "Ошибка"
+    },
+    "col": {
+      "query": "Запрос",
+      "search_engine": "Поисковый движок",
+      "fetch_engine": "Движок контента",
+      "status": "Статус",
+      "created_at": "Создан"
+    },
+    "field": {
+      "search_engine": "Поисковый движок",
+      "fetch_engine": "Движок контента",
+      "created_at": "Создан",
+      "finished_at": "Завершён"
+    },
+    "filter": {
+      "query": "Поиск по тексту запроса",
+      "search_engine": "Поисковый движок",
+      "status": "Статус"
+    },
+    "list": {
+      "title": "Запросы поиска",
+      "description": "История запросов к поисковым движкам и их выдача.",
+      "empty": "Запросов не найдено"
+    },
+    "detail": {
+      "title": "Запрос",
+      "results": "Результаты",
+      "no_results": "У запроса нет результатов."
+    },
+    "create": {
+      "title": "Новый запрос поиска",
+      "query": "Текст запроса",
+      "query_ph": "Что искать…",
+      "pages": "Страниц",
+      "submit": "Запустить",
+      "cancel": "Отмена"
+    }
+  },
+  "page": {
+    "status": {
+      "pending": "Ожидает",
+      "processing": "Получение",
+      "done": "Получено",
+      "error": "Ошибка"
+    },
+    "col": {
+      "url": "URL",
+      "domain": "Домен",
+      "status": "Статус",
+      "created_at": "Создана",
+      "fetched_at": "Получена"
+    },
+    "field": {
+      "fetched_at": "Получена"
+    },
+    "filter": {
+      "query": "Поиск по URL",
+      "status": "Статус"
+    },
+    "list": {
+      "title": "Страницы",
+      "description": "Найденные страницы и их контент в markdown.",
+      "empty": "Страниц не найдено"
+    },
+    "detail": {
+      "title": "Страница",
+      "no_content": "Контент ещё не получен."
+    }
+  }
+}

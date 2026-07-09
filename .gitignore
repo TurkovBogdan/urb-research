@@ -1,0 +1,84 @@
+# agents — AGENTS/ is committed directly; only the root symlinks AGENTS.md/CLAUDE.md are ignored
+.claude/
+/AGENTS.md
+/CLAUDE.md
+# local-only symlinks into private stores (second-brain / other projects) — never publish
+/AGENTS/obsidian
+/AGENTS/semaphore-core
+
+# env / secrets — real .env never committed; example templates are tracked
+.env
+.env.*
+!.env.example
+!.env.example.*
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# node / frontend deps + build caches (web/dist is committed — see below)
+node_modules/
+web/tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# built SPA — web/dist/ IS committed (deploy = git pull; nginx serves it as docroot).
+# Source statics live in web/static/ (Vite publicDir, copied into web/dist on build).
+
+# runtime artifacts — keep the profile dirs, ignore generated content (DB, cache, logs, user files)
+/runtime/*
+!/runtime/dev/
+/runtime/dev/*
+!/runtime/dev/.gitkeep
+!/runtime/test/
+/runtime/test/*
+!/runtime/test/.gitkeep
+!/runtime/prod/
+/runtime/prod/*
+!/runtime/prod/.gitkeep
+
+# file storage — keep the folders, ignore contents.
+# storage/public — served by nginx directly; storage/protected — served only via backend auth.
+/storage/public/*
+!/storage/public/.gitkeep
+/storage/protected/*
+!/storage/protected/.gitkeep
+
+# caches
+.cache/
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# IDE — .idea workspace is local; JetBrains run configs live in dev/.run/ and ARE tracked
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+.directory
+
+# scratch
+/temp/
+
+# bench artifacts — only source (.py/.md) is tracked anywhere under dev/bench
+/dev/bench/**/tmp/
+/dev/bench/**/*.json
+/dev/bench/**/*.jsonl
+/dev/bench/**/*.ndjson
+/dev/bench/**/*.sql
+/dev/bench/**/*.csv
+/dev/bench/**/*.tsv
+/dev/bench/**/*.html
+/dev/bench/**/*.xml
+/dev/bench/**/*.txt
+/dev/bench/**/*.log
+
+# bench sample data — keep the folder, ignore its contents
+/dev/bench/data/*
+!/dev/bench/data/.gitkeep

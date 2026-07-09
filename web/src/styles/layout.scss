@@ -1,0 +1,39 @@
+// ── PageLayout ────────────────────────────────────────────────────────────────
+// Structural shell rendered by `layout/templates/PageLayout.vue`: a vertical flex
+// column with an optional top toolbar, a scrollable content zone and an optional
+// bottom bar. Class names mirror the component's BEM block `page-layout`; the
+// scroll axis is layered on via the `scroll-*` classes (see main.scss), driven by
+// `route.meta.scroll`.
+
+.page-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+
+  // Top toolbar / bottom bar — fixed height, never squeezed by the content zone.
+  &__top,
+  &__bottom {
+    flex-shrink: 0;
+  }
+
+  // The content zone takes the remaining height; scroll axis comes from a
+  // `scroll-*` class added alongside.
+  &__content {
+    flex-grow: 1;
+  }
+
+  // Standard content padding (applied unless `route.meta.padding === false`).
+  // One knob — `--page-layout-pad` — so the value lives in a single place and a
+  // page can override it by setting the var in its own scope (it wins over the
+  // fallback here, for both desktop and mobile). Tightens below the mobile-chrome
+  // cutoff (md = 960px, matching Vuetify `mobileBreakpoint: 'md'`) so phones get
+  // the screen edges back.
+  &__content--padded {
+    padding: var(--page-layout-pad, 24px);
+
+    @media (max-width: 959px) {
+      padding: var(--page-layout-pad, 16px);
+    }
+  }
+}

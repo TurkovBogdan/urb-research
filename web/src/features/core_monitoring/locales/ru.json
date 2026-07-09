@@ -1,0 +1,68 @@
+{
+  "nav": "Задачи",
+  "page": {
+    "title": "Мониторинг",
+    "description": "Фоновые задачи планировщика",
+    "description_updated": "Фоновые задачи планировщика · обновлено {rel}"
+  },
+  "updated": {
+    "just_now": "только что",
+    "sec": "{n} с назад",
+    "min": "{n} мин назад",
+    "hour": "{n} ч назад"
+  },
+  "kpi": {
+    "enabled": "включено",
+    "running": "в работе",
+    "errors24h": "ошибок 24ч"
+  },
+  "filter": {
+    "all": "Все",
+    "running": "В работе",
+    "errors": "Ошибки",
+    "search": {
+      "label": "Поиск задачи",
+      "placeholder": "название, код, модуль, описание"
+    }
+  },
+  "badge": {
+    "enabled": "Включено",
+    "disabled": "Отключено",
+    "manual": "ручной",
+    "ttl": "TTL {n}s"
+  },
+  "stats": {
+    "last24h": "за последние 24 часа",
+    "runs": "запусков",
+    "running": "в работе",
+    "success": "успешных",
+    "errors": "ошибок"
+  },
+  "action": {
+    "refresh": "Обновить",
+    "logs": "Лог запусков"
+  },
+  "empty": {
+    "none": "Нет зарегистрированных задач.",
+    "filtered": "Задач по заданным условиям не найдено."
+  },
+  "runs": {
+    "fallback_title": "Задача",
+    "filter_status": "Статус",
+    "col": {
+      "status": "Статус",
+      "started": "Запущено",
+      "finished": "Завершено",
+      "duration": "Длительность",
+      "error": "Ошибка"
+    },
+    "empty": "Запусков ещё не было",
+    "logs": "Логи",
+    "logs_empty": "Записей нет"
+  },
+  "catalog": {
+    "core": {
+      "heartbeat": { "name": "Heartbeat", "short": "Heartbeat", "description": "Маркер живого планировщика: каждую минуту пишет успешный запуск в core_tasks." }
+    }
+  }
+}

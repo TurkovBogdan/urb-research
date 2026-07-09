@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>Uroboros.Research</title>
+    <!-- Boot splash: shown until Vue mounts (after the first navigation resolves).
+         Vue replaces #app on mount, so the splash needs no JS teardown. Colours =
+         brand tokens (--accent #3B9EFF on --bg #0F1115, see styles/main.scss / vuetify.ts). -->
+    <style>
+      #app-splash {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #0F1115;
+      }
+      #app-splash .spinner {
+        width: 44px;
+        height: 44px;
+        border: 4px solid rgba(59, 158, 255, 0.18);
+        border-top-color: #3B9EFF;
+        border-radius: 50%;
+        animation: app-splash-spin 0.8s linear infinite;
+      }
+      @keyframes app-splash-spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
+    <script type="module" crossorigin src="/assets/index-DucitkGq.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BxTFHnHl.css">
+  </head>
+  <body>
+    <div id="app">
+      <div id="app-splash"><div class="spinner"></div></div>
+    </div>
+  </body>
+</html>

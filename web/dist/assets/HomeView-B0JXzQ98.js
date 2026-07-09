@@ -1,0 +1,16 @@
+import{aj as h,ak as f,aN as w,ad as n,aX as M,ac as e,aK as t,aL as o,af as _,aE as m,F as i,aB as c,o as d,p,n as k,aH as v,ae as I,aa as b}from"./index-DucitkGq.js";import{_ as N}from"./PageLayout.vue_vue_type_script_setup_true_lang-BWR86Zx6.js";/**
+ * @license @tabler/icons-vue v3.44.0 - MIT
+ *
+ * This source code is licensed under the MIT license.
+ * See the LICENSE file in the root directory of this source tree.
+ */var x=h("outline","arrow-narrow-right","ArrowNarrowRight",[["path",{d:"M5 12l14 0",key:"svg-0"}],["path",{d:"M15 16l4 -4",key:"svg-1"}],["path",{d:"M15 8l4 4",key:"svg-2"}]]);/**
+ * @license @tabler/icons-vue v3.44.0 - MIT
+ *
+ * This source code is licensed under the MIT license.
+ * See the LICENSE file in the root directory of this source tree.
+ */var B=h("outline","notes","Notes",[["path",{d:"M5 5a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2l0 -14",key:"svg-0"}],["path",{d:"M9 7l6 0",key:"svg-1"}],["path",{d:"M9 11l6 0",key:"svg-2"}],["path",{d:"M9 15l4 0",key:"svg-3"}]]);/**
+ * @license @tabler/icons-vue v3.44.0 - MIT
+ *
+ * This source code is licensed under the MIT license.
+ * See the LICENSE file in the root directory of this source tree.
+ */var y=h("outline","sitemap","Sitemap",[["path",{d:"M3 17a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v2a2 2 0 0 1 -2 2h-2a2 2 0 0 1 -2 -2l0 -2",key:"svg-0"}],["path",{d:"M15 17a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v2a2 2 0 0 1 -2 2h-2a2 2 0 0 1 -2 -2l0 -2",key:"svg-1"}],["path",{d:"M9 5a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v2a2 2 0 0 1 -2 2h-2a2 2 0 0 1 -2 -2l0 -2",key:"svg-2"}],["path",{d:"M6 15v-1a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v1",key:"svg-3"}],["path",{d:"M12 9l0 3",key:"svg-4"}]]);const S={class:"home"},C={class:"home__hero"},V={class:"home__badge"},$={class:"home__brand"},z={class:"home__title"},H={class:"home__lead"},A={class:"home__flow"},D={class:"home__flow-title"},E={class:"home__flow-track"},F={class:"home__flow-step"},L={class:"home__flow-label"},R={class:"home__grid"},j={class:"home__card-title"},q={class:"home__card-text"},K={class:"home__hint"},T=f({__name:"HomeView",setup(W){const{t:s}=w(),l=[{key:"research",icon:d},{key:"area",icon:y},{key:"query",icon:p},{key:"source",icon:k},{key:"note",icon:B}],g=[{key:"mcp",icon:k},{key:"search",icon:p},{key:"structure",icon:y},{key:"result",icon:d}];return(X,r)=>(c(),n(N,null,{default:M(()=>[e("div",S,[e("div",C,[e("span",V,t(o(s)("common.home.badge")),1),e("div",$,[r[0]||(r[0]=e("span",{class:"home__glyph"},"◈",-1)),e("h1",z,t(o(s)("common.home.title")),1)]),e("p",H,t(o(s)("common.home.lead")),1)]),e("div",A,[e("div",D,t(o(s)("common.home.flow.title")),1),e("div",E,[(c(),_(i,null,m(l,(a,u)=>(c(),_(i,{key:a.key},[e("div",F,[(c(),n(v(a.icon),{class:"home__flow-icon",size:20,stroke:"1.5"})),e("span",L,t(o(s)(`common.home.flow.steps.${a.key}`)),1)]),u<l.length-1?(c(),n(o(x),{key:0,class:"home__flow-arrow",size:18,stroke:"1.5"})):I("",!0)],64))),64))])]),e("div",R,[(c(),_(i,null,m(g,a=>e("div",{key:a.key,class:"home__card"},[(c(),n(v(a.icon),{class:"home__card-icon",size:24,stroke:"1.5"})),e("h2",j,t(o(s)(`common.home.capabilities.${a.key}.title`)),1),e("p",q,t(o(s)(`common.home.capabilities.${a.key}.text`)),1)])),64))]),e("p",K,t(o(s)("common.home.hint")),1)])]),_:1}))}}),O=b(T,[["__scopeId","data-v-e46de5ef"]]);export{O as default};

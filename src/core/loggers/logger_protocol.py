@@ -1,0 +1,19 @@
+"""Контракт логгера ядра."""
+
+from __future__ import annotations
+
+from typing import Any, Protocol
+
+
+class CoreLoggerProtocol(Protocol):
+    """Минимальный набор методов, который должен предоставить любой логгер."""
+
+    def debug(self, msg: Any, *args: Any, **kwargs: Any) -> None: ...
+    def info(self, msg: Any, *args: Any, **kwargs: Any) -> None: ...
+    def warning(self, msg: Any, *args: Any, **kwargs: Any) -> None: ...
+    def error(self, msg: Any, *args: Any, **kwargs: Any) -> None: ...
+    def exception(self, msg: Any, *args: Any, **kwargs: Any) -> None: ...
+    def set_level(self, level: int | str) -> None: ...
+
+
+__all__ = ["CoreLoggerProtocol"]

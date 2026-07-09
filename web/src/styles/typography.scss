@@ -1,0 +1,7 @@
+// ── Typography helpers ─────────────────────────────────────────────────────────
+// Reusable text utilities. The font families themselves live as design tokens
+// (--font / --font-mono) in main.scss; these classes apply them by name.
+
+// Monospace text (JetBrains Mono). Replaces the per-component `.mono` copies that
+// each redeclared `font-family: var(--font-mono)`.
+.font-mono { font-family: var(--font-mono); }

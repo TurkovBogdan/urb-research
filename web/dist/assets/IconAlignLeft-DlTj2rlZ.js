@@ -1,0 +1,6 @@
+import{aj as e}from"./index-DucitkGq.js";/**
+ * @license @tabler/icons-vue v3.44.0 - MIT
+ *
+ * This source code is licensed under the MIT license.
+ * See the LICENSE file in the root directory of this source tree.
+ */var a=e("outline","align-left","AlignLeft",[["path",{d:"M4 6l16 0",key:"svg-0"}],["path",{d:"M4 12l10 0",key:"svg-1"}],["path",{d:"M4 18l14 0",key:"svg-2"}]]);export{a as I};

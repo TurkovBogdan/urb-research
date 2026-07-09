@@ -1,0 +1,54 @@
+// ── Route content transitions ────────────────────────────────────────────────
+// Named transitions for the content-zone <Transition> in App.vue. A route picks one
+// via `meta.transition` (default 'page'); the sidebar lives outside RouterView, so
+// only the body animates. The wrapper uses mode="out-in" + appear (animates on first
+// paint too). See AGENTS/docs/frontend-route-meta.md.
+//
+// Naming convention — for a transition named `x`, define two phases:
+//
+//   ENTER (new page appears):
+//     .x-enter-from    → hidden start state (applied for one frame)
+//     .x-enter-active  → the transition (duration + easing of the animated props)
+//                        Vue swaps from `-enter-from` to the resting state, animating.
+//
+//   LEAVE (old page disappears):
+//     .x-leave-to      → hidden end state (animated towards)
+//     .x-leave-active  → the transition
+//
+// Rules of thumb:
+//   - Put `transition:` on `*-active`; put the hidden values on `*-enter-from`/`*-leave-to`.
+//   - Animate cheap props only (opacity/transform) — never width/height/top/left.
+//   - A name with NO matching CSS renders instantly (e.g. meta.transition: 'none').
+//   - Add a new option here, then set `meta.transition: '<name>'` on the route.
+
+// 'page' — default: fade + slight vertical rise.
+.page-enter-active,
+.page-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.page-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+// 'fade' — pure opacity, no movement.
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+// Reduced motion — keep the fade, drop the movement.
+@media (prefers-reduced-motion: reduce) {
+  .page-enter-from,
+  .page-leave-to {
+    transform: none;
+  }
+}

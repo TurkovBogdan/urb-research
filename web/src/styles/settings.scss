@@ -1,0 +1,17 @@
+// Vuetify SASS variable overrides.
+// Только переменные — никаких стилей, иначе они дублируются в каждый компонент.
+@forward 'vuetify/settings' with (
+
+  // ── VSwitch (inset) ────────────────────────────────────────────────────────
+  // По умолчанию: track 52×32px, thumb ON 24px, thumb OFF 16px, opacity 0.6
+  $switch-inset-track-width:      34px,
+  $switch-inset-track-height:     20px,
+  // thumb 12px в треке 20px → 4px зазор сверху/снизу, offset 3px → 3px от краёв
+  $switch-inset-thumb-width:      12px,
+  $switch-inset-thumb-height:     12px,
+  $switch-inset-thumb-off-width:  12px,
+  $switch-inset-thumb-off-height: 12px,
+  $switch-thumb-offset:           4px,
+  $switch-track-opacity:          1,
+
+);
