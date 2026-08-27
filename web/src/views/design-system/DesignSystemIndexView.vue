@@ -10,7 +10,8 @@ import {
   IconAlertTriangle, IconBellRinging, IconInfoCircle, IconLayoutKanban, IconArrowsHorizontal, IconTags,
   IconLayoutBottombarExpand, IconToggleLeft, IconPaperclip,
   IconMessages, IconMail, IconChevronDown, IconUsersGroup, IconMoodSmile,
-  IconMoodSad, IconHeading, IconPalette, IconBrush,
+  IconMoodSad, IconHeading, IconPalette, IconBrush, IconLayoutList, IconLayoutNavbar,
+  IconSearch,
 } from '@tabler/icons-vue'
 import type { TablerIcon } from '@/shared/nav'
 import PageLayout from '@/layout/templates/PageLayout.vue'
@@ -45,6 +46,7 @@ const groups: Group[] = [
       { slug: 'button-group', icon: IconLayoutColumns },
       { slug: 'selects',      icon: IconSelector },
       { slug: 'inputs',       icon: IconForms },
+      { slug: 'search-field', icon: IconSearch },
       { slug: 'numbers',      icon: IconCurrencyRubel },
       { slug: 'toggle',       icon: IconToggleRight },
       { slug: 'sliders',      icon: IconAdjustmentsHorizontal },
@@ -55,12 +57,12 @@ const groups: Group[] = [
     ],
   },
   {
-    key: 'data',
+    key: 'tables',
     pages: [
+      { slug: 'table-page',  icon: IconLayoutList },
       { slug: 'data-table',  icon: IconTable },
       { slug: 'table',       icon: IconTableRow },
       { slug: 'pagination',  icon: IconPageBreak },
-      { slug: 'world-map',   icon: IconWorld },
     ],
   },
   {
@@ -69,6 +71,7 @@ const groups: Group[] = [
       { slug: 'line-chart', icon: IconChartLine },
       { slug: 'bar-chart',  icon: IconChartBar },
       { slug: 'pie-chart',  icon: IconChartPie },
+      { slug: 'world-map',  icon: IconWorld },
     ],
   },
   {
@@ -104,6 +107,7 @@ const groups: Group[] = [
       { slug: 'file-cards',   icon: IconPaperclip },
       { slug: 'spoiler',      icon: IconChevronDown },
       { slug: 'members-cell', icon: IconUsersGroup },
+      { slug: 'page-header', icon: IconLayoutNavbar },
       { slug: 'section-header', icon: IconHeading },
     ],
   },
