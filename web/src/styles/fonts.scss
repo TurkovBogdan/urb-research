@@ -6,7 +6,8 @@
 //
 // The libre families are Google's own per-subset variable builds, served verbatim:
 // the binaries are not re-cut, so the OFL Reserved Font Name clause never comes into
-// play. Each licence sits next to the files as `assets/fonts/OFL-<family>.txt`.
+// play. One family = one directory `assets/fonts/<family>/`, holding every cut it
+// ships plus its licence as `OFL.txt`.
 
 // Subsetting is what keeps the choice cheap: a family the user has not selected is
 // never requested, and a selected one downloads only the ranges its text actually
@@ -33,7 +34,7 @@ $font-subsets: (
       font-style: normal;
       font-weight: $weights;
       font-display: swap;
-      src: url('../assets/fonts/#{$slug}-#{$subset}.woff2') format('woff2');
+      src: url('../assets/fonts/#{$slug}/#{$subset}.woff2') format('woff2');
       unicode-range: $range;
     }
   }
@@ -46,8 +47,8 @@ $font-subsets: (
   font-style: normal;
   font-weight: 100 900;
   font-display: swap;
-  src: url('../assets/fonts/onest.woff2') format('woff2'),
-       url('../assets/fonts/onest.woff')  format('woff');
+  src: url('../assets/fonts/onest/regular.woff2') format('woff2'),
+       url('../assets/fonts/onest/regular.woff')  format('woff');
 }
 
 // JetBrains Mono — code, in prose and in the CodeBlock component (variable, wght 100–800).
@@ -56,8 +57,8 @@ $font-subsets: (
   font-style: normal;
   font-weight: 100 800;
   font-display: swap;
-  src: url('../assets/fonts/jetbrains-mono.woff2') format('woff2'),
-       url('../assets/fonts/jetbrains-mono.woff')  format('woff');
+  src: url('../assets/fonts/jetbrains-mono/regular.woff2') format('woff2'),
+       url('../assets/fonts/jetbrains-mono/regular.woff')  format('woff');
 }
 
 @font-face {
@@ -65,8 +66,8 @@ $font-subsets: (
   font-style: italic;
   font-weight: 100 800;
   font-display: swap;
-  src: url('../assets/fonts/jetbrains-mono-italic.woff2') format('woff2'),
-       url('../assets/fonts/jetbrains-mono-italic.woff')  format('woff');
+  src: url('../assets/fonts/jetbrains-mono/italic.woff2') format('woff2'),
+       url('../assets/fonts/jetbrains-mono/italic.woff')  format('woff');
 }
 
 // Golos Text — Cyrillic-first grotesque drawn for reading rather than for interfaces.
