@@ -26,7 +26,7 @@ SOURCE_DOCUMENT_CODE_PREFIX = "SOURCE"
 SEARCH_CODE_PREFIX = "SEARCH"  # web_search_query (референс из research)
 PAGE_CODE_PREFIX = "PAGE"  # web_search_page (референс из research)
 
-# Что делать с исследованиями полки при её удалении. Полка — раскладка, поэтому по умолчанию
+# Что делать с исследованиями группы при её удалении. Группа — раскладка, поэтому по умолчанию
 # исследования переживают её (``detach``); остальные два варианта человек выбирает явно.
 GROUP_RESEARCHES_DETACH = "detach"
 GROUP_RESEARCHES_MOVE = "move"

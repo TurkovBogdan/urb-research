@@ -1,7 +1,7 @@
 """research: research_index.group_code
 
-Adds ``research_index.group_code`` — nullable FK → ``research_group.code`` (``SET NULL``): полка,
-на которой лежит исследование, ``NULL`` = не разложено. Существующие строки получают ``NULL``,
+Adds ``research_index.group_code`` — nullable FK → ``research_group.code`` (``SET NULL``): группа,
+в которую входит исследование, ``NULL`` = не разложено. Существующие строки получают ``NULL``,
 бэкфилла нет. Физически колонка ложится в хвост таблицы, логический порядок — сразу после ``code``,
 как в ``models/research.py::Research``.
 

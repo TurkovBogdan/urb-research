@@ -1,6 +1,6 @@
 """research: research_group table
 
-Creates ``research_group`` — справочник-полка для раскладки исследований (title/description/icon
+Creates ``research_group`` — справочник для раскладки исследований (title/description/icon
 + color + sort, больший sort = выше). Имена иконки и цвета — из палитр ``icons.py`` / ``colors.py``,
 в БД не валидируются. Column order mirrors ``models/group.py::ResearchGroup``. String PK
 ``code`` (голый 22-hex, префикс ``GROUP@`` — презентация). Ссылку с исследования (колонка

@@ -60,7 +60,7 @@ def _oldest_first(rows: list) -> list:
 
 
 async def _resolve_group(group_code: str | None):
-    """Голый код полки → её строка; ``""``/``None`` — полка не задана. Промах кода — ошибка."""
+    """Голый код группы → её строка; ``""``/``None`` — группа не задана. Промах кода — ошибка."""
     if not group_code:
         return None
     group = await group_crud.group_get(group_code)
@@ -99,9 +99,9 @@ def register(mcp: "FastMCP") -> None:
         """Return one research in full — its fields and body, plus its areas and notes.
 
         Areas and notes are the scan layer (code, title, description, updated_at),
-        ordered by update time oldest first. group_code / group_name say which shelf the
-        research is filed under (empty when it is not filed anywhere); group_name is derived
-        from the group, so rename a shelf with group_update, never here.
+        ordered by update time oldest first. group_code / group_name say which group the
+        research is filed in (empty when it is not filed anywhere); group_name is derived
+        from the group, so rename a group with group_update, never here.
 
         Args:
             research_code: The research code returned by research_create.
@@ -129,11 +129,11 @@ def register(mcp: "FastMCP") -> None:
         """List researches, most recently updated first.
 
         Each row: code, title, description, its group (group_code / group_name — empty when the
-        research is not filed on a shelf) and updated_at.
+        research is not filed in a group) and updated_at.
 
         Args:
-            group_code: Omit for every research; pass a GROUP@ code for that shelf only, or an
-                empty string for the researches that sit on no shelf.
+            group_code: Omit for every research; pass a GROUP@ code for that group only, or an
+                empty string for the researches that sit in no group.
         """
         group_code = strip_prefix(group_code)
         if group_code:
@@ -163,8 +163,8 @@ def register(mcp: "FastMCP") -> None:
             title: New title (up to 128 chars), or omit to keep the current one.
             description: New short description (up to 512 chars), or omit to keep.
             body: New main body in markdown, or omit to keep the current one.
-            group_code: GROUP@ code to file this research under, or an empty string to take it
-                off its shelf; omit to keep. Optional — shelving is for the user's convenience.
+            group_code: GROUP@ code to file this research in, or an empty string to take it out
+                of its group; omit to keep. Optional — grouping is for the user's convenience.
         """
         research_code = strip_prefix(research_code)
         group_code = strip_prefix(group_code)

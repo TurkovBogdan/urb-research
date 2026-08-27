@@ -33,7 +33,7 @@ if TYPE_CHECKING:  # fork fastmcp — только backend (через mcp_serve
     from fastmcp import FastMCP
 
 _RESEARCH_SECTION = {
-    GROUP_CODE_PREFIX: "researches",  # полка и исследование делят сегмент, разводит префикс
+    GROUP_CODE_PREFIX: "researches",  # группа и исследование делят сегмент, разводит префикс
     RESEARCH_CODE_PREFIX: "researches",
     AREA_CODE_PREFIX: "areas",
     NOTE_CODE_PREFIX: "notes",
