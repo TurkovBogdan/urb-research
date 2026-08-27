@@ -13,6 +13,9 @@ import { listResearches, type ResearchListRow, type ResearchSortBy, type SortDir
 // Одновременно они не встречаются (это разные страницы), а контекст сильнее выбора.
 export const useResearchesStore = defineStore('research-researches', () => {
   const query = ref('')
+  // Глубина поиска: включено — стог считает тело исследования, его зоны и заметки, выключено —
+  // только название и описание. Умолчание совпадает с прежним поведением.
+  const inBodies = ref(true)
   const groupCode = ref<string | null>(null)
   const groupFilter = ref<string | null>(null)
   const sortBy = ref<ResearchSortBy>('created_at')
@@ -36,6 +39,7 @@ export const useResearchesStore = defineStore('research-researches', () => {
     try {
       const res = await listResearches({
         query: query.value || undefined,
+        in_bodies: inBodies.value,
         group_code: groupCode.value ?? groupFilter.value ?? undefined,
         sort_by: sortBy.value,
         sort_dir: sortDir.value,
@@ -55,6 +59,16 @@ export const useResearchesStore = defineStore('research-researches', () => {
     page.value = 1
   }
 
+  // Глубина меняет стог, а не строку: с пустым запросом список и так не сужен, перезапрашивать
+  // нечего. Страница сбрасывается — набор строк другой, и третья страница прежней выдачи к нему
+  // отношения не имеет.
+  function searchDeeper(enabled: boolean) {
+    inBodies.value = enabled
+    if (!query.value.trim()) return
+    resetPage()
+    return load()
+  }
+
   function clearFilters() {
     query.value = ''
     groupFilter.value = null
@@ -62,9 +76,9 @@ export const useResearchesStore = defineStore('research-researches', () => {
   }
 
   return {
-    query, groupCode, groupFilter, sortBy, sortDir, page, pageSize,
+    query, inBodies, groupCode, groupFilter, sortBy, sortDir, page, pageSize,
     items, total, loading, error,
     pageCount, hasActiveFilters,
-    load, resetPage, clearFilters,
+    load, resetPage, searchDeeper, clearFilters,
   }
 })

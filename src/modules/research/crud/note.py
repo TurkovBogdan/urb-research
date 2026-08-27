@@ -113,11 +113,29 @@ async def note_bodies_by_research(research_code: str) -> list[tuple[str, str]]:
         return [(code, body) for code, body in (await s.execute(stmt)).all()]
 
 
+async def note_search_texts() -> list[tuple[str, str]]:
+    """``(research_code, весь текст заметки одной строкой)`` по всем заметкам реестра.
+
+    Из чего заметка состоит для поиска, знает её CRUD — служба поиска складывает регистр и ищет
+    подстроку, но не перечисляет колонки: добавленное сюда поле начинает искаться само.
+    """
+    stmt = select(
+        ResearchNote.research_code,
+        ResearchNote.title,
+        ResearchNote.description,
+        ResearchNote.body,
+    )
+    async with session_scope() as s:
+        rows = (await s.execute(stmt)).all()
+    return [(research_code, "\n".join(filter(None, texts))) for research_code, *texts in rows]
+
+
 __all__ = [
     "note_code",
     "note_create",
     "note_get",
     "note_bodies_by_research",
+    "note_search_texts",
     "note_list_by_research",
     "note_update",
     "note_delete",

@@ -1,7 +1,7 @@
 /**
  * Клиент API модуля research (бэк: /internal/research).
  *
- * Содержимое пишет MCP-сервер; человеку принадлежат полки, переименование и удаление. Иерархия:
+ * Содержимое пишет MCP-сервер; человеку принадлежат группы, переименование и удаление. Иерархия:
  * research → area → source-query (поиск) → source-document (источник); заметки висят
  * на research. Коды приходят с префиксом (RESEARCH@ / AREA@ / QUERY@ / NOTE@ / SOURCE@) —
  * бэк снимает его сам (strip_prefix идемпотентен), в путь кодируем через encodeURIComponent.
@@ -31,8 +31,8 @@ export interface ResearchListRow {
   description: string
   group_code: string | null
   group_name: string
-  // Вид полки едет со строкой: имена из реестров `groupIcons.ts` / `groupColors.ts`, пустые —
-  // когда полки нет. Иначе списку пришлось бы держать ещё и справочник полок ради метки.
+  // Вид группы едет со строкой: имена из реестров `groupIcons.ts` / `groupColors.ts`, пустые —
+  // когда группы нет. Иначе списку пришлось бы держать ещё и справочник групп ради метки.
   group_icon: string
   group_color: string
   area_count: number
@@ -82,6 +82,10 @@ export interface ResearchDetail {
   description: string
   group_code: string | null
   group_name: string
+  // Вид группы, как и у строки списка: имена из реестров `groupIcons.ts` / `groupColors.ts`,
+  // пустые — когда группы нет.
+  group_icon: string
+  group_color: string
   body: string
   areas: AreaRow[]
   queries: SourceQueryRow[]
@@ -136,7 +140,10 @@ export type ResearchSortBy = (typeof RESEARCH_SORT_FIELDS)[number]
 
 export interface ListResearchesParams {
   query?: string
-  // Полка: код группы, либо пустая строка — только не разложенные по полкам.
+  // Глубина поиска: `false` оставляет от исследования подписи — название и описание, всё
+  // написанное внутри (тело, зоны, заметки) из стога выпадает. Умолчание бэка — искать в телах.
+  in_bodies?: boolean
+  // Группа: её код, либо пустая строка — только не разложенные по группам.
   group_code?: string
   sort_by?: ResearchSortBy
   sort_dir?: SortDir
@@ -182,7 +189,7 @@ export async function searchResearchBodies(
   })
 }
 
-// ── Группы (полки реестра) ────────────────────────────────────────────────────
+// ── Группы (раскладка реестра) ────────────────────────────────────────────────
 // Единственная часть research, которую правит пользователь, а не MCP-сервер.
 
 export interface GroupRow {
@@ -198,14 +205,17 @@ export interface GroupRow {
   updated_at: string
 }
 
-// Строка списка полок: карточка + сколько исследований на ней лежит (счётчик считает бэк).
+// Строка списка групп: карточка + сколько исследований в неё входит (счётчик считает бэк).
 export interface GroupListRow extends GroupRow {
   research_count: number
+  // Когда в группе последний раз работали = самое свежее обновление среди её исследований;
+  // null у пустой. Это НЕ `updated_at` самой группы — та меняется от правки имени или иконки.
+  research_updated_at: string | null
 }
 
-// Псевдо-полка «Без группы»: код с пустым хешем. Бэк снимает префикс (strip_prefix идемпотентен),
+// Псевдо-группа «Без группы»: код с пустым хешем. Бэк снимает префикс (strip_prefix идемпотентен),
 // получает пустую строку — а она в его фильтрах и означает «только не разложенные». Поэтому
-// адрес /research/researches/GROUP@ работает тем же маршрутом, что и обычная полка, без
+// адрес /research/researches/GROUP@ работает тем же маршрутом, что и обычная группа, без
 // отдельного эндпойнта и без спец-значения в query.
 export const UNGROUPED_CODE = 'GROUP@'
 
@@ -217,8 +227,51 @@ export interface GroupBody {
   sort?: number
 }
 
-export async function listGroups(opts?: RequestOptions): Promise<GroupListRow[]> {
-  return internalApi.get<GroupListRow[]>(`${BASE}/groups`, opts)
+// По чему бэк умеет сортировать группы (белый список `GROUP_SORT_BY_COLUMNS` в crud/group.py).
+// `research_updated_at` и `research_count` — коррелированные подзапросы по исследованиям группы,
+// остальное — её собственные колонки. `sort` — ручная позиция, которую человек выставляет в форме
+// группы; она осталась ОДНИМ ИЗ ключей, а не единственным порядком. Порядок пунктов здесь задаёт
+// порядок в выпадающем списке.
+export const GROUP_SORT_FIELDS = [
+  'research_updated_at',
+  'sort',
+  'title',
+  'research_count',
+  'created_at',
+] as const
+
+export type GroupSortBy = (typeof GROUP_SORT_FIELDS)[number]
+
+export interface ListGroupsParams {
+  sort_by?: GroupSortBy
+  sort_dir?: SortDir
+}
+
+export async function listGroups(
+  params: ListGroupsParams = {},
+  opts?: RequestOptions,
+): Promise<GroupListRow[]> {
+  return internalApi.get<GroupListRow[]>(`${BASE}/groups`, { ...opts, query: { ...params } })
+}
+
+// Какие группы оставить на странице реестра: бэк ищет в самой группе и во всём тексте входящих
+// в неё исследований — включая тела зон и заметок, до которых клиенту не дотянуться. Возвращаются
+// только коды: карточки уже загружены, надо знать лишь, какие показать. `ungrouped` — про
+// псевдо-группу «Без группы», у которой кода нет.
+export interface GroupSearchResult {
+  codes: string[]
+  ungrouped: boolean
+}
+
+export async function searchGroups(
+  query: string,
+  params?: { in_researches?: boolean },
+  opts?: RequestOptions,
+): Promise<GroupSearchResult> {
+  return internalApi.get<GroupSearchResult>(`${BASE}/groups/search`, {
+    ...opts,
+    query: { q: query, ...params },
+  })
 }
 
 export async function getGroup(code: string, opts?: RequestOptions): Promise<GroupRow> {
@@ -240,8 +293,8 @@ export async function updateGroup(
   return internalApi.put<GroupRow>(`${BASE}/groups/${seg(code)}`, body, opts)
 }
 
-// Что делать с исследованиями удаляемой полки: снять с неё, перевесить на другую либо удалить
-// вместе с содержимым. Умолчание — самое мягкое: полка это раскладка, её снос не должен уносить
+// Что делать с исследованиями удаляемой группы: убрать из неё, перевесить в другую либо удалить
+// вместе с содержимым. Умолчание — самое мягкое: группа это раскладка, её снос не должен уносить
 // работу, поэтому «удалить» человек выбирает руками.
 export type ResearchesAction = 'detach' | 'move' | 'delete'
 
@@ -262,7 +315,7 @@ export async function deleteGroup(
   })
 }
 
-// null — снять исследование с полки.
+// null — убрать исследование из группы.
 export async function setResearchGroup(
   researchCode: string,
   groupCode: string | null,

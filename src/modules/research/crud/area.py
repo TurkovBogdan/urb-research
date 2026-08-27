@@ -135,6 +135,27 @@ async def area_bodies_by_research(research_code: str) -> list[tuple[str, str]]:
         return [(code, body) for code, body in (await s.execute(stmt)).all()]
 
 
+async def area_search_texts() -> list[tuple[str, str]]:
+    """``(research_code, весь текст зоны одной строкой)`` по всем зонам реестра.
+
+    Бриф зоны (цель / рамки / ожидания) ищется наравне с синтезом: он тоже написан словами
+    пользователя. Из чего зона состоит для поиска, знает её CRUD — служба поиска колонок
+    не перечисляет.
+    """
+    stmt = select(
+        ResearchArea.research_code,
+        ResearchArea.title,
+        ResearchArea.description,
+        ResearchArea.objective,
+        ResearchArea.scope,
+        ResearchArea.expectations,
+        ResearchArea.body,
+    )
+    async with session_scope() as s:
+        rows = (await s.execute(stmt)).all()
+    return [(research_code, "\n".join(filter(None, texts))) for research_code, *texts in rows]
+
+
 async def area_count_by_research_codes(research_codes: list[str]) -> dict[str, int]:
     """``research_code → число областей`` одним GROUP BY (для списка исследований)."""
     if not research_codes:
@@ -156,5 +177,6 @@ __all__ = [
     "area_update",
     "area_delete",
     "area_bodies_by_research",
+    "area_search_texts",
     "area_count_by_research_codes",
 ]

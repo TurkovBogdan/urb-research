@@ -1,6 +1,6 @@
 """CRUD ``ResearchGroup`` — группы исследований. Каждая функция владеет сессией.
 
-Группа — полка реестра, а не часть пайплайна: удаление группы не трогает сами исследования, оно
+Группа — раскладка реестра, а не часть пайплайна: удаление группы не трогает сами исследования, оно
 их **отвязывает** (``group_code`` → ``NULL``). Декларация ``ON DELETE SET NULL`` на SQLite не
 исполняется (FK-каскад выключен), поэтому отвязку делает ``group_delete`` — тем же ручным способом,
 что и остальные каскады модуля.
@@ -11,7 +11,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 
 from src.core.database import session_scope
 from src.core.utils.hashing import random_hash
@@ -72,19 +72,66 @@ async def group_get(code: str) -> ResearchGroup | None:
         return await s.get(ResearchGroup, code)
 
 
-async def group_list() -> list[ResearchGroup]:
-    """Все группы: больший ``sort`` — выше, дальше по названию.
+def _researches_of_group(column):
+    """Скалярный подзапрос «свести колонку по исследованиям этой группы».
 
-    Второй ключ обязателен: у всех новых групп ``sort`` одинаковый, и без него порядок
-    одинаковых строк меняется от запроса к запросу.
+    Коррелирует по ``group_code`` с внешней ``ResearchGroup``, поэтому годится прямо в ``ORDER BY``:
+    счётчик и дата работы на карточке считаются отдельными GROUP BY (по кодам страницы), но
+    сортировать по ним можно только в SQL.
     """
+    return (
+        select(column)
+        .select_from(Research)
+        .where(Research.group_code == ResearchGroup.code)
+        .scalar_subquery()
+    )
+
+
+# По чему разрешено сортировать список полок (белый список = защита от инъекции: неизвестный
+# ключ падает в дефолт). ``sort_by`` — ключ сортировки списка, ``sort`` — колонка позиции,
+# которую человек выставляет руками; это разные вещи, отсюда и разные имена.
+GROUP_SORT_BY_COLUMNS = {
+    "research_updated_at": _researches_of_group(func.max(Research.updated_at)),
+    "sort": ResearchGroup.sort,
+    "title": ResearchGroup.title,
+    "research_count": _researches_of_group(func.count()),
+    "created_at": ResearchGroup.created_at,
+}
+# По умолчанию сверху та группа, где недавно работали: реестр читают, чтобы продолжить, а не
+# чтобы посмотреть на расстановку.
+GROUP_SORT_BY_DEFAULT = "research_updated_at"
+
+
+async def group_list(
+    *,
+    sort_by: str = GROUP_SORT_BY_DEFAULT,
+    sort_dir: str = "desc",
+) -> list[ResearchGroup]:
+    """Все группы в порядке показа. Неизвестный ключ падает в дефолт.
+
+    Название и код — тайбрейк: у всех новых групп ``sort`` одинаковый (и дата работы у пустых
+    групп отсутствует), без него порядок одинаковых строк менялся бы от запроса к запросу.
+
+    Пустая группа уходит в конец при **любом** направлении: у неё нет ни даты работы, ни
+    исследований, и это не «самая ранняя», а «ответа нет».
+    """
+    column = GROUP_SORT_BY_COLUMNS.get(sort_by, GROUP_SORT_BY_COLUMNS[GROUP_SORT_BY_DEFAULT])
+    ordering = column.asc() if sort_dir == "asc" else column.desc()
     stmt = select(ResearchGroup).order_by(
-        ResearchGroup.sort.desc(),
+        ordering.nulls_last(),
         ResearchGroup.title.asc(),
         ResearchGroup.code.asc(),
     )
     async with session_scope() as s:
         return list((await s.execute(stmt)).scalars().all())
+
+
+async def group_search_texts() -> list[tuple[str, str]]:
+    """``(code, весь текст группы одной строкой)`` по всем группам — сырьё для поиска по реестру."""
+    stmt = select(ResearchGroup.code, ResearchGroup.title, ResearchGroup.description)
+    async with session_scope() as s:
+        rows = (await s.execute(stmt)).all()
+    return [(code, "\n".join(filter(None, texts))) for code, *texts in rows]
 
 
 async def group_update(
@@ -124,8 +171,8 @@ async def group_delete(
 ) -> bool:
     """Удалить группу, решив судьбу её исследований. ``True`` — существовала и удалена.
 
-    ``researches``: ``detach`` — снять с полки (``group_code`` → ``NULL``), ``move`` — перевесить
-    на полку ``move_to``, ``delete`` — удалить сами исследования вместе с их содержимым.
+    ``researches``: ``detach`` — убрать из группы (``group_code`` → ``NULL``), ``move`` — перевесить
+    в группу ``move_to``, ``delete`` — удалить сами исследования вместе с их содержимым.
     Существование ``move_to`` проверяет вызывающий: CRUD не решает, что считать ошибкой ввода.
 
     Удаление идёт через ``research_delete`` по одному, а не пачкой: каскад исследования (источники
@@ -158,10 +205,13 @@ async def _research_codes_of(group_code: str) -> list[str]:
 
 
 __all__ = [
+    "GROUP_SORT_BY_COLUMNS",
+    "GROUP_SORT_BY_DEFAULT",
     "group_code",
     "group_create",
     "group_get",
     "group_list",
+    "group_search_texts",
     "group_update",
     "group_delete",
 ]

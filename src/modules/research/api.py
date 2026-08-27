@@ -1,9 +1,9 @@
 """HTTP-API модуля ``research`` (mounted at /internal/research).
 
 Содержимое ресёрча (исследования, области, поиски, источники, заметки) **пишет MCP-сервер**,
-не эти ручки — пользователю остаются просмотр, раскладка по полкам, переименование и удаление.
+не эти ручки — пользователю остаются просмотр, раскладка по группам, переименование и удаление.
 
-- **Группы** — полностью пользовательские: полка это раскладка человека, а не результат работы
+- **Группы** — полностью пользовательские: группа это раскладка человека, а не результат работы
   агента, поэтому у неё полный набор write-ручек плюс узкая ``PUT /researches/{code}/group``
   (меняет только привязку, не открывая правку самого исследования).
 - **Переименование** (``PUT .../title`` на исследовании / области / заметке) — за пользователем:
@@ -63,6 +63,7 @@ from src.modules.research.dto import (
     DeepSearchResult,
     GroupListRow,
     GroupRow,
+    GroupSearchResult,
     NoteDetail,
     NoteRow,
     ResearchDetail,
@@ -80,12 +81,12 @@ from src.modules.research.dto import (
     source_document_row,
 )
 from src.modules.research.services.refetch import refetch_sources
-from src.modules.research.services.search import search_bodies
+from src.modules.research.services.search import search_bodies, search_groups, search_researches
 
 router = APIRouter()
 
 _MAX_PAGE_SIZE = 200
-# Значение ``group_code`` в списке, означающее «только не разложенные по полкам».
+# Значение ``group_code`` в списке, означающее «только не разложенные по группам».
 # Строка, а не ``None``: ``None`` в query-параметре неотличим от «параметр не передан».
 _UNGROUPED = ""
 
@@ -106,7 +107,7 @@ class GroupBody(BaseModel):
 
 
 class ResearchGroupBody(BaseModel):
-    """Тело ``PUT /researches/{code}/group``: код полки либо ``None`` — снять с полки."""
+    """Тело ``PUT /researches/{code}/group``: код группы либо ``None`` — убрать из группы."""
 
     group_code: str | None = None
 
@@ -136,17 +137,45 @@ async def _require_group(code: str) -> None:
 
 
 @router.get("/groups")
-async def list_groups() -> list[GroupListRow]:
-    """Полки в порядке показа (больший ``sort`` — выше, дальше по названию) + счётчик на карточке."""
-    rows = await group_crud.group_list()
-    counts = await research_crud.research_count_by_group_codes([row.code for row in rows])
+async def list_groups(
+    sort_by: str = Query(
+        group_crud.GROUP_SORT_BY_DEFAULT,
+        description=f"Поле сортировки: {', '.join(group_crud.GROUP_SORT_BY_COLUMNS)}",
+    ),
+    sort_dir: str = Query("desc", pattern="^(asc|desc)$"),
+) -> list[GroupListRow]:
+    """Полки в порядке показа + счётчик и дата работы на карточке."""
+    rows = await group_crud.group_list(sort_by=sort_by, sort_dir=sort_dir)
+    codes = [row.code for row in rows]
+    counts = await research_crud.research_count_by_group_codes(codes)
+    worked_at = await research_crud.research_updated_at_by_group_codes(codes)
     return [
         GroupListRow(
             **GroupRow.model_validate(row).model_dump(),
             research_count=counts.get(row.code, 0),
+            research_updated_at=worked_at.get(row.code),
         )
         for row in rows
     ]
+
+
+@router.get("/groups/search")
+async def search_groups_by_text(
+    q: str = Query(""),
+    in_researches: bool = Query(
+        True, description="Искать и в исследованиях группы; false — только текст самих групп"
+    ),
+) -> GroupSearchResult:
+    """Какие группы оставить на странице реестра: ищем в группе и во всём тексте её исследований.
+
+    Объявлена ДО ``/groups/{group_code}``: FastAPI сопоставляет маршруты в порядке объявления,
+    и ниже по файлу ``search`` уехал бы в код группы.
+
+    Ищет по написанному человеком и агентом — группа, исследование, его зоны (включая бриф) и
+    заметки; материал источников не смотрим. Пустой запрос ничего не сужает.
+    """
+    matches = await search_groups(q, in_researches=in_researches)
+    return GroupSearchResult(codes=matches.codes, ungrouped=matches.ungrouped)
 
 
 @router.post("/groups", status_code=201)
@@ -171,7 +200,7 @@ async def get_group(group_code: str) -> GroupRow:
 
 @router.put("/groups/{group_code}")
 async def update_group(group_code: str, payload: GroupBody) -> GroupRow:
-    """Полная замена карточки полки: тело несёт все поля, ``sort`` опускается — остаётся прежним."""
+    """Полная замена карточки группы: тело несёт все поля, ``sort`` опускается — остаётся прежним."""
     row = await group_crud.group_update(
         strip_prefix(group_code),
         title=payload.title,
@@ -191,11 +220,11 @@ async def delete_group(
     researches: str = Query(
         GROUP_RESEARCHES_DETACH,
         pattern=f"^({'|'.join(GROUP_RESEARCHES_ACTIONS)})$",
-        description="Судьба исследований полки: снять / перевесить / удалить",
+        description="Судьба исследований группы: снять / перевесить / удалить",
     ),
     move_to: str | None = Query(None, description="Куда перевесить при researches=move"),
 ) -> Response:
-    """Удалить полку. По умолчанию исследования переживают её — становятся не разложенными."""
+    """Удалить группу. По умолчанию исследования переживают её — становятся не разложенными."""
     group_code = strip_prefix(group_code)
     move_to = strip_prefix(move_to)
     if researches == GROUP_RESEARCHES_MOVE:
@@ -213,7 +242,16 @@ async def delete_group(
 
 @router.get("/researches")
 async def list_researches(
-    query: str | None = None,
+    query: str | None = Query(
+        None,
+        description=(
+            "Поиск по тексту исследования: название, описание, тело, а также тела его зон "
+            "(включая бриф) и заметок — глубину задаёт in_bodies. Источники не ищутся."
+        ),
+    ),
+    in_bodies: bool = Query(
+        True, description="Искать и в телах исследований; false — только названия и описания"
+    ),
     group_code: str | None = Query(
         None, description="Полка: код группы, пустая строка — только не разложенные"
     ),
@@ -228,15 +266,20 @@ async def list_researches(
     group_code = strip_prefix(group_code)
     if group_code:
         await _require_group(group_code)
+    # Поиск идёт по тексту, а не по колонке заголовка, поэтому отрабатывает до SQL и приезжает
+    # сюда списком кодов; группу, сортировку и страницу накладывает уже запрос.
+    codes = (
+        await search_researches(query, in_bodies=in_bodies) if query and query.strip() else None
+    )
     rows = await research_crud.research_list_paged(
-        query=query,
+        codes=codes,
         sort_by=sort_by,
         sort_dir=sort_dir,
         offset=_offset(page, page_size),
         limit=page_size,
         group_code=group_code,
     )
-    total = await research_crud.research_count(query=query, group_code=group_code)
+    total = await research_crud.research_count(codes=codes, group_code=group_code)
     codes = [r.code for r, _ in rows]
     area_counts = await area_crud.area_count_by_research_codes(codes)
     query_counts = await source_query_crud.source_query_count_by_research_codes(codes)
@@ -269,6 +312,7 @@ async def get_research(research_code: str) -> ResearchDetail:
     return ResearchDetail(
         **ResearchRow.model_validate(research).model_dump(),
         **group_fields(group),
+        **group_style_fields(group),
         body=research.body,
         areas=[AreaRow.model_validate(a) for a in areas],
         queries=[ResearchSourceQueryRow.model_validate(q) for q in queries],
@@ -306,7 +350,7 @@ async def rename_research(research_code: str, payload: TitleBody) -> ResearchDet
 async def set_research_group(
     research_code: str, payload: ResearchGroupBody
 ) -> ResearchDetail:
-    """Положить исследование на полку или снять с неё (``group_code: null``).
+    """Положить исследование в группу или убрать из неё (``group_code: null``).
 
     Единственная write-ручка по исследованию: меняет только привязку — содержимое ресёрча
     по-прежнему пишет MCP-сервер.

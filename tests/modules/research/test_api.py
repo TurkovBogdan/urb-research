@@ -8,6 +8,7 @@ from datetime import datetime
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import update
 
 from src.core.api import register_exception_handlers
 from src.core.config import Config
@@ -189,13 +190,238 @@ async def test_create_group_rejects_empty_title(client):
     assert r.status_code == 422
 
 
-async def test_list_groups_is_in_display_order(client):
+async def test_list_groups_by_position_is_in_display_order(client):
+    """Ручная расстановка: больший ``sort`` — выше."""
     await group_crud.group_create(title="Бета", sort=100)
     await group_crud.group_create(title="Альфа", sort=900)
 
-    rows = (await client.get("/internal/research/groups")).json()
+    rows = (await client.get("/internal/research/groups", params={"sort_by": "sort"})).json()
 
     assert [row["title"] for row in rows] == ["Альфа", "Бета"]
+
+
+async def _group_with_research_updated_at(title: str, updated_at: datetime):
+    group = await group_crud.group_create(title=title)
+    research = await research_crud.research_create(title=f"R-{title}", group_code=group.code)
+    async with session_scope() as s:
+        await s.execute(
+            update(Research).where(Research.code == research.code).values(updated_at=updated_at)
+        )
+    return group
+
+
+async def test_list_groups_defaults_to_where_work_happened_last(client):
+    """Умолчание — где недавно работали: реестр читают, чтобы продолжить."""
+    await _group_with_research_updated_at("Старая", datetime(2026, 1, 1, 10, 0, 0))
+    await _group_with_research_updated_at("Свежая", datetime(2026, 8, 1, 10, 0, 0))
+
+    rows = (await client.get("/internal/research/groups")).json()
+
+    assert [row["title"] for row in rows] == ["Свежая", "Старая"]
+
+
+async def test_list_groups_reports_when_the_shelf_was_worked_on(client):
+    """Дата на карточке — самая свежая среди исследований, а не ``updated_at`` самой полки."""
+    await _group_with_research_updated_at("Полка", datetime(2026, 3, 4, 5, 6, 7))
+
+    row = (await client.get("/internal/research/groups")).json()[0]
+
+    assert row["research_updated_at"] == "2026-03-04 05:06:07"
+
+
+async def test_an_empty_shelf_has_no_work_date(client):
+    await group_crud.group_create(title="Пустая")
+
+    row = (await client.get("/internal/research/groups")).json()[0]
+
+    assert row["research_updated_at"] is None
+    assert row["research_count"] == 0
+
+
+async def test_an_empty_shelf_sinks_in_both_directions(client):
+    """У пустой полки даты нет — это «ответа нет», а не «самая ранняя», поэтому она всегда внизу."""
+    await group_crud.group_create(title="Пустая")
+    await _group_with_research_updated_at("С работой", datetime(2026, 5, 5, 5, 5, 5))
+
+    for direction in ("desc", "asc"):
+        rows = (
+            await client.get("/internal/research/groups", params={"sort_dir": direction})
+        ).json()
+
+        assert [row["title"] for row in rows] == ["С работой", "Пустая"], direction
+
+
+async def test_list_groups_sorts_by_research_count(client):
+    small = await group_crud.group_create(title="Одна")
+    big = await group_crud.group_create(title="Две")
+    await research_crud.research_create(title="a", group_code=small.code)
+    await research_crud.research_create(title="b", group_code=big.code)
+    await research_crud.research_create(title="c", group_code=big.code)
+
+    rows = (
+        await client.get("/internal/research/groups", params={"sort_by": "research_count"})
+    ).json()
+
+    assert [row["title"] for row in rows] == ["Две", "Одна"]
+
+
+async def test_list_groups_sorts_by_title_ascending(client):
+    await group_crud.group_create(title="Бета")
+    await group_crud.group_create(title="Альфа")
+
+    rows = (
+        await client.get(
+            "/internal/research/groups", params={"sort_by": "title", "sort_dir": "asc"}
+        )
+    ).json()
+
+    assert [row["title"] for row in rows] == ["Альфа", "Бета"]
+
+
+async def test_unknown_group_sort_key_falls_back_to_the_default(client):
+    """Белый список — защита от инъекции: неизвестный ключ не ошибка, а дефолт."""
+    await _group_with_research_updated_at("Старая", datetime(2026, 1, 1, 10, 0, 0))
+    await _group_with_research_updated_at("Свежая", datetime(2026, 8, 1, 10, 0, 0))
+
+    rows = (
+        await client.get("/internal/research/groups", params={"sort_by": "; DROP TABLE"})
+    ).json()
+
+    assert [row["title"] for row in rows] == ["Свежая", "Старая"]
+
+
+# ── Поиск по реестру исследований: тот же текст, что и у поиска по полкам ─────
+
+
+async def test_research_search_still_matches_the_title(client):
+    """Название — часть того же текста, поэтому прежние совпадения по нему никуда не делись."""
+    await research_crud.research_create(title="Оренбург и взносы")
+    await research_crud.research_create(title="Совсем другое")
+
+    body = (await client.get(f"{BASE}/researches", params={"query": "оренбург"})).json()
+
+    assert [row["title"] for row in body["items"]] == ["Оренбург и взносы"]
+    assert body["total"] == 1
+
+
+async def test_research_search_reaches_the_body_and_its_children(client):
+    """Поиск идёт по тексту, а не по колонке заголовка: тело, зона и заметка тоже считаются."""
+    by_body = await research_crud.research_create(title="R1")
+    await research_crud.research_update(by_body.code, body="Синтез про Оренбург")
+    by_area = await research_crud.research_create(title="R2")
+    area = await area_crud.area_create(research_code=by_area.code, title="Зона")
+    await area_crud.area_update(area.code, body="Тело зоны про Оренбург")
+    by_note = await research_crud.research_create(title="R3")
+    note = await note_crud.note_create(research_code=by_note.code, kind="result", title="Вывод")
+    await note_crud.note_update(note.code, body="Заметка про Оренбург")
+    await research_crud.research_create(title="Мимо")
+
+    body = (await client.get(f"{BASE}/researches", params={"query": "оренбург"})).json()
+
+    assert {row["title"] for row in body["items"]} == {"R1", "R2", "R3"}
+
+
+async def test_research_search_folds_case_for_cyrillic(client):
+    research = await research_crud.research_create(title="R")
+    await research_crud.research_update(research.code, body="Синтез про Оренбург")
+
+    body = (await client.get(f"{BASE}/researches", params={"query": "ОрЕнБуРг"})).json()
+
+    assert body["total"] == 1
+
+
+async def test_research_search_narrows_inside_the_shelf(client):
+    """На странице полки поиск обязан оставаться внутри неё: совпавшее с чужой полки не всплывает."""
+    shelf = await group_crud.group_create(title="Полка")
+    mine = await research_crud.research_create(title="Оренбург свой", group_code=shelf.code)
+    await research_crud.research_create(title="Оренбург чужой")
+
+    body = (
+        await client.get(
+            f"{BASE}/researches", params={"query": "оренбург", "group_code": f"GROUP@{shelf.code}"}
+        )
+    ).json()
+
+    assert [row["code"] for row in body["items"]] == [f"RESEARCH@{mine.code}"]
+
+
+async def test_research_search_ignores_source_material(client):
+    """Источники не ищем — ни здесь, ни в поиске по полкам."""
+    research = await research_crud.research_create(title="R")
+    area = await area_crud.area_create(research_code=research.code, title="Зона")
+    query = await source_query_crud.source_query_create(
+        research_code=research.code, area_code=area.code, search_code="0" * 22, query="q"
+    )
+    page = await page_crud.page_upsert("https://example.test/mat", title="Страница")
+    await page_crud.page_set_body(page.code, body="Материал про Оренбург")
+    await source_document_crud.source_document_create(
+        research_code=research.code,
+        area_code=area.code,
+        query_code=query.code,
+        page_code=page.code,
+    )
+
+    body = (await client.get(f"{BASE}/researches", params={"query": "оренбург"})).json()
+
+    assert body["total"] == 0
+
+
+async def test_research_search_without_matches_is_an_empty_page(client):
+    """«Искали и не нашли» — пустая страница, а не весь список: пустой набор кодов не то же,
+    что отсутствие поиска."""
+    await research_crud.research_create(title="Что-то")
+
+    body = (await client.get(f"{BASE}/researches", params={"query": "чегонетнигде"})).json()
+
+    assert body["items"] == [] and body["total"] == 0
+
+
+async def test_research_search_without_bodies_matches_only_the_labels(client):
+    """На странице полки тот же переключатель: ищем по подписям, а не по написанному внутри."""
+    by_title = await research_crud.research_create(title="Оренбург в названии")
+    by_description = await research_crud.research_create(title="R2")
+    await research_crud.research_update(by_description.code, description="Про Оренбург")
+    by_body = await research_crud.research_create(title="R3")
+    await research_crud.research_update(by_body.code, body="Синтез про Оренбург")
+
+    body = (
+        await client.get(f"{BASE}/researches", params={"query": "оренбург", "in_bodies": "false"})
+    ).json()
+
+    assert {row["title"] for row in body["items"]} == {"Оренбург в названии", "R2"}
+
+
+async def test_research_search_without_bodies_ignores_areas_and_notes(client):
+    research = await research_crud.research_create(title="R")
+    area = await area_crud.area_create(research_code=research.code, title="Зона")
+    await area_crud.area_update(area.code, body="Тело зоны про Оренбург")
+    note = await note_crud.note_create(research_code=research.code, kind="result", title="Вывод")
+    await note_crud.note_update(note.code, body="Заметка про Оренбург")
+
+    body = (
+        await client.get(f"{BASE}/researches", params={"query": "оренбург", "in_bodies": "false"})
+    ).json()
+
+    assert body["total"] == 0
+
+
+async def test_blank_research_search_narrows_nothing(client):
+    await research_crud.research_create(title="Первое")
+    await research_crud.research_create(title="Второе")
+
+    body = (await client.get(f"{BASE}/researches", params={"query": "   "})).json()
+
+    assert body["total"] == 2
+
+
+async def test_the_agent_still_sees_the_arrangement_the_user_made(client, call):
+    """У MCP свой контракт: агенту едет ручная расстановка, а не веб-умолчание."""
+    await _group_with_research_updated_at("Свежая, но снизу", datetime(2026, 8, 1, 10, 0, 0))
+    await group_crud.group_create(title="Поднята руками", sort=900)
+
+    titles = [row["title"] for row in (await call("group_list"))["result"]]
+
+    assert titles == ["Поднята руками", "Свежая, но снизу"]
 
 
 async def test_get_group(client):
@@ -1213,6 +1439,199 @@ async def test_deep_search_missing_research_is_404(client):
     r = await client.get(f"{BASE}/researches/{MISSING}/search", params={"q": "оренбург"})
 
     assert r.status_code == 404
+
+
+# ── Поиск по реестру: какие полки остаются на странице групп ──────────────────
+
+
+async def _shelved_research(group_code: str | None, title: str):
+    return await research_crud.research_create(title=title, group_code=group_code)
+
+
+async def _search_groups(client, query: str, **params) -> dict:
+    return (await client.get(f"{BASE}/groups/search", params={"q": query, **params})).json()
+
+
+async def test_group_search_matches_the_shelf_itself(client):
+    group = await group_crud.group_create(title="Экология", description="Про природу")
+    await group_crud.group_create(title="Финансы")
+
+    body = await _search_groups(client, "природ")
+
+    assert body["codes"] == [f"GROUP@{group.code}"]
+
+
+async def test_group_search_reaches_through_a_research_body(client):
+    """Полка совпадает по телу лежащего на ней исследования — до него клиенту не дотянуться."""
+    group = await group_crud.group_create(title="Полка")
+    research = await _shelved_research(group.code, "Ничего говорящего")
+    await research_crud.research_update(research.code, body="Синтез про Оренбург")
+
+    body = await _search_groups(client, "оренбург")
+
+    assert body["codes"] == [f"GROUP@{group.code}"]
+
+
+async def test_group_search_reaches_through_area_and_note_bodies(client):
+    """Зона и заметка — тоже текст исследования, и обе тянут свою полку в выдачу."""
+    by_area = await group_crud.group_create(title="Через зону")
+    by_note = await group_crud.group_create(title="Через заметку")
+    area_research = await _shelved_research(by_area.code, "R1")
+    area = await area_crud.area_create(research_code=area_research.code, title="Зона")
+    await area_crud.area_update(area.code, body="Тело зоны про Оренбург")
+    note_research = await _shelved_research(by_note.code, "R2")
+    note = await note_crud.note_create(
+        research_code=note_research.code, kind="result", title="Вывод"
+    )
+    await note_crud.note_update(note.code, body="Заметка про Оренбург")
+
+    body = await _search_groups(client, "оренбург")
+
+    assert set(body["codes"]) == {f"GROUP@{by_area.code}", f"GROUP@{by_note.code}"}
+
+
+async def test_group_search_reaches_through_an_area_brief(client):
+    """Бриф зоны (цель / рамки / ожидания) написан словами и ищется наравне с синтезом."""
+    group = await group_crud.group_create(title="Полка")
+    research = await _shelved_research(group.code, "R")
+    await area_crud.area_create(
+        research_code=research.code, title="Зона", objective="Разобрать тарифы Оренбурга"
+    )
+
+    body = await _search_groups(client, "оренбург")
+
+    assert body["codes"] == [f"GROUP@{group.code}"]
+
+
+async def test_group_search_folds_case_for_cyrillic(client):
+    """У SQLite `lower()` кириллицу не трогает — сверка обязана идти в Python."""
+    group = await group_crud.group_create(title="Полка")
+    research = await _shelved_research(group.code, "R")
+    await research_crud.research_update(research.code, body="Синтез про Оренбург")
+
+    body = await _search_groups(client, "ОрЕнБуРг")
+
+    assert body["codes"] == [f"GROUP@{group.code}"]
+
+
+async def test_group_search_reports_the_ungrouped_shelf_separately(client):
+    """Псевдо-полки «Без группы» в БД нет — совпадение у неразложенного едет флагом."""
+    await group_crud.group_create(title="Полка")
+    loose = await _shelved_research(None, "Неразложенное")
+    await research_crud.research_update(loose.code, body="Синтез про Оренбург")
+
+    body = await _search_groups(client, "оренбург")
+
+    assert body == {"codes": [], "ungrouped": True}
+
+
+async def test_group_search_without_matches_returns_nothing(client):
+    await group_crud.group_create(title="Полка")
+    await _shelved_research(None, "Неразложенное")
+
+    body = await _search_groups(client, "чегонетнигде")
+
+    assert body == {"codes": [], "ungrouped": False}
+
+
+async def test_group_search_ignores_source_material(client):
+    """Источники не ищем: их материал скачан извне, а не написан здесь."""
+    group = await group_crud.group_create(title="Полка")
+    research = await _shelved_research(group.code, "R")
+    area = await area_crud.area_create(research_code=research.code, title="Зона")
+    query = await source_query_crud.source_query_create(
+        research_code=research.code, area_code=area.code, search_code="0" * 22, query="q"
+    )
+    page = await page_crud.page_upsert("https://example.test/material", title="Страница")
+    await page_crud.page_set_body(page.code, body="Материал страницы про Оренбург")
+    await source_document_crud.source_document_create(
+        research_code=research.code,
+        area_code=area.code,
+        query_code=query.code,
+        page_code=page.code,
+    )
+
+    body = await _search_groups(client, "оренбург")
+
+    assert body == {"codes": [], "ungrouped": False}
+
+
+async def test_empty_group_search_narrows_nothing(client):
+    """«Ничего не набрано» — это отсутствие поиска, а не поиск с пустым результатом."""
+    first = await group_crud.group_create(title="Первая")
+    second = await group_crud.group_create(title="Вторая")
+
+    body = await _search_groups(client, "   ")
+
+    assert set(body["codes"]) == {f"GROUP@{first.code}", f"GROUP@{second.code}"}
+    assert body["ungrouped"] is True
+
+
+async def test_group_search_without_researches_reads_only_the_shelves(client):
+    """Выключенный спуск оставляет от корпуса текст самих полок — что на них лежит, не смотрим."""
+    by_shelf = await group_crud.group_create(title="Оренбург", description="Полка про город")
+    by_research = await group_crud.group_create(title="Другая")
+    await _shelved_research(by_research.code, "Оренбург в названии исследования")
+
+    with_researches = await _search_groups(client, "оренбург")
+    shelves_only = await _search_groups(client, "оренбург", in_researches="false")
+
+    assert set(with_researches["codes"]) == {f"GROUP@{by_shelf.code}", f"GROUP@{by_research.code}"}
+    assert shelves_only["codes"] == [f"GROUP@{by_shelf.code}"]
+
+
+async def test_group_search_without_researches_ignores_bodies_areas_and_notes(client):
+    """Ни тело исследования, ни зона, ни заметка не тянут свою полку, пока спуск выключен."""
+    group = await group_crud.group_create(title="Полка")
+    research = await _shelved_research(group.code, "R")
+    await research_crud.research_update(research.code, body="Синтез про Оренбург")
+    area = await area_crud.area_create(research_code=research.code, title="Зона")
+    await area_crud.area_update(area.code, body="Тело зоны про Оренбург")
+    note = await note_crud.note_create(research_code=research.code, kind="result", title="Вывод")
+    await note_crud.note_update(note.code, body="Заметка про Оренбург")
+
+    body = await _search_groups(client, "оренбург", in_researches="false")
+
+    assert body == {"codes": [], "ungrouped": False}
+
+
+async def test_group_search_without_researches_never_matches_the_ungrouped_shelf(client):
+    """У псевдо-полки «Без группы» своего текста нет: без спуска в исследования ей нечем совпасть."""
+    loose = await _shelved_research(None, "Оренбург неразложенный")
+    await research_crud.research_update(loose.code, body="Синтез про Оренбург")
+
+    deep = await _search_groups(client, "оренбург")
+    shelves_only = await _search_groups(client, "оренбург", in_researches="false")
+
+    assert deep["ungrouped"] is True
+    assert shelves_only == {"codes": [], "ungrouped": False}
+
+
+async def test_group_search_route_is_not_shadowed_by_the_group_code_route(client):
+    """`/groups/search` объявлен выше `/groups/{group_code}` — иначе `search` уехал бы в код полки."""
+    r = await client.get(f"{BASE}/groups/search", params={"q": "что угодно"})
+
+    assert r.status_code == 200
+
+
+async def test_detail_carries_the_group_look(client):
+    """Странице исследования нужен вид полки: иначе ради одной плашки она ходила бы за группой."""
+    group = await group_crud.group_create(title="Экология", icon="flask", color="green")
+    research = await research_crud.research_create(title="Парки", group_code=group.code)
+
+    body = (await client.get(f"{BASE}/researches/{research.code}")).json()
+
+    assert body["group_name"] == "Экология"
+    assert (body["group_icon"], body["group_color"]) == ("flask", "green")
+
+
+async def test_detail_group_look_is_empty_without_a_group(client):
+    research = await research_crud.research_create(title="Сам по себе")
+
+    body = (await client.get(f"{BASE}/researches/{research.code}")).json()
+
+    assert body["group_code"] is None
+    assert (body["group_icon"], body["group_color"]) == ("", "")
 
 
 async def test_list_carries_the_group_look(client):

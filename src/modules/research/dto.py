@@ -43,7 +43,7 @@ class GroupCreated(BaseModel):
 class GroupScan(BaseModel):
     """Группа для MCP: одна карточка — ни оформления, ни позиции в списке.
 
-    Как полка выглядит (``icon``/``color``) и где лежит (``sort``) — выбор человека в интерфейсе;
+    Как группа выглядит (``icon``/``color``) и где стоит (``sort``) — выбор человека в интерфейсе;
     для агента это лишние поля, поэтому поверхности разведены: MCP отдаёт этот набор,
     web-вьюер — ``GroupRow``.
     """
@@ -57,7 +57,7 @@ class GroupScan(BaseModel):
 
 
 class GroupRow(BaseModel):
-    """Группа целиком для web-вьюера: у полки нет тела, скан и деталь — один набор полей."""
+    """Группа целиком для web-вьюера: тела у неё нет, скан и деталь — один набор полей."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -71,13 +71,18 @@ class GroupRow(BaseModel):
 
 
 class GroupListRow(GroupRow):
-    """Строка списка полок для web-вьюера: карточка + сколько исследований на ней лежит.
+    """Строка списка групп для web-вьюера: карточка + сколько исследований в неё входит.
 
-    Счётчик только тут: MCP отдаёт ``GroupRow`` без него — агенту он не нужен, а считать его
-    на каждый вызов тула значило бы платить за то, что читает только интерфейс.
+    Счётчик и дата работы — только тут: MCP отдаёт ``GroupRow`` без них — агенту они не нужны,
+    а считать их на каждый вызов тула значило бы платить за то, что читает только интерфейс.
+
+    ``research_updated_at`` — самое свежее обновление среди исследований группы, то есть «когда
+    здесь последний раз работали»; ``None`` у пустой группы. Это НЕ ``updated_at`` самой группы:
+    та меняется, когда человек правит имя или иконку.
     """
 
     research_count: int = 0
+    research_updated_at: DatetimeUTCStr | None = None
 
 
 class ResearchCreated(BaseModel):
@@ -89,9 +94,9 @@ class ResearchCreated(BaseModel):
 
 
 class ResearchScan(BaseModel):
-    """Скан research — код/заголовок/описание + полка (без дат/тела). Возврат research_update.
+    """Скан research — код/заголовок/описание + группа (без дат/тела). Возврат research_update.
 
-    ``group_code`` — ссылка (``None`` = не разложено), ``group_name`` — **вычисляемое** имя полки
+    ``group_code`` — ссылка (``None`` = не разложено), ``group_name`` — **вычисляемое** имя группы
     из join'а с ``research_group``: в самом исследовании названия группы нет и хранить его там
     было бы копией, разъезжающейся при переименовании. Пустая строка = группы нет.
     """
@@ -106,7 +111,7 @@ class ResearchScan(BaseModel):
 
 
 class ResearchListItem(BaseModel):
-    """Строка research_list — скан-поля + полка + ``updated_at`` (без ``created_at``)."""
+    """Строка research_list — скан-поля + группа + ``updated_at`` (без ``created_at``)."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -291,10 +296,10 @@ class NoteDetail(BaseModel):
 
 
 class ResearchListRow(BaseModel):
-    """Строка списка исследований — полка (опознание + вид) + счётчики; ``updated_at`` последним.
+    """Строка списка исследований — группа (опознание + вид) + счётчики; ``updated_at`` последним.
 
-    Вид полки (``group_icon``/``group_color``) едет вместе со строкой, а не добирается вторым
-    запросом за списком полок: строка и так знает, к какой полке относится, и отдать её метку
+    Вид группы (``group_icon``/``group_color``) едет вместе со строкой, а не добирается вторым
+    запросом за списком групп: строка и так знает, к какой группе относится, и отдать её метку
     сразу дешевле, чем заставлять каждого потребителя списка держать ещё и справочник.
     """
 
@@ -315,7 +320,7 @@ class ResearchListRow(BaseModel):
 
 
 class ResearchDetail(BaseModel):
-    """Исследование + полка + тело + области, запросы и заметки; ``updated_at`` последним."""
+    """Исследование + группа + тело + области, запросы и заметки; ``updated_at`` последним."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -324,6 +329,10 @@ class ResearchDetail(BaseModel):
     description: str = ""
     group_code: GroupCode | None = None
     group_name: str = ""
+    # Вид группы едет с деталью по той же причине, что и со строкой списка: иначе страница
+    # исследования ради одной плашки ходила бы за группой вторым запросом.
+    group_icon: str = ""
+    group_color: str = ""
     body: str = ""
     areas: list[AreaRow] = []
     queries: list[ResearchSourceQueryRow] = []
@@ -358,6 +367,18 @@ class DeepSearchResult(BaseModel):
     sources: list[SourceDocumentCode] = []
 
 
+class GroupSearchResult(BaseModel):
+    """Группы, которые остаются на странице реестра при запросе.
+
+    Только коды — по той же причине, что и у ``DeepSearchResult``: карточки со всем их
+    содержимым фронт уже загрузил, ему нужно знать лишь, какие из них показать. ``ungrouped``
+    — про псевдо-группу «Без группы», которой в БД нет и код которой поэтому не назвать.
+    """
+
+    codes: list[GroupCode] = []
+    ungrouped: bool = False
+
+
 class ReferencesBody(BaseModel):
     """Тело запроса разрешения ссылок-кодов в теле — набор ``TYPE@hash`` (или голых)."""
 
@@ -379,7 +400,7 @@ if TYPE_CHECKING:
 
 
 def group_fields(group: "ResearchGroup | None") -> dict:
-    """Пара полей полки для контрактов исследования; нет группы → ``None`` + пустое имя."""
+    """Пара полей группы для контрактов исследования; нет группы → ``None`` + пустое имя."""
     return dict(
         group_code=group.code if group else None,
         group_name=group.title if group else "",
@@ -387,8 +408,8 @@ def group_fields(group: "ResearchGroup | None") -> dict:
 
 
 def group_style_fields(group: "ResearchGroup | None") -> dict:
-    """Как полку рисовать — иконка и цвет. Отдельно от ``group_fields``, потому что нужны они
-    только интерфейсу: MCP-контракты делят с ним опознание полки (код и имя), но не её вид."""
+    """Как группу рисовать — иконка и цвет. Отдельно от ``group_fields``, потому что нужны они
+    только интерфейсу: MCP-контракты делят с ним опознание группы (код и имя), но не её вид."""
     return dict(
         group_icon=group.icon if group else "",
         group_color=group.color if group else "",
@@ -398,7 +419,7 @@ def group_style_fields(group: "ResearchGroup | None") -> dict:
 def research_list_item(
     row: "Research", group: "ResearchGroup | None"
 ) -> ResearchListItem:
-    """Строка research_list: свои поля + имя полки из join'а группы."""
+    """Строка research_list: свои поля + имя группы из join'а."""
     return ResearchListItem(
         code=row.code,
         title=row.title,

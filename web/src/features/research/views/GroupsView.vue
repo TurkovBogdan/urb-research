@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onActivated, ref } from 'vue'
+import { computed, onActivated, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   IconCheck,
@@ -8,19 +8,24 @@ import {
   IconPencil,
   IconPlus,
   IconRefresh,
+  IconSortAscending,
+  IconSortDescending,
   IconTrash,
 } from '@tabler/icons-vue'
 
 import PageLayout from '@/layout/templates/PageLayout.vue'
 import PageHeader from '@/layout/components/PageHeader.vue'
 import SectionError from '@/components/SectionError.vue'
+import SearchField from '@/components/SearchField.vue'
 import { useClipboard } from '@/composables/useClipboard'
+import { deeperScope, deeperScopeModel } from '../search'
 import { groupColorVars } from '../constants/groupColors'
 import { GROUP_ICON_FALLBACK, groupIcon } from '../constants/groupIcons'
 import GroupFormDialog from '../components/GroupFormDialog.vue'
 import GroupDeleteDialog from '../components/GroupDeleteDialog.vue'
 import { useGroupsStore } from '../stores/groups.store'
-import { UNGROUPED_CODE, type GroupListRow } from '../api'
+import { fmtDateTime } from '@/shared/utils/date'
+import { GROUP_SORT_FIELDS, UNGROUPED_CODE, type GroupListRow, type GroupSortBy } from '../api'
 
 const { t } = useI18n()
 const store = useGroupsStore()
@@ -30,6 +35,34 @@ const store = useGroupsStore()
 const { copy, isCopied } = useClipboard()
 
 onActivated(store.load)
+
+// Поиск идёт на бэк (тела зон и заметок до клиента не доходят), поэтому строка отложена —
+// та же задержка, что и в реестре исследований.
+const SEARCH_DEBOUNCE_MS = 350
+const queryInput = ref(store.query)
+let queryTimer: ReturnType<typeof setTimeout> | null = null
+
+watch(queryInput, (value) => {
+  if (queryTimer) clearTimeout(queryTimer)
+  queryTimer = setTimeout(() => store.search(value ?? ''), SEARCH_DEBOUNCE_MS)
+})
+
+// Глубина поиска кнопкой в самом поле: она относится к этому запросу и ни к чему больше.
+// Переключение перезапрашивает — сужение считается на бэке, до клиента тексты не доходят.
+// Подпись поля следует за кнопкой и сама говорит, где сейчас ищем, — пояснения под полем
+// поэтому нет: оно повторяло бы подпись другими словами.
+const searchScopes = computed(() => deeperScope(t('research.search.scope_researches')))
+const activeScopes = deeperScopeModel(() => store.inResearches, store.searchDeeper)
+const searchLabel = computed(() =>
+  t(store.inResearches ? 'research.group.search.label' : 'research.group.search.label_groups_only'),
+)
+
+const sortOptions = computed(() =>
+  GROUP_SORT_FIELDS.map((field) => ({ title: t(`research.group.sort.by.${field}`), value: field })),
+)
+
+const selectSortBy = (field: GroupSortBy) => store.sort(field, store.sortDir)
+const toggleSortDir = () => store.sort(store.sortBy, store.sortDir === 'desc' ? 'asc' : 'desc')
 
 // Код приходит уже с типовым префиксом (GROUP@…) — он и есть сегмент адреса полки; у
 // псевдо-полки «Без группы» хеш пустой, путь тот же. Кодировать код НЕЛЬЗЯ: `@` в пути
@@ -79,6 +112,45 @@ function remove(group: GroupListRow) {
       </template>
     </PageHeader>
 
+    <!-- Панель поиска над полками: она их сужает, поэтому стоит отдельной карточкой сверху,
+         а не внутри сетки. Видна и на пустой странице — но не пока полки грузятся. -->
+    <VCard v-if="!store.loading && !store.error" variant="outlined" rounded="lg" class="filter-panel mb-3">
+      <div class="filter-grid">
+        <SearchField
+          v-model="queryInput"
+          v-model:active-scopes="activeScopes"
+          :scopes="searchScopes"
+          :label="searchLabel"
+          :loading="store.searching"
+        />
+        <!-- Сортировка не сужает список, а переставляет его, поэтому стоит после поиска
+             и отбита от него. -->
+        <VSelect
+          :model-value="store.sortBy"
+          :items="sortOptions"
+          :label="t('research.sort.label')"
+          variant="outlined"
+          density="comfortable"
+          hide-details
+          class="filter-grid__sort"
+          @update:model-value="selectSortBy"
+        />
+        <VBtn
+          variant="outlined"
+          density="comfortable"
+          icon
+          :aria-label="t(`research.sort.${store.sortDir}`)"
+          @click="toggleSortDir"
+        >
+          <IconSortAscending v-if="store.sortDir === 'asc'" :size="18" />
+          <IconSortDescending v-else :size="18" />
+          <VTooltip activator="parent" location="top">
+            {{ t(`research.sort.${store.sortDir}`) }}
+          </VTooltip>
+        </VBtn>
+      </div>
+    </VCard>
+
     <div v-if="store.loading" class="group-grid">
       <VCard v-for="n in 3" :key="n" variant="flat" class="group-card skel-card">
         <VSkeletonLoader type="heading, text, text" />
@@ -87,9 +159,13 @@ function remove(group: GroupListRow) {
 
     <SectionError v-else-if="store.error" :error="store.error" />
 
+    <div v-else-if="store.isEmpty" class="groups-empty">
+      {{ t('research.group.search.empty') }}
+    </div>
+
     <div v-else class="group-grid">
       <VCard
-        v-for="group in store.items"
+        v-for="group in store.visibleItems"
         :key="group.code"
         variant="flat"
         class="group-card"
@@ -145,15 +221,26 @@ function remove(group: GroupListRow) {
 
         <p class="group-card__desc">{{ group.description }}</p>
 
+        <!-- Дата рядом со счётчиком объясняет порядок по умолчанию: без неё карточки стояли бы
+             в последовательности, причины которой на экране не видно. У пустой полки её нет —
+             прочерк был бы шумом там, где отсутствие и есть ответ. -->
         <footer class="group-card__footer">
           <span class="group-card__count">{{ group.research_count }}</span>
           <span class="group-card__count-label">{{ t('research.group.card.researches') }}</span>
+          <span v-if="group.research_updated_at" class="group-card__worked">
+            {{ fmtDateTime(group.research_updated_at) }}
+            <VTooltip activator="parent" location="top">
+              {{ t('research.group.card.worked_at') }}
+            </VTooltip>
+          </span>
         </footer>
       </VCard>
 
       <!-- Полка, которой нет в БД: сюда попадает всё, что не разложено. Всегда последняя и
-           приглушена — это не выбор пользователя, а остаток. -->
+           приглушена — это не выбор пользователя, а остаток. Под поиском исчезает наравне с
+           обычными: у неё тоже либо совпало что-то из лежащих на ней исследований, либо нет. -->
       <VCard
+        v-if="store.ungroupedVisible"
         variant="flat"
         class="group-card group-card--auto"
         :to="groupPath(UNGROUPED_CODE)"
@@ -185,6 +272,42 @@ function remove(group: GroupListRow) {
 </template>
 
 <style scoped>
+/* Панель управления списком: те же 12px внутри, что у панелей фильтров в реестре и в источниках.
+   Отступ несёт сетка внутри, карточке добавлять нечего. */
+.filter-panel {
+  overflow: hidden;
+}
+
+/* Выравнивание по ВЕРХУ, а не по центру, как в реестре исследований: у поля поиска под ним
+   висит пояснение, поэтому оно выше соседей — по центру селект и кнопка уехали бы вниз. */
+.filter-grid {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 12px;
+  align-items: start;
+  padding: 12px;
+}
+
+.filter-grid__sort {
+  width: 260px;
+}
+
+/* Кнопка направления — квадрат в высоту поля рядом: `density` правит только высоту, а сторону
+   иконочной кнопки Vuetify считает от неё же, и без явной ширины выходит прямоугольник. */
+.filter-grid .v-btn--icon {
+  width: 48px;
+  height: 48px;
+}
+
+.groups-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
 .group-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
@@ -302,6 +425,15 @@ function remove(group: GroupListRow) {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-muted);
+}
+
+/* Дата прижата к правому краю подвала: слева счётчик — то, сколько тут лежит, справа — когда
+   этого касались; два ответа об одной полке, но о разном, и разводить их по краям читается
+   быстрее, чем ставить в строку. */
+.group-card__worked {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-faint);
 }
 
 /* Описание фиксировано на две строки: короткие резервируют высоту, длинные обрезаются

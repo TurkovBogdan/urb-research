@@ -1,8 +1,8 @@
-"""MCP-тулы групп — полок, на которые разложен реестр исследований.
+"""MCP-тулы групп — папок, по которым разложен реестр исследований.
 
 Тонкий адаптер над CRUD. Группа стоит НАД исследованием и не участвует в пайплайне: у неё нет
 ни тела, ни источников, ни статусов — агенту видна одна карточка (title/description). Всё, чем
-полка выглядит и как лежит в списке (иконка, цвет, ``sort``), на этой поверхности не выставлено
+группа выглядит и как стоит в списке (иконка, цвет, ``sort``), на этой поверхности не выставлено
 вовсе — это выбор человека в интерфейсе. title/description режутся усечением в CRUD
 (кириллица-safe), не ошибкой. Ошибка → ``ValueError``.
 """
@@ -26,9 +26,9 @@ def register(mcp: "FastMCP") -> None:
         title: str,
         description: str | None = None,
     ) -> GroupCreated:
-        """Create a group — a shelf that researches are filed under.
+        """Create a group — a folder that researches are filed in.
 
-        A group carries no research content of its own: it only labels a shelf. Overlong
+        A group carries no research content of its own: it only names a folder. Overlong
         fields are trimmed (no error on overflow).
 
         Args:
@@ -40,8 +40,13 @@ def register(mcp: "FastMCP") -> None:
 
     @mcp.tool()
     async def group_list() -> list[GroupScan]:
-        """List all groups in the order the user sees them."""
-        return [GroupScan.model_validate(r) for r in await group_crud.group_list()]
+        """List all groups in the order the user arranged them."""
+        # Ключ задан явно: у агента и у веб-списка разные вопросы к порядку. Веб сортируется
+        # тем, что человек выбрал в панели (по умолчанию — где недавно работали), а сюда
+        # приезжает та расстановка, которую он выставил руками (`sort`) и которую агент
+        # видит, но не меняет.
+        rows = await group_crud.group_list(sort_by="sort", sort_dir="desc")
+        return [GroupScan.model_validate(r) for r in rows]
 
     @mcp.tool()
     async def group_get(group_code: str) -> GroupScan:
