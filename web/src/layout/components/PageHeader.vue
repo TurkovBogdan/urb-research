@@ -19,14 +19,19 @@ const { goBack } = useNavigationHistory()
 </script>
 
 <template>
-  <div class="page-header">
+  <!-- Наличие описания читается ПРЯМО В РАЗМЕТКЕ, а не через computed поверх `useSlots()`: слоты
+       не являются реактивной зависимостью, и computed, посчитанный на первом кадре (когда данных
+       ещё нет и слот с `v-if` пуст), таким и остался бы навсегда. Разметка же пересчитывается
+       на каждый рендер. -->
+  <div class="page-header" :class="{ 'page-header--single-line': !(description || $slots.description) }">
     <div v-if="$slots.before || backTo" class="page-header__before">
       <slot name="before">
         <VBtn
           :icon="IconArrowLeft"
           variant="tonal"
-          density="default"
+          density="comfortable"
           rounded="0"
+          class="page-header__back"
           @click="goBack(router, props.backTo!)"
         />
       </slot>
@@ -49,18 +54,35 @@ const { goBack } = useNavigationHistory()
 </template>
 
 <style scoped>
+/* Выравнивание зависит от того, есть ли под заголовком описание. С описанием — по ВЕРХУ: по центру
+   кнопка уезжала бы к середине абзаца, то есть переставала бы стоять рядом с заголовком, к которому
+   относится. Без описания строка одна, и верх ей не нужен: кнопка выше строки текста, и прижатый к
+   её верхнему краю заголовок висел бы над серединой кнопки. */
 .page-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 16px;
   margin-bottom: 16px;
   flex-wrap: nowrap;
 }
 
+.page-header--single-line {
+  align-items: center;
+}
+
 .page-header__before {
   display: flex;
-  align-items: center;
   flex-shrink: 0;
+}
+
+/* Коробка задана здесь, а не пропом `size`: у иконочной кнопки Vuetify считает сторону как
+   `--v-btn-height + 12px`, а `density` правит только высоту — обе ручки дают то прямоугольник, то
+   размер крупнее нужного. Незаслоённое правило перебивает `@layer vuetify-components`
+   (docs/frontend/vuetify-css-patterns). */
+.page-header__back {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
 }
 
 /* Заголовок подтягивается к кнопке: у неё своя внутренняя рамка отступа. */

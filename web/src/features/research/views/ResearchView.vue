@@ -19,6 +19,8 @@ import { fmtDateTime, fmtRelative } from '@/shared/utils/date'
 import ResearchBody from '../components/ResearchBody.vue'
 import DocumentsTable from '../components/DocumentsTable.vue'
 import TitleEditor from '../components/TitleEditor.vue'
+import { groupColorVars } from '../constants/groupColors'
+import { groupIcon } from '../constants/groupIcons'
 import { useResearchDetailStore } from '../stores/research-detail.store'
 import { useSourcesRefetch } from '../useSourcesRefetch'
 import { refetchResearchDocuments } from '../api'
@@ -32,6 +34,9 @@ const settings = useSettingsStore()
 const { copy, isCopied } = useClipboard()
 
 const go = (path: string) => router.push(path)
+
+// Куда возвращает шапка при прямом заходе (ссылка, перезагрузка): по истории идти некуда.
+const RESEARCHES_PATH = '/research/researches'
 
 // Якоря разделов: один источник для `id` на самом разделе и для ссылки в боковой навигации —
 // разъехавшись, они дали бы ссылку в никуда.
@@ -125,12 +130,12 @@ const { refetchingAll, refetchingCode, refetchAllSources, refetchOneSource } = u
 
 <template>
   <PageLayout>
-    <!-- Название исследования — сама шапка страницы; описание и дата живут во «Вводных».
-         Заголовок себя же и правит: пока данных нет, слот не рисуется и работает плейсхолдер. -->
+    <!-- Стандартная шапка страницы, как у всех остальных: возврат, название, действия.
+         Название себя же и правит — пока данных нет, слот не рисуется и работает плейсхолдер. -->
     <PageHeader
       :title="store.research?.title || t('research.research.detail.title')"
       :loading="store.loading"
-      back-to="/research/researches"
+      :back-to="RESEARCHES_PATH"
     >
       <template v-if="store.research" #title>
         <TitleEditor
@@ -163,11 +168,21 @@ const { refetchingAll, refetchingCode, refetchAllSources, refetchOneSource } = u
     <!-- Двенадцать колонок: три под липкую навигацию по разделам, девять под содержимое. Обе
          колонки — дети одной сетки и начинаются с одной строки, поэтому верх плашки сам встаёт
          вровень с первым разделом. -->
-    <div v-if="store.research" class="detail-grid">
+    <div v-if="!store.error" class="detail-grid">
       <!-- Левая колонка целиком липкая: поиск и оглавление держатся вместе, иначе первый уехал бы
            вверх, а второе осталось — и они разъехались бы на полэкрана. -->
       <div class="detail-grid__rail">
-        <VCard variant="outlined" rounded="lg" class="rail-tools">
+        <!-- Полка над колонкой, а не в карточке поиска: она отвечает не «что искать», а «где это
+             лежит», и на полотне читается как надпись над разделом, а не как часть инструмента.
+             Без полки строки нет вовсе — её отсутствие и есть ответ. -->
+        <p v-if="store.research?.group_code" class="rail-group color-tones" :style="groupColorVars(store.research.group_color)">
+          <component :is="groupIcon(store.research.group_icon)" :size="14" :stroke-width="1.7" class="rail-group__icon" />
+          {{ store.research.group_name }}
+        </p>
+
+        <!-- Карточка ждёт данных вместе с остальным: имя и выход со страницы теперь несёт шапка,
+             и держать пустую рамку на время загрузки больше незачем. -->
+        <VCard v-if="store.research" variant="outlined" rounded="lg" class="rail-tools">
           <VTextField
             v-model="store.search"
             :label="t('research.research.detail.search')"
@@ -188,12 +203,18 @@ const { refetchingAll, refetchingCode, refetchAllSources, refetchOneSource } = u
           </p>
         </VCard>
 
-        <SectionNav :sections="navSections" />
+        <SectionNav v-if="store.research" :sections="navSections" />
       </div>
 
       <!-- Разделы появляются и уходят по мере сужения поиска, поэтому переход, а не мгновенная
-           подмена: иначе страница дёргается, и непонятно, что именно изменилось. -->
-      <TransitionGroup name="fragment" tag="div" class="detail-grid__main">
+           подмена: иначе страница дёргается, и непонятно, что именно изменилось. Своё условие,
+           потому что колонка слева переживает загрузку, а содержимое ждёт данных. -->
+      <TransitionGroup
+        v-if="store.research"
+        name="fragment"
+        tag="div"
+        class="detail-grid__main"
+      >
         <section v-if="sectionShown.brief" :key="SECTION.brief" :id="SECTION.brief">
           <SectionHeader :title="t('research.research.detail.brief')" />
           <VCard variant="outlined" rounded="lg" class="mb-4">
@@ -328,6 +349,29 @@ const { refetchingAll, refetchingCode, refetchAllSources, refetchOneSource } = u
   display: flex;
   flex-direction: column;
   gap: 10px;
+  flex: none;
+}
+
+/* Полка над колонкой: плашка того же вида, что на карточке исследования в списке — иконка в цвете
+   группы плюс имя. Отступ снизу тот же, что у сетки колонки (12px), поэтому строка читается как
+   надпись над карточкой, а не как оторванный элемент. */
+.rail-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Цвет несёт иконка, а не имя: тон выбран под плашку и текстом читался бы хуже подписи.
+   Без цвета — акцент, как везде, где полка нарисована. */
+.rail-group__icon {
+  color: var(--gc-ink, var(--accent));
   flex: none;
 }
 
