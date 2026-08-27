@@ -1,9 +1,9 @@
-# agents — AGENTS/ is committed directly; only the root symlinks AGENTS.md/CLAUDE.md are ignored
+# agents — the whole working-records tree (instructions, memory, tasks, docs, plans) is local-only,
+# never published; AGENTS.md/CLAUDE.md are root symlinks into it
 .claude/
+/AGENTS/
 /AGENTS.md
 /CLAUDE.md
-# local-only symlink into a private store (second-brain) — never publish
-/AGENTS/obsidian
 
 # env / secrets — real .env never committed; example templates are tracked
 .env
