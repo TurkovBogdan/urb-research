@@ -16,9 +16,13 @@ const REF_ROUTE: Record<string, string> = {
   SOURCE: 'sources',
 }
 const REF_CODE = new RegExp(`(${Object.keys(REF_ROUTE).join('|')})@([0-9a-f]{22})(?![0-9a-f])`, 'g')
+// A code reads as an identifier, so bodies routinely wrap it in backticks. A code span that is
+// nothing but one code is still a reference, not a literal — anything else in the span (prose,
+// a second code, a fragment) keeps it literal, and a fenced block stays code either way.
+const WHOLE_CODE_SPAN = new RegExp(`^(${Object.keys(REF_ROUTE).join('|')})@([0-9a-f]{22})$`)
 
-// A code is recognised only inside plain text: code spans and fences are separate token
-// types, and a code sitting in a link label must stay text (an <a> cannot nest an <a>).
+// A code is recognised only inside plain text and whole code spans: a fence is a separate token
+// type, and a code sitting in a link label must stay text (an <a> cannot nest an <a>).
 function entityRefs(state: StateCore): void {
   for (const block of state.tokens) {
     if (block.type !== 'inline' || !block.children) continue
@@ -32,10 +36,18 @@ function splitRefsOutOfText(children: Token[], state: StateCore): Token[] {
   for (const token of children) {
     if (token.type === 'link_open') linkDepth += 1
     if (token.type === 'link_close') linkDepth -= 1
-    if (token.type === 'text' && linkDepth === 0) result.push(...refTokens(token, state))
+    if (linkDepth > 0) result.push(token)
+    else if (token.type === 'text') result.push(...refTokens(token, state))
+    else if (token.type === 'code_inline') result.push(codeSpanRef(token, state) ?? token)
     else result.push(token)
   }
   return result
+}
+
+function codeSpanRef(span: Token, state: StateCore): Token | null {
+  const match = WHOLE_CODE_SPAN.exec(span.content.trim())
+  if (!match) return null
+  return refToken(match[1], match[2], span.level, state)
 }
 
 function refTokens(text: Token, state: StateCore): Token[] {
@@ -44,15 +56,19 @@ function refTokens(text: Token, state: StateCore): Token[] {
   for (const match of text.content.matchAll(REF_CODE)) {
     const start = match.index
     if (start > cursor) parts.push(textToken(text.content.slice(cursor, start), text.level, state))
-    const ref = new state.Token('entity_ref', '', 0)
-    ref.level = text.level
-    ref.meta = { refType: match[1], hash: match[2] }
-    parts.push(ref)
+    parts.push(refToken(match[1], match[2], text.level, state))
     cursor = start + match[0].length
   }
   if (!parts.length) return [text]
   if (cursor < text.content.length) parts.push(textToken(text.content.slice(cursor), text.level, state))
   return parts
+}
+
+function refToken(refType: string, hash: string, level: number, state: StateCore): Token {
+  const ref = new state.Token('entity_ref', '', 0)
+  ref.level = level
+  ref.meta = { refType, hash }
+  return ref
 }
 
 function textToken(content: string, level: number, state: StateCore): Token {

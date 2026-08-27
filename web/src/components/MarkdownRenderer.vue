@@ -2,6 +2,7 @@
 import { computed, getCurrentInstance, h, nextTick, onBeforeUnmount, onMounted, ref, render, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import CodeBlock from './CodeBlock.vue'
+import { useAfterRouteTransition } from '@/composables/useRouteTransition'
 import { renderMarkdown, type HeadingAnchor } from './markdown/render'
 
 const router = useRouter()
@@ -9,6 +10,10 @@ const router = useRouter()
 const props = defineProps<{
   text: string
   compact?: boolean
+  // Документ целиком, а не подпись под полем: разбор и раскладка такого тела занимают главный
+  // поток на десятки миллисекунд, и выпади они на переход между страницами — съели бы его
+  // анимацию. Помеченное так тело ждёт конца перехода; всё остальное рисуется сразу.
+  heavy?: boolean
   // Render Markdown images as <img> (off by default: the agent chat strips them).
   allowImages?: boolean
   // Treat single newlines as <br> — preserves line breaks of plain-text email bodies.
@@ -46,7 +51,14 @@ function withRefLabels(sanitized: string): string {
   return changed ? doc.body.innerHTML : sanitized
 }
 
-const rendered = computed(() => renderMarkdown(props.text, {
+// Пустой текст, пока идёт переход, — это и есть отсрочка: разбор не запускается, оглавление
+// приезжает вместе с телом, и ни один потребитель не узнаёт про ожидание ничего сверх того,
+// что тело пока пустое.
+const settled = useAfterRouteTransition()
+
+const source = computed(() => (props.heavy && !settled.value ? '' : props.text))
+
+const rendered = computed(() => renderMarkdown(source.value, {
   breaks: props.breaks ?? false,
   allowImages: props.allowImages ?? false,
 }))
@@ -375,6 +387,20 @@ function onClick(event: MouseEvent) {
 }
 .md-body :deep(.md-table tbody tr:nth-child(even)) {
   background: color-mix(in srgb, var(--surface-hi) 45%, transparent);
+}
+/* A pill never breaks in prose, but a cell is sized by its content: a title-labelled reference
+   would otherwise widen the column past the page and send the whole table into horizontal
+   scroll. Inside a cell it wraps like text instead. */
+.md-body :deep(.md-table .md-ref) {
+  white-space: normal;
+  /* The cell cap alone doesn't help: the table is sized by max-content, so a pill labelled with
+     a title claims one long line and widens the column. Capping the pill itself makes the label
+     wrap inside it and keeps the column near the width of the prose around it. */
+  max-width: 30ch;
+  /* A wrapped label is a paragraph, not a chip: the glyph belongs beside its first line (centring
+     it against the whole block reads as a bullet), and the lines need room to breathe. */
+  align-items: baseline;
+  line-height: 1.35;
 }
 /* Column alignment has to out-specify the cell rule above, so it names the cell too. */
 .md-body :deep(.md-table .md-align-left)   { text-align: left; }
