@@ -1,0 +1,79 @@
+// ── Font faces ───────────────────────────────────────────────────────────────
+// Every family the interface can be switched to is declared here; which one is in
+// use is decided at runtime by the settings store, which writes the `--font` and
+// `--font-reading` tokens. A family offered in `constants/fonts.ts` without a face
+// here would silently fall back to the system stack.
+//
+// The libre families are Google's own per-subset variable builds, served verbatim:
+// the binaries are not re-cut, so the OFL Reserved Font Name clause never comes into
+// play. Each licence sits next to the files as `assets/fonts/OFL-<family>.txt`.
+
+// Subsetting is what keeps the choice cheap: a family the user has not selected is
+// never requested, and a selected one downloads only the ranges its text actually
+// uses — Cyrillic prose pulls the Cyrillic file and leaves latin-ext alone.
+$font-subsets: (
+  'cyrillic-ext': (U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F),
+  'cyrillic': (U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116),
+  'latin-ext': (
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308,
+    U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF
+  ),
+  'latin': (
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD
+  ),
+);
+
+@mixin subsetted-family($family, $slug, $weights) {
+  @each $subset, $range in $font-subsets {
+    @font-face {
+      font-family: $family;
+      font-style: normal;
+      font-weight: $weights;
+      font-display: swap;
+      src: url('../assets/fonts/#{$slug}-#{$subset}.woff2') format('woff2');
+      unicode-range: $range;
+    }
+  }
+}
+
+// Onest — the default interface family (variable, wght 100–900). Shipped as one
+// file rather than per-subset ranges: it is already cut down to Latin + Russian.
+@font-face {
+  font-family: 'Onest';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('../assets/fonts/onest.woff2') format('woff2'),
+       url('../assets/fonts/onest.woff')  format('woff');
+}
+
+// JetBrains Mono — code, in prose and in the CodeBlock component (variable, wght 100–800).
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('../assets/fonts/jetbrains-mono.woff2') format('woff2'),
+       url('../assets/fonts/jetbrains-mono.woff')  format('woff');
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: italic;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('../assets/fonts/jetbrains-mono-italic.woff2') format('woff2'),
+       url('../assets/fonts/jetbrains-mono-italic.woff')  format('woff');
+}
+
+// Golos Text — Cyrillic-first grotesque drawn for reading rather than for interfaces.
+@include subsetted-family('Golos Text', 'golos-text', 400 900);
+
+// Literata — screen-first text serif (Google Play Books), for continuous reading.
+@include subsetted-family('Literata', 'literata', 400 700);
+
+// Inter — dense-interface grotesque, the alternative to Onest in the UI role.
+@include subsetted-family('Inter', 'inter', 100 900);

@@ -7,9 +7,10 @@ import {
   IconPageBreak, IconTable, IconTableRow, IconLayoutBottombar, IconCode, IconMarkdown,
   IconMessage2, IconCalendarTime, IconSeparator, IconWorld, IconChartLine,
   IconBoxMultiple, IconChartBar, IconChartPie, IconLayoutCards, IconDeviceMobile,
-  IconAlertTriangle, IconLayoutKanban, IconArrowsHorizontal, IconTags,
+  IconAlertTriangle, IconBellRinging, IconInfoCircle, IconLayoutKanban, IconArrowsHorizontal, IconTags,
   IconLayoutBottombarExpand, IconToggleLeft, IconPaperclip,
-  IconMessages, IconMail, IconChevronDown, IconUsersGroup,
+  IconMessages, IconMail, IconChevronDown, IconUsersGroup, IconMoodSmile,
+  IconMoodSad, IconHeading, IconPalette, IconBrush,
 } from '@tabler/icons-vue'
 import type { TablerIcon } from '@/shared/nav'
 import PageLayout from '@/layout/templates/PageLayout.vue'
@@ -48,6 +49,9 @@ const groups: Group[] = [
       { slug: 'toggle',       icon: IconToggleRight },
       { slug: 'sliders',      icon: IconAdjustmentsHorizontal },
       { slug: 'date-pickers', icon: IconCalendarTime },
+      { slug: 'icon-picker',  icon: IconMoodSmile },
+      { slug: 'color-picker', icon: IconPalette },
+      { slug: 'icon-color-picker', icon: IconBrush },
     ],
   },
   {
@@ -71,6 +75,9 @@ const groups: Group[] = [
     key: 'feedback',
     pages: [
       { slug: 'alerts',       icon: IconAlertTriangle },
+      { slug: 'toasts',       icon: IconBellRinging },
+      { slug: 'callout',      icon: IconInfoCircle },
+      { slug: 'error-states', icon: IconMoodSad },
       { slug: 'loaders',      icon: IconLoader2 },
       { slug: 'skeleton',     icon: IconBoxMultiple },
       { slug: 'status-badge', icon: IconCircleDot },
@@ -97,6 +104,7 @@ const groups: Group[] = [
       { slug: 'file-cards',   icon: IconPaperclip },
       { slug: 'spoiler',      icon: IconChevronDown },
       { slug: 'members-cell', icon: IconUsersGroup },
+      { slug: 'section-header', icon: IconHeading },
     ],
   },
   {

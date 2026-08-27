@@ -1,20 +1,39 @@
 <script setup lang="ts">
-import { onActivated, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onActivated, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { IconRefresh, IconSearch } from '@tabler/icons-vue'
+import { IconRefresh, IconSearch, IconSortAscending, IconSortDescending } from '@tabler/icons-vue'
 
 import PageLayout from '@/layout/templates/PageLayout.vue'
 import PageHeader from '@/layout/components/PageHeader.vue'
-import TablePaginationBar from '@/components/TablePaginationBar.vue'
-import { fmtDateTime } from '@/shared/utils/date'
+import SectionError from '@/components/SectionError.vue'
+import { useSettingsStore } from '@/stores/settings'
+import { RESEARCH_LIST_VIEWS } from '@/constants/lists'
 
+import ResearchesList from '../components/ResearchesList.vue'
+import { useGroupsStore } from '../stores/groups.store'
 import { useResearchesStore } from '../stores/researches.store'
-import type { ResearchListRow } from '../api'
+import { RESEARCH_SORT_FIELDS, UNGROUPED_CODE, type ResearchSortBy } from '../api'
 
 const { t } = useI18n()
-const router = useRouter()
 const store = useResearchesStore()
+const groupsStore = useGroupsStore()
+// Тот же ключ, что и на странице настроек: выбор здесь — не «на этот раз», а смена предпочтения.
+const settings = useSettingsStore()
+
+// null — все полки; UNGROUPED_CODE — только не разложенные (бэк читает пустой код именно так).
+const groupOptions = computed(() => [
+  { title: t('research.research.filter.group_all'), value: null },
+  { title: t('research.group.ungrouped.title'), value: UNGROUPED_CODE },
+  ...groupsStore.items.map((g) => ({ title: g.title, value: g.code })),
+])
+
+const sortOptions = computed(() =>
+  RESEARCH_SORT_FIELDS.map((field) => ({ title: t(`research.sort.by.${field}`), value: field })),
+)
+
+const groupFilterTitle = computed(() => (
+  groupOptions.value.find((o) => o.value === store.groupFilter)?.title ?? ''
+))
 
 const SEARCH_DEBOUNCE_MS = 350
 const queryInput = ref(store.query)
@@ -40,40 +59,37 @@ function clearAll() {
   store.load()
 }
 
-function toggleSort() {
+function reload() {
+  store.resetPage()
+  store.load()
+}
+
+function selectGroup(code: string | null) {
+  store.groupFilter = code
+  reload()
+}
+
+function selectSortBy(field: ResearchSortBy) {
+  store.sortBy = field
+  reload()
+}
+
+function toggleSortDir() {
   store.sortDir = store.sortDir === 'desc' ? 'asc' : 'desc'
-  store.resetPage()
+  reload()
+}
+
+// Стор общий с деталью полки, поэтому реестр каждый раз снимает с себя её контекст —
+// иначе после возврата из группы список остался бы отфильтрованным. Выбранная в панели
+// полка (groupFilter) — наоборот, переживает уход со страницы, как и строка поиска.
+onActivated(() => {
+  if (store.groupCode !== null) {
+    store.groupCode = null
+    store.resetPage()
+  }
+  if (!groupsStore.items.length) groupsStore.load()
   store.load()
-}
-
-function openResearch(_: unknown, row: { item: ResearchListRow }) {
-  router.push(`/research/researches/${row.item.code}`)
-}
-
-function onPageChange(p: number) {
-  store.page = p
-  store.load()
-}
-
-function onPageSizeChange(size: number) {
-  store.pageSize = size
-  store.resetPage()
-  store.load()
-}
-
-const DESCRIPTION_MAX = 128
-const truncate = (s: string, n: number) => (s.length > n ? s.slice(0, n) + '…' : s)
-
-const headers = [
-  { title: t('research.research.col.research'), key: 'title', sortable: false },
-  { title: t('research.research.col.areas'), key: 'area_count', sortable: false, width: 96, align: 'end' as const },
-  { title: t('research.research.col.queries'), key: 'query_count', sortable: false, width: 96, align: 'end' as const },
-  { title: t('research.research.col.kept'), key: 'document_kept', sortable: false, width: 104, align: 'end' as const },
-  { title: t('research.research.col.filtered'), key: 'document_filtered', sortable: false, width: 104, align: 'end' as const },
-  { title: t('research.research.col.updated_at'), key: 'updated_at', sortable: false, width: 170 },
-]
-
-onActivated(() => store.load())
+})
 </script>
 
 <template>
@@ -90,102 +106,114 @@ onActivated(() => store.load())
       </template>
     </PageHeader>
 
-    <VCard variant="outlined" rounded="lg" class="filter-panel mb-3">
-      <div class="filter-grid">
-        <VTextField
-          v-model="queryInput"
-          :label="t('research.research.filter.query')"
-          :prepend-inner-icon="IconSearch"
-          variant="outlined"
-          density="comfortable"
-          hide-details
-          clearable
-          class="filter-grid__search"
-        />
-        <VBtn variant="outlined" density="comfortable" @click="toggleSort">
-          {{ store.sortDir === 'desc' ? t('research.sort.newest') : t('research.sort.oldest') }}
-        </VBtn>
-      </div>
+    <SectionError v-if="store.error" :error="store.error" />
 
-      <div v-if="store.hasActiveFilters" class="filter-chips">
-        <VChip v-if="store.query" size="small" closable @click:close="queryInput = ''">
-          {{ store.query }}
-        </VChip>
-        <VBtn variant="text" size="small" @click="clearAll">
-          {{ t('research.action.clear_filters') }}
-        </VBtn>
-      </div>
-    </VCard>
+    <!-- Фильтры отдаются таблице слотом: они рисуются в её карточке над линейкой, как панель
+         фильтров у таблицы источников. -->
+    <ResearchesList v-else>
+      <template #filters>
+        <div class="filter-grid">
+          <VTextField
+            v-model="queryInput"
+            :label="t('research.research.filter.query')"
+            :prepend-inner-icon="IconSearch"
+            variant="outlined"
+            density="comfortable"
+            hide-details
+            clearable
+            class="filter-grid__search"
+          />
+          <VSelect
+            :model-value="store.groupFilter"
+            :items="groupOptions"
+            :label="t('research.research.filter.group')"
+            :loading="groupsStore.loading"
+            variant="outlined"
+            density="comfortable"
+            hide-details
+            class="filter-grid__select"
+            @update:model-value="selectGroup"
+          />
+          <VSelect
+            :model-value="store.sortBy"
+            :items="sortOptions"
+            :label="t('research.sort.label')"
+            variant="outlined"
+            density="comfortable"
+            hide-details
+            class="filter-grid__select filter-grid__sort"
+            @update:model-value="selectSortBy"
+          />
+          <VBtn
+            variant="outlined"
+            density="comfortable"
+            icon
+            :aria-label="t(`research.sort.${store.sortDir}`)"
+            @click="toggleSortDir"
+          >
+            <IconSortAscending v-if="store.sortDir === 'asc'" :size="18" />
+            <IconSortDescending v-else :size="18" />
+            <VTooltip activator="parent" location="top">
+              {{ t(`research.sort.${store.sortDir}`) }}
+            </VTooltip>
+          </VBtn>
 
-    <VAlert
-      v-if="store.error"
-      type="error"
-      variant="tonal"
-      closable
-      class="mb-3"
-      @click:close="store.error = null"
-    >
-      {{ store.error }}
-    </VAlert>
+          <!-- Раскладка стоит последней и отбита от фильтров: она не сужает список, а меняет
+               то, как он нарисован. `mandatory` — снять обе кнопки нельзя, раскладка всегда есть. -->
+          <VBtnToggle
+            v-model="settings.lists.researchView"
+            mandatory
+            density="comfortable"
+            variant="outlined"
+            divided
+            class="filter-grid__view"
+          >
+            <VBtn v-for="view in RESEARCH_LIST_VIEWS" :key="view.code" :value="view.code" icon>
+              <component :is="view.icon" :size="18" />
+              <VTooltip activator="parent" location="top">{{ t(view.label) }}</VTooltip>
+            </VBtn>
+          </VBtnToggle>
+        </div>
 
-    <VCard variant="outlined" rounded="lg">
-      <VDataTable
-        :headers="headers"
-        :items="store.items"
-        :loading="store.loading"
-        :items-per-page="store.pageSize"
-        item-value="code"
-        density="comfortable"
-        hover
-        hide-default-footer
-        :no-data-text="t('research.research.list.empty')"
-        @click:row="openResearch"
-      >
-        <template #[`item.title`]="{ item }">
-          <div class="topic-cell">{{ item.title }}</div>
-          <div v-if="item.description" class="desc-cell">
-            {{ truncate(item.description, DESCRIPTION_MAX) }}
-          </div>
-        </template>
-        <template #[`item.area_count`]="{ item }">
-          <span class="count-cell">{{ item.area_count }}</span>
-        </template>
-        <template #[`item.query_count`]="{ item }">
-          <span class="count-cell">{{ item.query_count }}</span>
-        </template>
-        <template #[`item.document_kept`]="{ item }">
-          <span class="count-cell count-cell--kept">{{ item.document_kept }}</span>
-        </template>
-        <template #[`item.document_filtered`]="{ item }">
-          <span class="count-cell count-cell--filtered">{{ item.document_filtered }}</span>
-        </template>
-        <template #[`item.updated_at`]="{ item }">
-          <span class="date-cell">{{ fmtDateTime(item.updated_at) }}</span>
-        </template>
-      </VDataTable>
-
-      <TablePaginationBar
-        :page="store.page"
-        :page-size="store.pageSize"
-        :total="store.total"
-        :page-count="store.pageCount"
-        @update:page="onPageChange"
-        @update:page-size="onPageSizeChange"
-      />
-    </VCard>
+        <div v-if="store.hasActiveFilters" class="filter-chips">
+          <VChip v-if="store.query" size="small" closable @click:close="queryInput = ''">
+            {{ store.query }}
+          </VChip>
+          <VChip
+            v-if="store.groupFilter !== null"
+            size="small"
+            closable
+            @click:close="selectGroup(null)"
+          >
+            {{ groupFilterTitle }}
+          </VChip>
+          <VBtn variant="text" size="small" @click="clearAll">
+            {{ t('research.action.clear_filters') }}
+          </VBtn>
+        </div>
+      </template>
+    </ResearchesList>
   </PageLayout>
 </template>
 
 <style scoped>
-.filter-panel {
+/* Панель живёт внутри карточки таблицы, поэтому отступ несёт она сама — как у фильтров
+   источников (`.doc-filters`). Чипы дотягивают тот же отступ снизу, если они есть. */
+.filter-grid {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto auto;
+  gap: 12px;
+  align-items: center;
   padding: 12px;
 }
 
-.filter-grid {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 12px;
-  align-items: center;
+/* Отбивка от кнопки направления: та относится к сортировке, а раскладка — сама по себе. */
+.filter-grid__view {
+  margin-left: 4px;
+}
+
+.filter-grid__select {
+  width: 220px;
 }
 
 .filter-chips {
@@ -193,42 +221,24 @@ onActivated(() => store.load())
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin-top: 10px;
+  padding: 0 12px 12px;
 }
 
-.topic-cell {
-  font-weight: 500;
-  line-height: 1.4;
-}
-
-.desc-cell {
-  margin-top: 2px;
-  font-size: 12px;
-  color: var(--text-muted);
-  line-height: 1.45;
-}
-
-.count-cell {
-  font-family: var(--font-mono);
-  color: var(--text-muted);
-}
-
-.count-cell--kept {
-  color: rgb(var(--v-theme-success));
-}
-
-.count-cell--filtered {
-  color: var(--text-faint);
-}
-
-.date-cell {
-  white-space: nowrap;
-  color: var(--text-muted);
-}
-
+/* Узкий экран: каждый фильтр на свою строку во всю ширину, а кнопка направления остаётся
+   рядом с выбором поля — она читается только вместе с ним. */
 @media (max-width: 720px) {
   .filter-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr auto;
+  }
+
+  .filter-grid__search,
+  .filter-grid__select {
+    grid-column: 1 / -1;
+    width: auto;
+  }
+
+  .filter-grid__sort {
+    grid-column: 1;
   }
 }
 </style>

@@ -7,7 +7,9 @@ import { getQuery, type QueryDetail } from '../api'
 export const useQueryDetailStore = defineStore('web_search-query-detail', () => {
   const query = ref<QueryDetail | null>(null)
   const loading = ref(false)
-  const error = ref<string | null>(null)
+  // Держим сам отказ, а не его текст: показ (`SectionError`) отличает «сущности нет» от сбоя
+  // по статусу ответа, а формулировку берёт из `errorText`.
+  const error = ref<unknown>(null)
 
   const results = computed(() => query.value?.results ?? [])
 
@@ -17,7 +19,7 @@ export const useQueryDetailStore = defineStore('web_search-query-detail', () => 
     try {
       query.value = await getQuery(code)
     } catch (e) {
-      error.value = e instanceof Error ? e.message : String(e)
+      error.value = e
       query.value = null
     } finally {
       loading.value = false

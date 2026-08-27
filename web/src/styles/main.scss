@@ -1,32 +1,5 @@
-// ── Fonts ────────────────────────────────────────────────────────────────────
-// Onest — Variable Font (wght 100–900)
-@font-face {
-  font-family: 'Onest';
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url('../assets/fonts/onest.woff2') format('woff2'),
-       url('../assets/fonts/onest.woff')  format('woff');
-}
-
-// JetBrains Mono — Variable Font (wght 100–800)
-@font-face {
-  font-family: 'JetBrains Mono';
-  font-style: normal;
-  font-weight: 100 800;
-  font-display: swap;
-  src: url('../assets/fonts/jetbrains-mono.woff2') format('woff2'),
-       url('../assets/fonts/jetbrains-mono.woff')  format('woff');
-}
-
-@font-face {
-  font-family: 'JetBrains Mono';
-  font-style: italic;
-  font-weight: 100 800;
-  font-display: swap;
-  src: url('../assets/fonts/jetbrains-mono-italic.woff2') format('woff2'),
-       url('../assets/fonts/jetbrains-mono-italic.woff')  format('woff');
-}
+// Font faces live in styles/fonts.scss — which family is in use is a runtime choice
+// (settings store → --font / --font-reading), so the declarations sit apart from tokens.
 
 // ── Design tokens ───────────────────────────────────────────────────────────
 :root {
@@ -41,7 +14,11 @@
   --border-sunken: #181C23;                // border paired with --surface-sunken
   --text:         #E6E9EF;
   --text-muted:   #9AA3B2;
-  --text-faint:   #6B7280;
+  // Raised from #6B7280: measured 3.45:1 against --surface, under the 4.5 an AA reader needs
+  // for text this size. It carries h6 labels, list markers and captions — tertiary, but read.
+  // The value is set against the *lightest* place it lands — table headers on --surface-hi —
+  // because that is where the ratio is worst, not against --surface where it looks safe.
+  --text-faint:   #8B94A3;
   --accent:       #3B9EFF;
   --accent-soft:  rgba(59, 158, 255, 0.14);
   --accent-mid:   #2C6FB0;
@@ -55,7 +32,11 @@
   --info-soft:    rgba(59, 158, 255, 0.14);
   --radius:       10px;
   --radius-sm:    6px;
-  --font:         'Onest', system-ui, sans-serif;
+  // Font roles. These are the defaults the app paints with before the settings store
+  // applies the user's choice onto <html> (see constants/fonts.ts) — and the values it
+  // keeps if the choice is the default one.
+  --font:         'Onest', system-ui, sans-serif;          // interface: scanned in small sizes
+  --font-reading: 'Onest', system-ui, sans-serif;          // prose: read continuously
   --font-mono:    'JetBrains Mono', monospace;
 
   --legacy-scrollbar-thumb-hover: #3A4150;
@@ -81,7 +62,100 @@
 
   --legacy-tooltip-bg:    #2A2F3A;
   --legacy-flyout-bg:     #1A1E26;
+
+  // Tells the engine which scheme the page is painted in, so native scrollbars, form
+  // controls and the canvas behind the app match instead of flashing white.
+  color-scheme: dark;
 }
+
+// ── Light palette ────────────────────────────────────────────────────────────
+// Same token names, inverted surfaces — every rule below in this file reads tokens, so the
+// scheme switches without touching a single component. The attribute is written onto <html>
+// by the settings store; absent it, the dark set above stands.
+//
+// Accents are darkened rather than reused: #3B9EFF carries a dark background but drops below
+// a readable contrast on white, and the same holds for the warn/error/success trio.
+:root[data-theme='light'] {
+  --sidebar-bg:   #FFFFFF;                 // panel
+  --bg:           #F4F6F9;                 // app bg
+  --surface:      #FFFFFF;                 // cards
+  --surface-hi:   #EDF0F5;                 // hover
+  --surface-sunken: #E7EAF1;               // recessed tray below surface
+  --input-bg:     #FFFFFF;                 // input wells
+  --border:       #D3D9E3;
+  --border-soft:  #E3E7EE;
+  --border-sunken: #DBE0E9;
+  // Each of these is set against the tint of its own colour, not against the card: a badge
+  // paints the colour on `*-soft`, and that pairing is always the tightest one on the page.
+  --text:         #171A21;
+  --text-muted:   #4F5867;
+  --text-faint:   #616A7B;
+  --accent:       #1667BE;
+  --accent-soft:  rgba(22, 103, 190, 0.10);
+  --accent-mid:   #8CBDEE;
+  --warn:         #8F5600;
+  --warn-soft:    rgba(143, 86, 0, 0.12);
+  --error:        #BC2C2F;
+  --error-soft:   rgba(188, 44, 47, 0.10);
+  --success:      #13692F;
+  --success-soft: rgba(19, 105, 47, 0.12);
+  --info:         #1667BE;
+  --info-soft:    rgba(22, 103, 190, 0.10);
+
+  --legacy-scrollbar-thumb-hover: #B4BCC9;
+
+  --legacy-error-text:    #B02428;
+  --legacy-warn-text:     #8A5300;
+  --legacy-info-text:     #14588F;
+  --legacy-accent-text:   #14588F;
+
+  --legacy-error-tint-12: rgba(188, 44, 47, 0.10);
+  --legacy-error-tint-14: rgba(188, 44, 47, 0.14);
+  --legacy-error-tint-28: rgba(188, 44, 47, 0.24);
+  --legacy-warn-tint-12:  rgba(143, 86, 0, 0.12);
+  --legacy-info-tint-12:  rgba(22, 103, 190, 0.10);
+  --legacy-accent-tint-05: rgba(22, 103, 190, 0.06);
+  --legacy-accent-tint-14: rgba(22, 103, 190, 0.14);
+  --legacy-accent-tint-28: rgba(22, 103, 190, 0.24);
+  --legacy-idle-tint-10:  rgba(79, 88, 103, 0.10);
+
+  --legacy-info-blue:     #1667BE;
+  --legacy-info-blue-10:  rgba(22, 103, 190, 0.10);
+  --legacy-info-blue-25:  rgba(22, 103, 190, 0.24);
+
+  // The tooltip stays dark in both schemes: its text colour is pinned light where it is
+  // styled, and a dark pill over light content is the readable pairing anyway.
+  --legacy-tooltip-bg:    #2A2F3A;
+  --legacy-flyout-bg:     #FFFFFF;
+
+  color-scheme: light;
+}
+
+
+// ── Colour tones ─────────────────────────────────────────────────────────────
+// Named colours a user picks from a palette (research shelves today) are not tokens: they arrive
+// per element as three lightness steps of one hue (`shared/colorTones.ts`). Only the choice
+// between them is a scheme question, so it is made here, next to the palettes, and not repeated
+// in every component that paints with a colour.
+//
+// A consumer sets the steps and reads roles: `--gc-ink` (glyph), `--gc-fill` (plate under it),
+// `--gc-swatch` (the colour's own identity — the middle step, flat, the one tone that stands for
+// the colour in either scheme). The alpha matches the `*-soft` tokens above, so a coloured plate
+// sits at the same weight as an accent one.
+//
+// The switch keys off `data-theme` like every token above, NOT off `color-scheme` via
+// `light-dark()`: Vuetify declares `color-scheme` on `.v-application` from its own theme class,
+// which would make these colours follow Vuetify's theme while the tokens follow ours.
+.color-tones {
+  --gc-ink: var(--gc-light);
+  --gc-fill: color-mix(in oklab, var(--gc-ink) 14%, transparent);
+  --gc-swatch: var(--gc-mid);
+}
+
+:root[data-theme='light'] .color-tones {
+  --gc-ink: var(--gc-deep);
+}
+
 
 // ── Reset & base ─────────────────────────────────────────────────────────────
 *, *::before, *::after { box-sizing: border-box; }

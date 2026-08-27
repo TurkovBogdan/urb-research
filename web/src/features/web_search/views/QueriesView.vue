@@ -6,6 +6,9 @@ import { IconPlus, IconRefresh, IconSearch } from '@tabler/icons-vue'
 
 import PageLayout from '@/layout/templates/PageLayout.vue'
 import PageHeader from '@/layout/components/PageHeader.vue'
+import SectionError from '@/components/SectionError.vue'
+import AppDialog from '@/components/AppDialog.vue'
+import { errorText } from '@/api/errorText'
 import TablePaginationBar from '@/components/TablePaginationBar.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { fmtDateTime, fmtRelative } from '@/shared/utils/date'
@@ -103,7 +106,7 @@ async function submitCreate() {
     })
     dialog.value = false
   } catch (e) {
-    createError.value = e instanceof Error ? e.message : String(e)
+    createError.value = errorText(e)
   }
 }
 
@@ -216,18 +219,9 @@ onActivated(() => {
       </div>
     </VCard>
 
-    <VAlert
-      v-if="store.error"
-      type="error"
-      variant="tonal"
-      closable
-      class="mb-3"
-      @click:close="store.error = null"
-    >
-      {{ store.error }}
-    </VAlert>
+    <SectionError v-if="store.error" :error="store.error" />
 
-    <VCard variant="outlined" rounded="lg">
+    <VCard v-else variant="outlined" rounded="lg">
       <VDataTable
         :headers="headers"
         :items="store.items"
@@ -267,10 +261,9 @@ onActivated(() => {
       />
     </VCard>
 
-    <VDialog v-model="dialog" max-width="560">
-      <VCard rounded="lg">
-        <VCardTitle>{{ t('web_search.query.create.title') }}</VCardTitle>
-        <VCardText>
+    <!-- Отказ создания живёт В ОКНЕ, а не тостом: человек смотрит сюда, и окно остаётся
+         открытым с введённым запросом. Клиент про него молчит — запрос идёт с report: false. -->
+    <AppDialog v-model="dialog" :title="t('web_search.query.create.title')">
           <VAlert
             v-if="createError"
             type="error"
@@ -322,24 +315,22 @@ onActivated(() => {
               hide-details
             />
           </div>
-        </VCardText>
-        <VCardActions>
-          <VSpacer />
-          <VBtn variant="text" @click="dialog = false">
-            {{ t('web_search.query.create.cancel') }}
-          </VBtn>
-          <VBtn
-            color="primary"
-            variant="flat"
-            :disabled="!canSubmit"
-            :loading="store.creating"
-            @click="submitCreate"
-          >
-            {{ t('web_search.query.create.submit') }}
-          </VBtn>
-        </VCardActions>
-      </VCard>
-    </VDialog>
+
+      <template #actions>
+        <VBtn variant="text" @click="dialog = false">
+          {{ t('web_search.query.create.cancel') }}
+        </VBtn>
+        <VBtn
+          color="primary"
+          variant="flat"
+          :disabled="!canSubmit"
+          :loading="store.creating"
+          @click="submitCreate"
+        >
+          {{ t('web_search.query.create.submit') }}
+        </VBtn>
+      </template>
+    </AppDialog>
   </PageLayout>
 </template>
 

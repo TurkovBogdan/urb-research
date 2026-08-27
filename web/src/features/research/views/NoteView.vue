@@ -5,9 +5,11 @@ import { useI18n } from 'vue-i18n'
 
 import PageLayout from '@/layout/templates/PageLayout.vue'
 import PageHeader from '@/layout/components/PageHeader.vue'
+import SectionError from '@/components/SectionError.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 
 import ResearchBody from '../components/ResearchBody.vue'
+import TitleEditor from '../components/TitleEditor.vue'
 import { useNoteDetailStore } from '../stores/note-detail.store'
 import { NOTE_KIND_COLOR } from '../labels'
 
@@ -32,15 +34,19 @@ watch(() => route.params.code, reload)
       back-to="/research/researches"
     />
 
-    <VAlert v-if="store.error" type="error" variant="tonal" class="mb-3">
-      {{ store.error }}
-    </VAlert>
+    <SectionError v-if="store.error" :error="store.error" />
 
     <template v-if="store.note">
       <VCard variant="outlined" rounded="lg" class="mb-3">
         <VCardText>
           <div class="note-head">
-            <div class="note-title">{{ store.note.title }}</div>
+            <TitleEditor
+              class="note-title"
+              :title="store.note.title"
+              :label="t('research.note.detail.title_label')"
+              :saving="store.renaming"
+              @save="store.rename"
+            />
             <StatusBadge :color="NOTE_KIND_COLOR[store.note.kind]">
               {{ t(`research.note.kind.${store.note.kind}`) }}
             </StatusBadge>
@@ -69,10 +75,13 @@ watch(() => route.params.code, reload)
   gap: 12px;
 }
 
+/* Кегль строки редактора задаётся его же токенами: подменять `font-size` снаружи нельзя —
+   на нём держится равная высота покоя и правки. Ширину строка забирает всю свободную, иначе
+   бейдж типа прилипал бы к названию вместо правого края. */
 .note-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text);
+  flex: 1 1 auto;
+  min-width: 0;
+  --ile-size: 16px;
 }
 
 .note-desc {

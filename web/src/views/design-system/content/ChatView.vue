@@ -79,13 +79,13 @@ const bodies: Record<string, MessageBody> = {
     html:
       "<p>Hello Jane, thanks for the detailed description — that really helps narrow it down. I can see your account on our side and you're right: a password-reset job got stuck in a half-finished state last night, which is why the session never sticks after login.</p>" +
       "<p>Nothing is lost, your templates and history are all intact. I'm clearing the stuck job now and sending you a fresh reset link. I've also attached a short PDF with the exact steps and our logo so you know the email is genuinely from us.</p>" +
-      '<p><img src="https://picsum.photos/seed/semaphore-logo/420/120" alt="brand logo"></p>',
+      '<p><img src="https://picsum.photos/seed/brand-logo/420/120" alt="brand logo"></p>',
     text: {
       forwarded: '',
       message:
         "Hello Jane, thanks for the detailed description — that really helps narrow it down. I can see your account on our side and you're right: a password-reset job got stuck in a half-finished state last night, which is why the session never sticks after login.\n\n" +
         "Nothing is lost, your templates and history are all intact. I'm clearing the stuck job now and sending you a fresh reset link. I've also attached a short PDF with the exact steps and our logo so you know the email is genuinely from us.\n\n" +
-        "![brand logo](https://picsum.photos/seed/semaphore-logo/420/120)",
+        "![brand logo](https://picsum.photos/seed/brand-logo/420/120)",
       history: '',
     },
   },

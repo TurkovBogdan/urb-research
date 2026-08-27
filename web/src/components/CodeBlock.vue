@@ -7,8 +7,9 @@ const props = defineProps<{
   code: string
   lang?: string
   showLineNumbers?: boolean
-  /** icon — lang badge + icon buttons (default); accent — lang badge + primary copy button; minimal — no header, no copy */
-  variant?: 'minimal' | 'icon' | 'accent'
+  /** icon — lang badge + icon buttons (default); accent — lang badge + primary copy button;
+   *  minimal — no header, no copy; compact — one-liner: no header, copy button on hover */
+  variant?: 'minimal' | 'icon' | 'accent' | 'compact'
 }>()
 
 const { highlight } = useHighlighter()
@@ -51,7 +52,7 @@ const resolvedVariant = () => props.variant ?? 'icon'
 </script>
 
 <template>
-  <div class="code-block">
+  <div class="code-block" :class="{ 'code-block--compact': resolvedVariant() === 'compact' }">
 
     <!-- variant: icon — lang badge + icon buttons -->
     <div v-if="resolvedVariant() === 'icon'" class="code-block__header">
@@ -97,13 +98,24 @@ const resolvedVariant = () => props.variant ?? 'icon'
       </VBtn>
     </div>
 
-    <!-- variant: minimal — no header -->
+    <!-- variant: minimal — no header; compact — no header, the copy button floats over the code -->
 
     <div
       class="code-block__body"
       :class="{ 'code-block__body--line-numbers': lineNumbers }"
       v-html="html"
     />
+
+    <button
+      v-if="resolvedVariant() === 'compact'"
+      class="code-block__btn code-block__copy-float"
+      :class="{ 'code-block__btn--copied': copied }"
+      title="Скопировать"
+      @click="copy"
+    >
+      <IconCheck v-if="copied" :size="13" stroke-width="2.5" />
+      <IconCopy v-else :size="13" stroke-width="2" />
+    </button>
   </div>
 </template>
 
@@ -116,12 +128,15 @@ const resolvedVariant = () => props.variant ?? 'icon'
   font-size: 12px;
 }
 
+/* The header shares the panel's surface instead of sitting a step above it: on a light card
+   the body is white and a raised header was the only filled area, so the block read as a grey
+   cap with nothing under it. The rule below it is what separates the two. */
 .code-block__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 6px 10px;
-  background: var(--surface-hi);
+  background: var(--surface);
   border-bottom: 1px solid var(--border-soft);
   user-select: none;
 }
@@ -156,8 +171,10 @@ const resolvedVariant = () => props.variant ?? 'icon'
   transition: background 0.12s, color 0.12s;
 }
 
+/* One step up from the header, which now shares the panel surface — the old value matched it
+   and the hover state was invisible. */
 .code-block__btn:hover {
-  background: var(--surface);
+  background: var(--surface-hi);
   color: var(--text-muted);
 }
 
@@ -177,7 +194,35 @@ const resolvedVariant = () => props.variant ?? 'icon'
   overflow-x: auto;
 }
 
-/* Reset global `code` styles that bleed green color/border/padding */
+/* Compact: a one-liner reads as a command chip, not as a code panel — no header, tighter
+   padding, and the copy button appears over the right edge on hover. */
+.code-block--compact {
+  position: relative;
+}
+
+.code-block--compact .code-block__body :deep(pre) {
+  padding: 6px 10px;
+}
+
+.code-block__copy-float {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  background: var(--surface-hi);
+  opacity: 0;
+  transition: opacity 0.12s, background 0.12s, color 0.12s;
+}
+
+.code-block--compact:hover .code-block__copy-float,
+.code-block__copy-float:focus-visible {
+  opacity: 1;
+}
+
+/* Reset the global `code` chip (accent colour, border, padding) that main.scss paints on every
+   bare `code` — inside a highlighted panel it would draw a box around the whole listing. */
 .code-block__body :deep(code) {
   background: transparent !important;
   color: inherit !important;
@@ -191,7 +236,9 @@ const resolvedVariant = () => props.variant ?? 'icon'
   background: transparent !important;
 }
 
-/* Override Shiki's pre/code defaults to match our theme */
+/* Override Shiki's pre/code defaults to match our theme. The plate is the app's own surface
+   rather than the syntax theme's: it has to sit inside a card next to other blocks, and two
+   competing greys would read as a seam. Only the token colours come from the theme. */
 .code-block__body :deep(pre) {
   margin: 0;
   padding: 12px 14px;
@@ -201,6 +248,21 @@ const resolvedVariant = () => props.variant ?? 'icon'
   font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.65;
+}
+
+/* Each token carries both palettes as custom properties (see composables/useHighlighter.ts);
+   these two rules are what picks one. Dark is the unconditional branch and light is the
+   override, mirroring how the colour tokens are declared in styles/main.scss — so a frame
+   rendered before the store has written `data-theme` still pairs dark tokens with the dark
+   surface it is sitting on. */
+.code-block__body :deep(pre),
+.code-block__body :deep(pre span) {
+  color: var(--shiki-dark);
+}
+
+html[data-theme='light'] .code-block__body :deep(pre),
+html[data-theme='light'] .code-block__body :deep(pre span) {
+  color: var(--shiki-light);
 }
 
 /* Line numbers via CSS counter */

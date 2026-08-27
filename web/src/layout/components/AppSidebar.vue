@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useDisplay } from 'vuetify'
 import { IconChevronRight, IconChevronLeft } from '@tabler/icons-vue'
@@ -8,11 +8,10 @@ import { IconChevronRight, IconChevronLeft } from '@tabler/icons-vue'
 import { useLayoutStore } from '../store'
 import { useSettingsStore } from '@/stores/settings'
 import { isGroup, isSection, type NavEntry, type NavLink } from '@/shared/nav'
-import { IconPalette, IconServerCog, IconAdjustments, IconWorldSearch, IconListSearch, IconFileText, IconClock, IconServerBolt, IconTelescope, IconPlugConnected } from '@tabler/icons-vue'
+import { IconPalette, IconServerCog, IconAdjustments, IconWorldSearch, IconListSearch, IconFileText, IconClock, IconServerBolt, IconTelescope, IconPlugConnected, IconTypography, IconCategory } from '@tabler/icons-vue'
 
 const layout = useLayoutStore()
 const settings = useSettingsStore()
-const router = useRouter()
 const route  = useRoute()
 const { t } = useI18n()
 const { mobile } = useDisplay()
@@ -39,8 +38,10 @@ function navLabel(entry: { label: string; labelKey?: string }): string {
 const nav: NavEntry[] = [
   { kind: 'section', label: 'MCP' },
   { path: '/mcp-servers', label: 'MCP-серверы', labelKey: 'core_mcp.nav', icon: IconServerBolt },
-  { kind: 'section', label: 'Данные' },
+  { kind: 'section', label: 'Исследования' },
+  { path: '/research/groups', label: 'Группы', labelKey: 'research.nav_groups', icon: IconCategory },
   { path: '/research/researches', label: 'Исследования', labelKey: 'research.nav', icon: IconTelescope },
+  { kind: 'section', label: 'Данные' },
   {
     label: 'Веб-поиск',
     labelKey: 'web_search.nav',
@@ -54,6 +55,7 @@ const nav: NavEntry[] = [
   { path: '/connectors', label: 'Сервисы', labelKey: 'core_connectors.nav', icon: IconPlugConnected },
   { path: '/tasks', label: 'Задачи', labelKey: 'core_monitoring.nav', icon: IconClock },
   { kind: 'section', label: 'Настройки' },
+  { path: '/settings/interface', label: 'Настройка интерфейса', icon: IconTypography },
   { path: '/settings/modules', label: 'Настройка модулей', icon: IconAdjustments },
   { path: '/settings/core', label: 'Настройка сервера', icon: IconServerCog },
   // design-system is template chrome (not a feature) — link inlined.
@@ -75,16 +77,14 @@ const visibleNav = computed<NavEntry[]>(() =>
 
 const visibleNavBottom = computed<NavLink[]>(() => navBottom)
 
+// Подсветка по ПРЕФИКСУ, а не по точному совпадению: деталка (`/research/researches/<code>`)
+// принадлежит своему разделу, и раньше на ней в меню не было подсвечено ничего.
 function isActive(navPath: string) {
-  return route.path === navPath
-}
-
-function isUnderPath(navPath: string) {
   return route.path === navPath || route.path.startsWith(navPath + '/')
 }
 
 function isGroupActive(group: NavEntry): boolean {
-  return isGroup(group) && group.children.some(c => isUnderPath(c.path))
+  return isGroup(group) && group.children.some(c => isActive(c.path))
 }
 
 const openGroups = ref<Record<string, boolean>>(
@@ -111,10 +111,10 @@ const drawerWidth = computed(() => (mobile.value ? 280 : collapsed.value ? 56 : 
     <template v-if="!mobile" #prepend>
       <div class="sidebar-logo" :class="{ 'sidebar-logo--collapsed': collapsed }">
         <template v-if="!collapsed">
-          <button type="button" class="logo-link" @click="router.push('/home')">
+          <RouterLink to="/home" class="logo-link">
             <span class="logo-icon">◈</span>
             <span class="logo-text">Uroboros.Research</span>
-          </button>
+          </RouterLink>
         </template>
         <VBtn
           :icon="collapsed ? IconChevronRight : IconChevronLeft"
@@ -169,12 +169,12 @@ const drawerWidth = computed(() => (mobile.value ? 280 : collapsed.value ? 56 : 
                 <VListItem
                   v-for="child in entry.children"
                   :key="child.path"
+                  :to="child.path"
                   :active="isActive(child.path)"
                   :prepend-icon="child.icon"
                   :title="navLabel(child)"
                   rounded="lg"
                   class="nav-item"
-                  @click="router.push(child.path)"
                 />
               </VList>
             </div>
@@ -190,11 +190,11 @@ const drawerWidth = computed(() => (mobile.value ? 280 : collapsed.value ? 56 : 
             <template #activator="{ props }">
               <VListItem
                 v-bind="props"
+                :to="entry.path"
                 :active="isActive(entry.path)"
                 :prepend-icon="entry.icon"
                 rounded="lg"
                 class="nav-item nav-item--collapsed"
-                @click="router.push(entry.path)"
               />
             </template>
           </VTooltip>
@@ -230,23 +230,23 @@ const drawerWidth = computed(() => (mobile.value ? 280 : collapsed.value ? 56 : 
             <VListItem
               v-for="child in entry.children"
               :key="child.path"
+              :to="child.path"
               :active="isActive(child.path)"
               :prepend-icon="child.icon"
               :title="navLabel(child)"
               rounded="lg"
               class="nav-item nav-item--child"
-              @click="router.push(child.path)"
             />
           </VListGroup>
 
           <VListItem
             v-else
+            :to="entry.path"
             :active="isActive(entry.path)"
             :prepend-icon="entry.icon"
             :title="navLabel(entry)"
             rounded="lg"
             class="nav-item"
-            @click="router.push(entry.path)"
           />
         </template>
       </template>
@@ -273,13 +273,13 @@ const drawerWidth = computed(() => (mobile.value ? 280 : collapsed.value ? 56 : 
           <template #activator="{ props }">
             <VListItem
               v-bind="props"
-              :active="isUnderPath(item.path)"
+              :to="item.path"
+              :active="isActive(item.path)"
               :prepend-icon="item.icon"
               :title="collapsed ? '' : navLabel(item)"
               rounded="lg"
               class="nav-item"
               :class="{ 'nav-item--collapsed': collapsed }"
-              @click="router.push(item.path)"
             />
           </template>
         </VTooltip>
@@ -302,6 +302,7 @@ const drawerWidth = computed(() => (mobile.value ? 280 : collapsed.value ? 56 : 
   background: none;
   cursor: pointer;
   text-align: left;
+  text-decoration: none;
 }
 
 </style>

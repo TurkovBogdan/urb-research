@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { IconMenu2, IconX } from '@tabler/icons-vue'
 import AppSidebar from '@/layout/components/AppSidebar.vue'
+import ErrorScreen from '@/components/ErrorScreen.vue'
+import ToastStack from '@/components/ToastStack.vue'
 import { navigationLoading } from '@/router/progress'
+import { shellError } from '@/composables/useShellError'
 import { useLayoutStore } from '@/layout/store'
 
 const route = useRoute()
-const router = useRouter()
 const { mobile } = useDisplay()
 const layout = useLayoutStore()
 
@@ -38,10 +40,10 @@ const transitionName = computed(() => route.meta.transition ?? 'page')
         class="app-topbar__menu"
         @click="layout.mobileOpen = !layout.mobileOpen"
       />
-      <button type="button" class="app-topbar__brand" @click="router.push('/home')">
+      <RouterLink to="/home" class="app-topbar__brand">
         <span class="logo-icon">◈</span>
         <span class="logo-text">Uroboros.Research</span>
-      </button>
+      </RouterLink>
       <VSpacer />
     </VAppBar>
 
@@ -64,7 +66,11 @@ const transitionName = computed(() => route.meta.transition ?? 'page')
            layout at a time (no two full-height pages overlapping). `appear` runs
            the enter once on first paint (after the boot splash). Order must be
            Transition > KeepAlive > component. -->
-      <RouterView v-slot="{ Component }">
+      <!-- Отказ, при котором смотреть на маршруте нечего, рисуется ВМЕСТО содержимого и на
+           том же адресе: уход на отдельный `/403` стёр бы единственную улику — что человек
+           открывал. Снимает его следующая навигация (гвард роутера). -->
+      <ErrorScreen v-if="shellError" :kind="shellError" class="h-100" />
+      <RouterView v-else v-slot="{ Component }">
         <Transition :name="transitionName" mode="out-in" appear>
           <KeepAlive>
             <component :is="Component" class="h-100" />
@@ -72,6 +78,10 @@ const transitionName = computed(() => route.meta.transition ?? 'page')
         </Transition>
       </RouterView>
     </VMain>
+
+    <!-- Отказ, который экран не показал сам, всплывает сюда: сообщение поверх всего, вне
+         зоны содержимого, поэтому переживает смену маршрута. -->
+    <ToastStack />
   </VApp>
 </template>
 
@@ -98,6 +108,7 @@ const transitionName = computed(() => route.meta.transition ?? 'page')
   background: none;
   cursor: pointer;
   border-radius: var(--radius-sm);
+  text-decoration: none;
   .logo-icon { font-size: 18px; color: var(--accent); line-height: 1; }
   .logo-text { font-size: 14px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; white-space: nowrap; }
 }

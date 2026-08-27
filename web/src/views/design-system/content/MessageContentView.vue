@@ -22,7 +22,7 @@ const reply: Sample = {
   html:
     '<p>Hi Anna,</p>' +
     '<p>Thanks for the update — looks good to me. Let\'s ship on Friday.</p>' +
-    '<p><img src="https://picsum.photos/seed/semaphore/480/120" alt="release banner"></p>' +
+    '<p><img src="https://picsum.photos/seed/release/480/120" alt="release banner"></p>' +
     '<p>Best,<br>John</p>' +
     '<details class="mc-spoiler mc-history"><summary></summary><div class="mc-quote">' +
     '<blockquote>On Mon, 15 Jun 2026, Anna &lt;anna@acme.example&gt; wrote:<br>' +
@@ -31,7 +31,7 @@ const reply: Sample = {
     forwarded: '',
     message:
       'Hi Anna,\n\nThanks for the update — looks good to me. Let\'s ship on Friday.\n\n' +
-      '![release banner](https://picsum.photos/seed/semaphore/480/120)\n\nBest,\nJohn',
+      '![release banner](https://picsum.photos/seed/release/480/120)\n\nBest,\nJohn',
     history: 'On Mon, 15 Jun 2026, Anna <anna@acme.example> wrote:\nHere is the latest draft, let me know what you think.',
   },
 }

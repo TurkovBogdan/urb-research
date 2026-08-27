@@ -5,7 +5,7 @@ import PageLayout from '@/layout/templates/PageLayout.vue'
 import PageHeader from '@/layout/components/PageHeader.vue'
 import CodeBlock from '@/components/CodeBlock.vue'
 
-type Variant = 'minimal' | 'icon' | 'accent'
+type Variant = 'minimal' | 'icon' | 'accent' | 'compact'
 
 const variant = ref<Variant>('icon')
 const lineNumbers = ref(false)
@@ -48,7 +48,7 @@ async function completeSession(sessionId: number, text: string) {
 set -euo pipefail
 pnpm --filter web build
 python build.py --clean
-echo "Done: dist/release/hh-support-agent"`,
+echo "Done: dist/release/urb-research"`,
 
   sql: `SELECT v.id, v.title, v.salary_from, c.name AS company_name
 FROM hh_vacancy v
@@ -76,6 +76,7 @@ LIMIT 20;`,
                 <VBtn value="minimal">Minimal</VBtn>
                 <VBtn value="icon">Icon</VBtn>
                 <VBtn value="accent">Accent</VBtn>
+                <VBtn value="compact">Compact</VBtn>
               </VBtnToggle>
             </div>
             <span class="ds-spec">header template</span>
@@ -121,6 +122,10 @@ LIMIT 20;`,
           <div class="variant-item">
             <span class="ds-tag">accent</span>
             <CodeBlock :code="python" lang="python" variant="accent" />
+          </div>
+          <div class="variant-item">
+            <span class="ds-tag">compact — однострочный код, копирование по наведению</span>
+            <CodeBlock code="uv run pytest --core" lang="bash" variant="compact" />
           </div>
         </div>
       </VCard>

@@ -6,6 +6,7 @@ import { IconExternalLink } from '@tabler/icons-vue'
 
 import PageLayout from '@/layout/templates/PageLayout.vue'
 import PageHeader from '@/layout/components/PageHeader.vue'
+import SectionError from '@/components/SectionError.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import { fmtDateTime } from '@/shared/utils/date'
@@ -34,9 +35,7 @@ watch(
       back-to="/web-search/pages"
     />
 
-    <VAlert v-if="store.error" type="error" variant="tonal" class="mb-3">
-      {{ store.error }}
-    </VAlert>
+    <SectionError v-if="store.error" :error="store.error" />
 
     <template v-if="store.page">
       <VCard variant="outlined" rounded="lg" class="mb-3">

@@ -26,7 +26,9 @@ export const useQueriesStore = defineStore('web_search-queries', () => {
   const items = ref<QueryRow[]>([])
   const total = ref(0)
   const loading = ref(false)
-  const error = ref<string | null>(null)
+  // Держим сам отказ, а не его текст: показ (`SectionError`) отличает «сущности нет» от сбоя
+  // по статусу ответа, а формулировку берёт из `errorText`.
+  const error = ref<unknown>(null)
 
   // Движки для формы создания (грузятся один раз): доступные коды по ролям + дефолты.
   const engines = ref<{
@@ -58,7 +60,7 @@ export const useQueriesStore = defineStore('web_search-queries', () => {
       items.value = res.items
       total.value = res.total
     } catch (e) {
-      error.value = e instanceof Error ? e.message : String(e)
+      error.value = e
     } finally {
       loading.value = false
     }

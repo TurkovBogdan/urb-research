@@ -18,12 +18,21 @@ export type FieldKind =
   | 'multichoice'
   | 'list'
 
+/** Поле видно, пока значение `key` в форме равно `equals`; считается на фронте, не на бэке. */
+export interface VisibleWhen {
+  key: string
+  equals: unknown
+}
+
 interface FieldBase {
   key: string
   kind: FieldKind
   label: string
   description: string
   default: unknown
+  /** Заголовок блока, в который поле собирается на экране. Пусто — поле само по себе. */
+  group: string
+  visible_when: VisibleWhen | null
 }
 
 export interface IntFieldDescriptor extends FieldBase {
@@ -84,15 +93,17 @@ export interface MultiChoiceFieldDescriptor extends FieldBase {
   max_items: number | null
 }
 
-// Item-дескриптор внутри ListField — без key/label/description/default
-// (они стрипаются на бэке в `ui_descriptor`).
+// Item-дескриптор внутри ListField — элемент списка это тип значения, а не отдельная
+// настройка: перечисленное ниже бэк стрипает в `ui_descriptor`.
+type SettingOwnKeys = 'key' | 'label' | 'description' | 'default' | 'group' | 'visible_when'
+
 export type ListItemDescriptor =
-  | Omit<IntFieldDescriptor, 'key' | 'label' | 'description' | 'default'>
-  | Omit<FloatFieldDescriptor, 'key' | 'label' | 'description' | 'default'>
-  | Omit<StrFieldDescriptor, 'key' | 'label' | 'description' | 'default'>
-  | Omit<DateFieldDescriptor, 'key' | 'label' | 'description' | 'default'>
-  | Omit<DateTimeFieldDescriptor, 'key' | 'label' | 'description' | 'default'>
-  | Omit<ChoiceFieldDescriptor, 'key' | 'label' | 'description' | 'default'>
+  | Omit<IntFieldDescriptor, SettingOwnKeys>
+  | Omit<FloatFieldDescriptor, SettingOwnKeys>
+  | Omit<StrFieldDescriptor, SettingOwnKeys>
+  | Omit<DateFieldDescriptor, SettingOwnKeys>
+  | Omit<DateTimeFieldDescriptor, SettingOwnKeys>
+  | Omit<ChoiceFieldDescriptor, SettingOwnKeys>
 
 export interface ListFieldDescriptor extends FieldBase {
   kind: 'list'

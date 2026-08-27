@@ -18,7 +18,6 @@ const emit = defineEmits<{ 'update:modelValue': [boolean] }>()
     :model-value="modelValue"
     :title="field.label"
     :disabled="saving"
-    tone="transparent"
     @update:model-value="emit('update:modelValue', $event)"
   >
     <MarkdownRenderer v-if="field.description" :text="field.description" compact />

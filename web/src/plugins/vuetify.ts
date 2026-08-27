@@ -121,8 +121,43 @@ export default createVuetify({
   },
 
   theme: {
+    // The active theme is set by the settings store, which resolves the user's choice
+    // (including «system») and hands the concrete name here.
     defaultTheme: 'dark',
     themes: {
+      // Mirrors the light token palette in styles/main.scss — Vuetify colours its own
+      // components from this map, the rest of the app reads the tokens.
+      light: {
+        dark: false,
+        colors: {
+          background:           '#F4F6F9',  // --bg
+          surface:              '#FFFFFF',  // --surface
+          'surface-variant':    '#FFFFFF',  // --sidebar-bg / panel
+          'surface-bright':     '#EDF0F5',  // --surface-hi
+          'on-background':      '#171A21',  // --text
+          'on-surface':         '#171A21',
+          'on-surface-variant': '#171A21',
+          primary:              '#1667BE',  // --accent
+          'primary-darken-1':   '#8CBDEE',  // --accent-mid
+          secondary:            '#4F5867',  // --text-muted
+          error:                '#BC2C2F',  // --error
+          success:              '#13692F',  // --success
+          warning:              '#8F5600',  // --warn
+          info:                 '#1667BE',  // --info
+          outline:              '#D3D9E3',  // --border
+        },
+        variables: {
+          'high-emphasis-opacity':   1,
+          'medium-emphasis-opacity': 0.6,
+          'disabled-opacity':        0.38,
+          'border-opacity':          1,
+          'hover-opacity':           0.04,
+          'focus-opacity':           0.08,
+          'selected-opacity':        0.06,
+          'activated-opacity':       0.08,
+          'pressed-opacity':         0.08,
+        },
+      },
       dark: {
         dark: true,
         // Vuetify парсит цвета как hex для построения rgba-оверлеев — oklch() даёт warn.

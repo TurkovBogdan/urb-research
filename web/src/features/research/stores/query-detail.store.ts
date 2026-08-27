@@ -7,7 +7,9 @@ import { getSourceQuery, type SourceQueryDetail } from '../api'
 export const useQueryDetailStore = defineStore('research-query-detail', () => {
   const query = ref<SourceQueryDetail | null>(null)
   const loading = ref(false)
-  const error = ref<string | null>(null)
+  // Держим сам отказ, а не его текст: показ (`SectionError`) отличает «сущности нет» от сбоя
+  // по статусу ответа, а формулировку берёт из `errorText`.
+  const error = ref<unknown>(null)
 
   const documents = computed(() => query.value?.documents ?? [])
   const keptDocuments = computed(() => documents.value.filter((d) => d.status === 'kept'))
@@ -25,7 +27,7 @@ export const useQueryDetailStore = defineStore('research-query-detail', () => {
       query.value = data
     } catch (e) {
       if (current !== code) return
-      error.value = e instanceof Error ? e.message : String(e)
+      error.value = e
       query.value = null
     } finally {
       if (current === code) loading.value = false

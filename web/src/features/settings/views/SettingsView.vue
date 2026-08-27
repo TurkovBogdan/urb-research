@@ -11,8 +11,19 @@ import { useSettingText } from '../settingText'
 import {
   listModules,
   putValue,
+  type FieldDescriptor,
   type ModulePayload,
 } from '../api'
+
+/** Блок полей на экране: либо со своей подписью, либо во главе с тумблером. */
+interface FieldBlock {
+  key: string
+  /** Подпись блока. Пусто, когда её роль исполняет тумблер в шапке. */
+  caption: string
+  /** Bool-поле, поднятое в шапку блока: остальные поля читаются как его содержимое. */
+  header: FieldDescriptor | null
+  fields: FieldDescriptor[]
+}
 
 const { t } = useI18n()
 const { localizeField } = useSettingText()
@@ -45,6 +56,48 @@ const localizedModules = computed(() =>
   modules.value.map((m) => ({
     ...m,
     fields: m.fields.map((f) => localizeField(m.module, f)),
+  })),
+)
+
+// Условие видимости считается по ТЕКУЩЕЙ форме, а не по сохранённому: выключил сервис — его ключ
+// уходит сразу, не дожидаясь сохранения. Скрытое поле не стирается и вернётся вместе с условием.
+function visible(module: string, field: FieldDescriptor): boolean {
+  const condition = field.visible_when
+  return condition === null || values[module]?.[condition.key] === condition.equals
+}
+
+// Поля одной группы идут в схеме подряд, поэтому блок закрывается на первом же поле с другой
+// группой — сортировать и раскладывать по словарю не нужно, порядок схемы и есть порядок экрана.
+function splitByGroup(fields: FieldDescriptor[]): FieldDescriptor[][] {
+  const blocks: FieldDescriptor[][] = []
+  for (const field of fields) {
+    const sameGroupAsPrevious = blocks.length > 0 && blocks[blocks.length - 1][0].group === field.group
+    if (sameGroupAsPrevious) blocks[blocks.length - 1].push(field)
+    else blocks.push([field])
+  }
+  return blocks
+}
+
+// Тумблер во главе группы («Включить Tavily») сам называет блок, поэтому подпись при нём не
+// рисуется — иначе название сервиса стояло бы дважды подряд.
+function toBlock(module: string, group: FieldDescriptor[]): FieldBlock {
+  const [first, ...rest] = group
+  const headed = first.group !== '' && first.kind === 'bool'
+  return {
+    key: `${first.group}:${first.key}`,
+    caption: headed ? '' : first.group,
+    header: headed ? first : null,
+    fields: (headed ? rest : group).filter((f) => visible(module, f)),
+  }
+}
+
+const moduleBlocks = computed(() =>
+  localizedModules.value.map((m) => ({
+    ...m,
+    blocks: splitByGroup(m.fields)
+      .map((group) => toBlock(m.module, group))
+      // Группа, где скрыто всё и нет тумблера, не должна оставлять пустую рамку.
+      .filter((b) => b.header !== null || b.fields.length > 0),
   })),
 )
 
@@ -149,9 +202,9 @@ async function saveAll() {
       {{ error }}
     </VAlert>
 
-    <div v-if="!loading" class="d-flex flex-column ga-4">
+    <div v-if="!loading" class="modules-grid">
       <VCard
-        v-for="m in localizedModules"
+        v-for="m in moduleBlocks"
         :key="m.module"
         variant="outlined"
         rounded="lg"
@@ -165,15 +218,35 @@ async function saveAll() {
           {{ t('settings.module.no_fields') }}
         </VCardText>
         <VCardText v-else class="d-flex flex-column ga-6">
-          <SettingField
-            v-for="f in m.fields"
-            :key="f.key"
-            :field="f"
-            :model-value="values[m.module]?.[f.key]"
-            :error="fieldErrors[m.module]?.[f.key] ?? null"
-            :saving="saving"
-            @update:model-value="onChange(m.module, f.key, $event)"
-          />
+          <div
+            v-for="b in m.blocks"
+            :key="b.key"
+            class="field-block"
+            :class="{ 'field-block--headed': b.header }"
+          >
+            <div v-if="b.caption" class="field-block__caption">{{ b.caption }}</div>
+
+            <SettingField
+              v-if="b.header"
+              :field="b.header"
+              :model-value="values[m.module]?.[b.header.key]"
+              :error="fieldErrors[m.module]?.[b.header.key] ?? null"
+              :saving="saving"
+              @update:model-value="onChange(m.module, b.header.key, $event)"
+            />
+
+            <div v-if="b.fields.length" class="field-block__fields">
+              <SettingField
+                v-for="f in b.fields"
+                :key="f.key"
+                :field="f"
+                :model-value="values[m.module]?.[f.key]"
+                :error="fieldErrors[m.module]?.[f.key] ?? null"
+                :saving="saving"
+                @update:model-value="onChange(m.module, f.key, $event)"
+              />
+            </div>
+          </div>
         </VCardText>
       </VCard>
     </div>
@@ -181,6 +254,57 @@ async function saveAll() {
 </template>
 
 <style scoped>
+/* Раскладка та же, что у «Настройки сервера»: колонки с потолком ширины и высотой по
+   содержимому. `minmax(320, 440)` — поле ввода шире ~440px читается хуже, лишнюю ширину отдаём
+   соседней колонке; на типовой ширине контента (~930px) встают две колонки.
+   `align-items: start` — карточка ровно по своему содержимому: у модулей число полей разное,
+   и без него короткая карточка тянулась бы до высоты «Сервисов» с их девятью ключами. */
+.modules-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 440px));
+  align-items: start;
+  justify-content: start;
+  gap: 16px;
+}
+
+/* Одна колонка на узком экране — иначе поля сжимаются до нечитаемых. */
+@media (max-width: 700px) {
+  .modules-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Блок = группа полей схемы. Внутри поля стоят теснее, чем блоки между собой: расстояние и есть
+   то, чем группировка читается, отдельной рамки для этого не нужно. */
+.field-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.field-block__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Поля под тумблером — его содержимое, а не соседи: сдвиг и линейка слева показывают, что ключ
+   принадлежит именно этому сервису и уедет вместе с ним. Сдвиг равен ширине переключателя, чтобы
+   поля вставали под текстом плашки, а не под её краем. */
+.field-block--headed .field-block__fields {
+  margin-left: 14px;
+  padding-left: 14px;
+  border-left: 1px solid var(--border-soft);
+}
+
+.field-block__caption {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
 .module-desc {
   padding: 0 16px 16px;
 }

@@ -17,7 +17,9 @@ export const usePagesStore = defineStore('web_search-pages', () => {
   const items = ref<WebSearchPageRow[]>([])
   const total = ref(0)
   const loading = ref(false)
-  const error = ref<string | null>(null)
+  // Держим сам отказ, а не его текст: показ (`SectionError`) отличает «сущности нет» от сбоя
+  // по статусу ответа, а формулировку берёт из `errorText`.
+  const error = ref<unknown>(null)
 
   const pageCount = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
   const hasActiveFilters = computed(
@@ -40,7 +42,7 @@ export const usePagesStore = defineStore('web_search-pages', () => {
       items.value = res.items
       total.value = res.total
     } catch (e) {
-      error.value = e instanceof Error ? e.message : String(e)
+      error.value = e
     } finally {
       loading.value = false
     }

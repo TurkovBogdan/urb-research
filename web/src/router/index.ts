@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import { setupGuards } from './guards'
+import { setupChunkReload } from './reload'
 import { designSystemRoutes } from './design-system'
 import { coreConnectorsRoutes } from '../features/core_connectors/routes'
 import { coreMcpRoutes } from '../features/core_mcp/routes'
@@ -16,6 +17,7 @@ const router = createRouter({
     { path: '/', redirect: '/home' },
     {
       path: '/home',
+      name: 'home',
       component: () => import('../views/HomeView.vue'),
       meta: { scroll: 'y' },
     },
@@ -31,12 +33,14 @@ const router = createRouter({
     // Renders the 404 inside the app shell.
     {
       path: '/:pathMatch(.*)*',
+      name: 'not-found',
       component: () => import('../views/errors/NotFoundView.vue'),
-      meta: { scroll: 'none', padding: false },
+      meta: { scroll: 'none', padding: false, title: 'common.errors.notFound.title' },
     },
   ],
 })
 
 setupGuards(router)
+setupChunkReload(router)
 
 export default router

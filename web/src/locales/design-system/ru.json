@@ -15,64 +15,495 @@
       "interface": "Интерфейс"
     },
     "page": {
-      "tokens":       { "label": "Токены",            "tags": ["Цветовая палитра", "Скругления", "Шрифты"] },
-      "typography":   { "label": "Типографика",       "tags": ["Заголовки h1–h6", "Параграфы", "Ссылки", "Код"] },
-      "layout":       { "label": "Макет",            "tags": ["PageLayout", "PageHeader", "Скролл-режимы", "Отступы"] },
-      "breakpoints":  { "label": "Брейкпоинты",       "tags": ["useDisplay", "mobileBreakpoint", "Живой индикатор"] },
-      "action-panel": { "label": "Панель действий",   "tags": ["Мобильный", "Разметка действий", "Нижняя панель", "Прототип"] },
-      "buttons":      { "label": "Кнопки",            "tags": ["VBtn", "Варианты", "Размеры", "Состояния"] },
-      "button-group": { "label": "Группы кнопок",     "tags": ["VBtnGroup", "VBtnToggle", "Одиночный выбор", "Множественный выбор"] },
-      "selects":      { "label": "Выпадающие списки", "tags": ["VSelect", "VAutocomplete", "Мультивыбор", "Плотность"] },
-      "inputs":       { "label": "Поля ввода",        "tags": ["VTextField", "VTextarea", "Состояния", "Иконки"] },
-      "numbers":      { "label": "Числа и валюта",    "tags": ["VNumberInput", "Шаг", "Точность", "Диапазон"] },
-      "toggle":       { "label": "Чекбоксы и радио",  "tags": ["VCheckbox", "VRadio", "VSwitch", "Группы"] },
-      "sliders":      { "label": "Слайдеры",          "tags": ["VSlider", "VRangeSlider", "Метки", "Форматирование"] },
-      "date-pickers": { "label": "Дата и время",      "tags": ["VDateInput", "VTimePicker", "Диапазон дат", "Совместное поле"] },
-      "data-table":   { "label": "Таблица данных",         "tags": ["VDataTable", "Слоты", "Состояния", "Пагинация"] },
-      "table":        { "label": "Таблица",            "tags": ["VTable", "Нативная разметка", "Плотность", "Состояния"] },
-      "task-status":  { "label": "Статус задач",       "tags": ["Pinia store", "Запросы запуска", "Статус"] },
-      "pagination":   { "label": "Пагинация",         "tags": ["VPagination", "TablePaginationBar", "Плотность", "Размер страницы"] },
-      "world-map":    { "label": "Карта мира",        "tags": ["WorldMap", "Choropleth", "Плашки", "Кастомный tooltip"] },
-      "line-chart":   { "label": "Линейный график",   "tags": ["LineChart", "Multi-series", "Area", "Hover-crosshair"] },
-      "bar-chart":    { "label": "Столбчатая диаграмма", "tags": ["BarChart", "Группы", "Стек", "Горизонтальная"] },
-      "pie-chart":    { "label": "Круговая диаграмма", "tags": ["PieChart", "Donut", "Легенда", "Проценты"] },
-      "alerts":       { "label": "Алерты",            "tags": ["VAlert", "Типы", "Варианты", "С действием"] },
-      "loaders":      { "label": "Загрузчики",        "tags": ["VProgressCircular", "VProgressLinear", ".spin"] },
-      "skeleton":     { "label": "Скелетная загрузка","tags": ["VSkeletonLoader", "Типы", "Пресеты", "Загрузка → контент"] },
-      "status-badge": { "label": "Статус-бейдж",      "tags": ["StatusBadge", "Цвета", "Пульс-анимация"] },
-      "chips":        { "label": "Чипы",            "tags": ["VChip", "Варианты", "Цвета", "Закрываемые", "Фильтр-группа"] },
-      "switch-panel": { "label": "Плашка-переключатель", "tags": ["SwitchPanel", "Переключатель", "Описание"] },
-      "dialogs":      { "label": "Диалоги",           "tags": ["VDialog", "Формы", "Подтверждение", "Прокручиваемые"] },
-      "tooltips":     { "label": "Тултипы",           "tags": ["VTooltip", "Позиции", "Сложное содержимое", "Задержки"] },
-      "code-block":   { "label": "CodeBlock",         "tags": ["CodeBlock", "Языки", "Нумерация строк", "Копирование"] },
-      "markdown":     { "label": "Markdown",          "tags": ["MarkdownRenderer", "Компактный режим", "Предпросмотр"] },
-      "chat":         { "label": "Чат",               "tags": ["ChatFeed", "ChatMessage", "ChatEvent", "Пузыри"] },
-      "message":      { "label": "Сообщение",         "tags": ["MessageContent", "HTML / Текст", "Спойлеры", "Безопасный режим"] },
-      "cards":        { "label": "Карточки",          "tags": ["VCard", "Варианты", "Структура", "Состояния"] },
-      "dividers":     { "label": "Разделители",       "tags": ["VDivider", "Горизонтальный", "Вертикальный", "Inset"] },
-      "file-cards":   { "label": "Файловые карточки", "tags": ["FileCards", "Вложения", "Безопасность", "Скачивание"] },
-      "kanban":       { "label": "Канбан",            "tags": ["Доска", "Колонки", "Горизонтальный скролл", "Карточки"] },
-      "spoiler":      { "label": "Спойлер",           "tags": ["Spoiler", "Сворачивание", "Раскрытие", "minimal"] },
-      "members-cell": { "label": "Ячейка участников", "tags": ["MembersCell", "Попап +N", "Клик-фильтр", "Mono"] },
-      "edge-scroller": { "label": "EdgeScroller",     "tags": ["Full-bleed", "Горизонтальный скролл", "Краевые тени", "Таблицы"] }
+      "tokens": {
+        "label": "Токены",
+        "tags": [
+          "Цветовая палитра",
+          "Скругления",
+          "Шрифты"
+        ]
+      },
+      "typography": {
+        "label": "Типографика",
+        "tags": [
+          "Заголовки h1–h6",
+          "Параграфы",
+          "Ссылки",
+          "Код"
+        ]
+      },
+      "layout": {
+        "label": "Макет",
+        "tags": [
+          "PageLayout",
+          "PageHeader",
+          "Скролл-режимы",
+          "Отступы"
+        ]
+      },
+      "breakpoints": {
+        "label": "Брейкпоинты",
+        "tags": [
+          "useDisplay",
+          "mobileBreakpoint",
+          "Живой индикатор"
+        ]
+      },
+      "action-panel": {
+        "label": "Панель действий",
+        "tags": [
+          "Мобильный",
+          "Разметка действий",
+          "Нижняя панель",
+          "Прототип"
+        ]
+      },
+      "buttons": {
+        "label": "Кнопки",
+        "tags": [
+          "VBtn",
+          "Варианты",
+          "Размеры",
+          "Состояния"
+        ]
+      },
+      "button-group": {
+        "label": "Группы кнопок",
+        "tags": [
+          "VBtnGroup",
+          "VBtnToggle",
+          "Одиночный выбор",
+          "Множественный выбор"
+        ]
+      },
+      "selects": {
+        "label": "Выпадающие списки",
+        "tags": [
+          "VSelect",
+          "VAutocomplete",
+          "Мультивыбор",
+          "Плотность"
+        ]
+      },
+      "inputs": {
+        "label": "Поля ввода",
+        "tags": [
+          "VTextField",
+          "VTextarea",
+          "Состояния",
+          "Иконки"
+        ]
+      },
+      "numbers": {
+        "label": "Числа и валюта",
+        "tags": [
+          "VNumberInput",
+          "Шаг",
+          "Точность",
+          "Диапазон"
+        ]
+      },
+      "toggle": {
+        "label": "Чекбоксы и радио",
+        "tags": [
+          "VCheckbox",
+          "VRadio",
+          "VSwitch",
+          "Группы"
+        ]
+      },
+      "sliders": {
+        "label": "Слайдеры",
+        "tags": [
+          "VSlider",
+          "VRangeSlider",
+          "Метки",
+          "Форматирование"
+        ]
+      },
+      "date-pickers": {
+        "label": "Дата и время",
+        "tags": [
+          "VDateInput",
+          "VTimePicker",
+          "Диапазон дат",
+          "Совместное поле"
+        ]
+      },
+      "icon-picker": {
+        "label": "Выбор иконки",
+        "tags": [
+          "IconPicker",
+          "Поиск",
+          "Прокрутка"
+        ]
+      },
+      "color-picker": {
+        "label": "Выбор цвета",
+        "tags": [
+          "ColorPicker",
+          "Палитра",
+          "Темы"
+        ]
+      },
+      "icon-color-picker": {
+        "label": "Выбор иконки и цвета",
+        "tags": [
+          "IconColorPicker",
+          "Плашка",
+          "Две модели"
+        ]
+      },
+      "data-table": {
+        "label": "Таблица данных",
+        "tags": [
+          "VDataTable",
+          "Слоты",
+          "Состояния",
+          "Пагинация"
+        ]
+      },
+      "table": {
+        "label": "Таблица",
+        "tags": [
+          "VTable",
+          "Нативная разметка",
+          "Плотность",
+          "Состояния"
+        ]
+      },
+      "task-status": {
+        "label": "Статус задач",
+        "tags": [
+          "Pinia store",
+          "Запросы запуска",
+          "Статус"
+        ]
+      },
+      "pagination": {
+        "label": "Пагинация",
+        "tags": [
+          "VPagination",
+          "TablePaginationBar",
+          "Плотность",
+          "Размер страницы"
+        ]
+      },
+      "world-map": {
+        "label": "Карта мира",
+        "tags": [
+          "WorldMap",
+          "Choropleth",
+          "Плашки",
+          "Кастомный tooltip"
+        ]
+      },
+      "line-chart": {
+        "label": "Линейный график",
+        "tags": [
+          "LineChart",
+          "Multi-series",
+          "Area",
+          "Hover-crosshair"
+        ]
+      },
+      "bar-chart": {
+        "label": "Столбчатая диаграмма",
+        "tags": [
+          "BarChart",
+          "Группы",
+          "Стек",
+          "Горизонтальная"
+        ]
+      },
+      "pie-chart": {
+        "label": "Круговая диаграмма",
+        "tags": [
+          "PieChart",
+          "Donut",
+          "Легенда",
+          "Проценты"
+        ]
+      },
+      "alerts": {
+        "label": "Алерты",
+        "tags": [
+          "VAlert",
+          "Типы",
+          "Варианты",
+          "С действием"
+        ]
+      },
+      "toasts": {
+        "label": "Всплывающие сообщения",
+        "tags": [
+          "pushToast",
+          "Уровни",
+          "Очередь",
+          "Отсчёт"
+        ]
+      },
+      "callout": {
+        "label": "Плашка пояснения",
+        "tags": [
+          "Callout",
+          "Тона",
+          "Плотность",
+          "Не VAlert"
+        ]
+      },
+      "error-states": {
+        "label": "Отказы",
+        "tags": [
+          "ErrorState",
+          "SectionError",
+          "Экран или состояние",
+          "Правило"
+        ]
+      },
+      "loaders": {
+        "label": "Загрузчики",
+        "tags": [
+          "VProgressCircular",
+          "VProgressLinear",
+          ".spin"
+        ]
+      },
+      "skeleton": {
+        "label": "Скелетная загрузка",
+        "tags": [
+          "VSkeletonLoader",
+          "Типы",
+          "Пресеты",
+          "Загрузка → контент"
+        ]
+      },
+      "status-badge": {
+        "label": "Статус-бейдж",
+        "tags": [
+          "StatusBadge",
+          "Цвета",
+          "Пульс-анимация"
+        ]
+      },
+      "chips": {
+        "label": "Чипы",
+        "tags": [
+          "VChip",
+          "Варианты",
+          "Цвета",
+          "Закрываемые",
+          "Фильтр-группа"
+        ]
+      },
+      "switch-panel": {
+        "label": "Плашка-переключатель",
+        "tags": [
+          "SwitchPanel",
+          "Переключатель",
+          "Описание"
+        ]
+      },
+      "dialogs": {
+        "label": "Диалоги",
+        "tags": [
+          "VDialog",
+          "Формы",
+          "Подтверждение",
+          "Прокручиваемые"
+        ]
+      },
+      "tooltips": {
+        "label": "Тултипы",
+        "tags": [
+          "VTooltip",
+          "Позиции",
+          "Сложное содержимое",
+          "Задержки"
+        ]
+      },
+      "code-block": {
+        "label": "CodeBlock",
+        "tags": [
+          "CodeBlock",
+          "Языки",
+          "Нумерация строк",
+          "Копирование"
+        ]
+      },
+      "markdown": {
+        "label": "Markdown",
+        "tags": [
+          "MarkdownRenderer",
+          "Компактный режим",
+          "Предпросмотр"
+        ]
+      },
+      "chat": {
+        "label": "Чат",
+        "tags": [
+          "ChatFeed",
+          "ChatMessage",
+          "ChatEvent",
+          "Пузыри"
+        ]
+      },
+      "message": {
+        "label": "Сообщение",
+        "tags": [
+          "MessageContent",
+          "HTML / Текст",
+          "Спойлеры",
+          "Безопасный режим"
+        ]
+      },
+      "cards": {
+        "label": "Карточки",
+        "tags": [
+          "VCard",
+          "Варианты",
+          "Структура",
+          "Состояния"
+        ]
+      },
+      "dividers": {
+        "label": "Разделители",
+        "tags": [
+          "VDivider",
+          "Горизонтальный",
+          "Вертикальный",
+          "Inset"
+        ]
+      },
+      "file-cards": {
+        "label": "Файловые карточки",
+        "tags": [
+          "FileCards",
+          "Вложения",
+          "Безопасность",
+          "Скачивание"
+        ]
+      },
+      "kanban": {
+        "label": "Канбан",
+        "tags": [
+          "Доска",
+          "Колонки",
+          "Горизонтальный скролл",
+          "Карточки"
+        ]
+      },
+      "spoiler": {
+        "label": "Спойлер",
+        "tags": [
+          "Spoiler",
+          "Сворачивание",
+          "Раскрытие",
+          "minimal"
+        ]
+      },
+      "members-cell": {
+        "label": "Ячейка участников",
+        "tags": [
+          "MembersCell",
+          "Попап +N",
+          "Клик-фильтр",
+          "Mono"
+        ]
+      },
+      "section-header": {
+        "label": "Заголовок секции",
+        "tags": [
+          "SectionHeader",
+          "PageHeader",
+          "Уровни h1–h6",
+          "Счётчик"
+        ]
+      },
+      "edge-scroller": {
+        "label": "EdgeScroller",
+        "tags": [
+          "Full-bleed",
+          "Горизонтальный скролл",
+          "Краевые тени",
+          "Таблицы"
+        ]
+      }
     }
   },
   "page": {
-    "tokens":       { "title": "Токены",                          "description": "Базовые переменные: цвета, скругления, шрифты" },
-    "typography":   { "title": "Типографика",                     "description": "Дефолтные стили HTML-элементов" },
-    "layout":       { "title": "Макет",                          "description": "Структура страниц и управление контентной зоной через route.meta" },
-    "breakpoints":  { "title": "Брейкпоинты",                      "description": "Брейкпоинты Vuetify, порог мобильного интерфейса и живой индикатор текущего размера" },
-    "action-panel": { "title": "Панель действий",                  "description": "Прототип: разметка действий страницы и их перенос в нижнюю панель действий на мобильных" },
-    "buttons":      { "title": "Кнопки",                          "description": "Варианты, размеры, состояния и группировка" },
-    "button-group": { "title": "Группировка кнопок",              "description": "VBtnGroup и VBtnToggle — варианты, плотность, реальные паттерны" },
-    "selects":      { "title": "Выпадающие списки",               "description": "VSelect, VAutocomplete — варианты, состояния, размеры" },
-    "inputs":       { "title": "Поля ввода",                      "description": "VTextField, VTextarea — варианты, состояния, плотность" },
-    "numbers":      { "title": "Числа и валюта",                  "description": "VNumberInput — варианты управления, степ, точность, слайдеры" },
-    "toggle":       { "title": "Чекбоксы, радио, переключатели",  "description": "VCheckbox, VRadio, VSwitch — варианты, состояния, группы" },
-    "sliders":      { "title": "Слайдеры",                        "description": "VSlider, VRangeSlider — шаг, метки, цвет, диапазон" },
-    "date-pickers": { "title": "Выбор даты и времени",            "description": "VDateInput (labs) и VTimePicker — 4 сценария" },
-    "data-table":   { "title": "Таблица данных",                      "description": "VDataTable — плотность, слоты, состояния, пагинация" },
-    "table":        { "title": "Таблица",                         "description": "VTable — нативная разметка thead/tbody, стилизованная под data table" },
+    "tokens": {
+      "title": "Токены",
+      "description": "Базовые переменные: цвета, скругления, шрифты"
+    },
+    "typography": {
+      "title": "Типографика",
+      "description": "Дефолтные стили HTML-элементов"
+    },
+    "layout": {
+      "title": "Макет",
+      "description": "Структура страниц и управление контентной зоной через route.meta"
+    },
+    "breakpoints": {
+      "title": "Брейкпоинты",
+      "description": "Брейкпоинты Vuetify, порог мобильного интерфейса и живой индикатор текущего размера"
+    },
+    "action-panel": {
+      "title": "Панель действий",
+      "description": "Прототип: разметка действий страницы и их перенос в нижнюю панель действий на мобильных"
+    },
+    "buttons": {
+      "title": "Кнопки",
+      "description": "Варианты, размеры, состояния и группировка"
+    },
+    "button-group": {
+      "title": "Группировка кнопок",
+      "description": "VBtnGroup и VBtnToggle — варианты, плотность, реальные паттерны"
+    },
+    "selects": {
+      "title": "Выпадающие списки",
+      "description": "VSelect, VAutocomplete — варианты, состояния, размеры"
+    },
+    "inputs": {
+      "title": "Поля ввода",
+      "description": "VTextField, VTextarea — варианты, состояния, плотность"
+    },
+    "numbers": {
+      "title": "Числа и валюта",
+      "description": "VNumberInput — варианты управления, степ, точность, слайдеры"
+    },
+    "toggle": {
+      "title": "Чекбоксы, радио, переключатели",
+      "description": "VCheckbox, VRadio, VSwitch — варианты, состояния, группы"
+    },
+    "sliders": {
+      "title": "Слайдеры",
+      "description": "VSlider, VRangeSlider — шаг, метки, цвет, диапазон"
+    },
+    "date-pickers": {
+      "title": "Выбор даты и времени",
+      "description": "VDateInput (labs) и VTimePicker — 4 сценария"
+    },
+    "icon-picker": {
+      "title": "Выбор иконки",
+      "description": "Панель с плитками иконок и поиском по коду: набор фиксирован, ищем по тому же имени, что уходит в базу."
+    },
+    "color-picker": {
+      "title": "Выбор цвета",
+      "description": "Плитки именованного набора: цвет выбирается из палитры, а не подбирается произвольно. Имя уходит в базу, а тон под тему подставляется на месте."
+    },
+    "icon-color-picker": {
+      "title": "Выбор иконки и цвета",
+      "description": "Рисунок и тон одной панелью: вверху предпросмотр плашки и палитра, ниже набор иконок с поиском. Выбранный цвет красит и выбранную иконку."
+    },
+    "data-table": {
+      "title": "Таблица данных",
+      "description": "VDataTable — плотность, слоты, состояния, пагинация"
+    },
+    "table": {
+      "title": "Таблица",
+      "description": "VTable — нативная разметка thead/tbody, стилизованная под data table"
+    },
     "task-status": {
       "title": "Статус задач",
       "description": "Глобальное хранилище задач — краткий статус каждой задачи + запросы запуска (core_users)",
@@ -85,33 +516,136 @@
         "button": "Кнопка статуса задач"
       }
     },
-    "pagination":   { "title": "Пагинация",                       "description": "VPagination — навигация по страницам списков и таблиц" },
-    "world-map":    { "title": "Карта мира",                      "description": "WorldMap — choropleth с настройкой палитры, плашками и кастомным tooltip" },
-    "line-chart":   { "title": "Линейные графики",                "description": "LineChart — таймсерии и числовая ось, multi-series, area, hover-crosshair, tooltip" },
-    "bar-chart":    { "title": "Столбчатые диаграммы",            "description": "BarChart — категориальные столбцы, группы и стек, вертикально и горизонтально, hover-tooltip" },
-    "pie-chart":    { "title": "Круговые диаграммы",              "description": "PieChart — круговая и кольцевая (donut), легенда сегментов, проценты, hover-tooltip" },
-    "alerts":       { "title": "Алерты",                          "description": "VAlert — инлайн-уведомления (success / info / warning / error)" },
-    "loaders":      { "title": "Загрузчики",                      "description": "VProgressCircular, VProgressLinear, .spin" },
-    "skeleton":     { "title": "Скелетная загрузка",              "description": "VSkeletonLoader — плейсхолдеры на время загрузки данных" },
-    "status-badge": { "title": "Статус-бейдж",                    "description": "StatusBadge — цветная точка + текст для отображения состояний" },
-    "chips":        { "title": "Чипы",                          "description": "VChip — варианты, цвета, размеры, закрываемые теги и фильтр-группы" },
-    "switch-panel": { "title": "Плашка-переключатель",            "description": "SwitchPanel — серая плашка: переключатель слева, текст справа. Кликается целиком" },
-    "dialogs":      { "title": "Диалоги",                         "description": "VDialog — варианты, формы, подтверждение действий" },
-    "tooltips":     { "title": "Тултипы",                         "description": "VTooltip — всплывающие подсказки при наведении" },
-    "code-block":   { "title": "CodeBlock",                       "description": "Подсветка синтаксиса с нумерацией строк и копированием" },
-    "markdown":     { "title": "MarkdownRenderer",                "description": "Рендеринг Markdown с кастомными классами через marked + DOMPurify" },
-    "chat":         { "title": "Лента чата",                      "description": "ChatFeed / ChatMessage / ChatEvent — пузыри переписки со сторонами и тонами" },
-    "message":      { "title": "Контент сообщения",               "description": "MessageContent — тело письма в выбранном представлении (оформление / текст) со спойлерами пересланного и истории и переключателем безопасности" },
-    "cards":        { "title": "Карточки",                        "description": "VCard — варианты, структура, состояния и реальные паттерны" },
-    "dividers":     { "title": "Разделители",                     "description": "VDivider — горизонтальные и вертикальные разделители" },
-    "file-cards":   { "title": "Файловые карточки",               "description": "FileCards — плавающие карточки файлов с иконкой по типу и цветом/подписью по уровню доверия" },
-    "kanban":       { "title": "Канбан",                          "description": "Канбан-доска — карточки по колонкам с горизонтальным скроллом" },
-    "spoiler":      { "title": "Спойлер",                         "description": "Spoiler — сворачиваемая секция с кликабельной шапкой; темы оформления (default / minimal / card)" },
-    "members-cell": { "title": "Ячейка участников",               "description": "MembersCell — табличная ячейка: первый участник, остальные под кликабельным попапом +N, каждый пункт — клик-фильтр" },
-    "edge-scroller": { "title": "EdgeScroller",                   "description": "Full-bleed обёртка горизонтального скролла с краевыми тенями — здесь оборачивает широкую таблицу" }
+    "pagination": {
+      "title": "Пагинация",
+      "description": "VPagination — навигация по страницам списков и таблиц"
+    },
+    "world-map": {
+      "title": "Карта мира",
+      "description": "WorldMap — choropleth с настройкой палитры, плашками и кастомным tooltip"
+    },
+    "line-chart": {
+      "title": "Линейные графики",
+      "description": "LineChart — таймсерии и числовая ось, multi-series, area, hover-crosshair, tooltip"
+    },
+    "bar-chart": {
+      "title": "Столбчатые диаграммы",
+      "description": "BarChart — категориальные столбцы, группы и стек, вертикально и горизонтально, hover-tooltip"
+    },
+    "pie-chart": {
+      "title": "Круговые диаграммы",
+      "description": "PieChart — круговая и кольцевая (donut), легенда сегментов, проценты, hover-tooltip"
+    },
+    "alerts": {
+      "title": "Алерты",
+      "description": "VAlert — инлайн-уведомления (success / info / warning / error)"
+    },
+    "toasts": {
+      "title": "Всплывающие сообщения",
+      "description": "pushToast / ToastStack — отказ, который экран не показал сам; очередь по одному, дедуп, отсчёт до закрытия"
+    },
+    "callout": {
+      "title": "Плашка пояснения",
+      "description": "Callout — постоянный контекст рядом с полем или разделом. Не VAlert: тот сообщает о событии"
+    },
+    "error-states": {
+      "title": "Отказы",
+      "description": "ErrorState / SectionError — что получает экран, что состояние внутри раздела, а что сообщение рядом с действием"
+    },
+    "loaders": {
+      "title": "Загрузчики",
+      "description": "VProgressCircular, VProgressLinear, .spin"
+    },
+    "skeleton": {
+      "title": "Скелетная загрузка",
+      "description": "VSkeletonLoader — плейсхолдеры на время загрузки данных"
+    },
+    "status-badge": {
+      "title": "Статус-бейдж",
+      "description": "StatusBadge — цветная точка + текст для отображения состояний"
+    },
+    "chips": {
+      "title": "Чипы",
+      "description": "VChip — варианты, цвета, размеры, закрываемые теги и фильтр-группы"
+    },
+    "switch-panel": {
+      "title": "Плашка-переключатель",
+      "description": "SwitchPanel — серая плашка: переключатель слева, текст справа. Кликается целиком"
+    },
+    "dialogs": {
+      "title": "Диалоги",
+      "description": "VDialog — варианты, формы, подтверждение действий"
+    },
+    "tooltips": {
+      "title": "Тултипы",
+      "description": "VTooltip — всплывающие подсказки при наведении"
+    },
+    "code-block": {
+      "title": "CodeBlock",
+      "description": "Подсветка синтаксиса с нумерацией строк и копированием"
+    },
+    "markdown": {
+      "title": "MarkdownRenderer",
+      "description": "Рендеринг Markdown с кастомными классами через marked + DOMPurify"
+    },
+    "chat": {
+      "title": "Лента чата",
+      "description": "ChatFeed / ChatMessage / ChatEvent — пузыри переписки со сторонами и тонами"
+    },
+    "message": {
+      "title": "Контент сообщения",
+      "description": "MessageContent — тело письма в выбранном представлении (оформление / текст) со спойлерами пересланного и истории и переключателем безопасности"
+    },
+    "cards": {
+      "title": "Карточки",
+      "description": "VCard — варианты, структура, состояния и реальные паттерны"
+    },
+    "dividers": {
+      "title": "Разделители",
+      "description": "VDivider — горизонтальные и вертикальные разделители"
+    },
+    "file-cards": {
+      "title": "Файловые карточки",
+      "description": "FileCards — плавающие карточки файлов с иконкой по типу и цветом/подписью по уровню доверия"
+    },
+    "kanban": {
+      "title": "Канбан",
+      "description": "Канбан-доска — карточки по колонкам с горизонтальным скроллом"
+    },
+    "spoiler": {
+      "title": "Спойлер",
+      "description": "Spoiler — сворачиваемая секция с кликабельной шапкой; темы оформления (default / minimal / card)"
+    },
+    "members-cell": {
+      "title": "Ячейка участников",
+      "description": "MembersCell — табличная ячейка: первый участник, остальные под кликабельным попапом +N, каждый пункт — клик-фильтр"
+    },
+    "section-header": {
+      "title": "Заголовок секции",
+      "description": "SectionHeader — уровень задаёт и тег <h*>, и кегль; счётчик, описание, правый слот. PageHeader собран поверх него"
+    },
+    "edge-scroller": {
+      "title": "EdgeScroller",
+      "description": "Full-bleed обёртка горизонтального скролла с краевыми тенями — здесь оборачивает широкую таблицу"
+    }
   },
   "section": {
-    "breakpoints":  { "current": "Текущий брейкпоинт", "scale": "Шкала брейкпоинтов", "mobileChrome": "Мобильный интерфейс", "desktopChrome": "Десктопный интерфейс", "mobileThreshold": "Порог мобильного интерфейса", "note": "Брейкпоинт «mobile» в Vuetify переопределён на md (< 960px): ниже этого порога включается мобильная навигация — overlay-drawer и верхний бар. Реактивное состояние берётся из useDisplay() (name, width, mobile).", "device": { "xs": "Телефоны (портрет)", "sm": "Телефоны (ландшафт)", "md": "Планшеты", "lg": "Ноутбуки", "xl": "Десктопы", "xxl": "Большие экраны" } },
+    "breakpoints": {
+      "current": "Текущий брейкпоинт",
+      "scale": "Шкала брейкпоинтов",
+      "mobileChrome": "Мобильный интерфейс",
+      "desktopChrome": "Десктопный интерфейс",
+      "mobileThreshold": "Порог мобильного интерфейса",
+      "note": "Брейкпоинт «mobile» в Vuetify переопределён на md (< 960px): ниже этого порога включается мобильная навигация — overlay-drawer и верхний бар. Реактивное состояние берётся из useDisplay() (name, width, mobile).",
+      "device": {
+        "xs": "Телефоны (портрет)",
+        "sm": "Телефоны (ландшафт)",
+        "md": "Планшеты",
+        "lg": "Ноутбуки",
+        "xl": "Десктопы",
+        "xxl": "Большие экраны"
+      }
+    },
     "action-panel": {
       "intro": "Действия страницы (кнопка обновления, панель фильтров и т.д.) на широком экране живут в тулбаре, но на телефоне места нет. Этот прототип позволяет разметить каждое действие — оставить его в тулбаре или перенести в нижнюю панель действий, которая появляется только на мобильных.",
       "marking": "Разметка действий",
@@ -120,23 +654,208 @@
       "desktop": "Десктоп",
       "mobile": "Мобильный",
       "preview": "Превью",
-      "placement": { "inline": "В тулбаре", "bottom": "Нижняя панель" },
-      "action": { "refresh": "Обновить", "create": "Создать", "filters": "Фильтры" },
-      "page": { "title": "Список переписок" },
-      "filters": { "status": "Статус", "channel": "Канал", "search": "Поиск" }
+      "placement": {
+        "inline": "В тулбаре",
+        "bottom": "Нижняя панель"
+      },
+      "action": {
+        "refresh": "Обновить",
+        "create": "Создать",
+        "filters": "Фильтры"
+      },
+      "page": {
+        "title": "Список переписок"
+      },
+      "filters": {
+        "status": "Статус",
+        "channel": "Канал",
+        "search": "Поиск"
+      }
     },
-    "buttons":      { "variants": "Варианты", "withIcons": "С иконками", "sizes": "Размеры", "states": "Состояния", "whenToUse": "Когда что использовать" },
-    "button-group": { "neutral": "VBtnGroup — нейтральная группировка", "single": "VBtnToggle — одиночный выбор", "multiple": "VBtnToggle — множественный выбор", "styling": "Варианты оформления VBtnToggle" },
-    "kanban":       { "title": "Канбан-доска", "note": "Собрана из KanbanBoard / KanbanColumn / KanbanCard. KanbanBoard оборачивает колонки в общий EdgeScroller (layout/components) — full-bleed горизонтальный скролл с краевыми тенями. У каждой колонки фиксированная ширина и собственный вертикальный стек карточек.", "addCard": "Добавить карточку" },
-    "edge-scroller": { "title": "EdgeScroller", "note": "Переиспользуемая обёртка из layout/ для любого широкого контента: горизонтальный скролл с мягкими краевыми тенями, которые проявляются с той стороны, где ещё спрятан контент, плюс опциональный проп `bleed` — выносит контент к краям экрана (гасит паддинг страницы), при этом первая колонка остаётся выровненной с заголовком. Канбан-доска использует её; здесь она оборачивает широкую таблицу — прокрути вбок, чтобы увидеть краевые тени и выход к краям." },
-    "cards":        { "variants": "Варианты", "structure": "Структура", "rounded": "Скругление и тень", "states": "Состояния", "clickable": "Кликабельная", "usage": "Примеры использования" },
-    "code-block":   { "props": "Настройки компонента", "demo": "Демо", "allVariants": "Все варианты", "languages": "Языки" },
-    "date-pickers": { "date": "Выбор даты", "time": "Выбор времени", "dateTime": "Выбор даты и времени", "range": "Диапазон дат" },
-    "dialogs":      { "variants": "Варианты" },
-    "dividers":     { "horizontal": "Горизонтальные", "vertical": "Вертикальные", "usage": "Примеры использования" },
-    "file-cards":   { "withHeader": "С заголовком", "states": "Состояния доверия", "kinds": "Типы файлов", "list": "Линейный вариант", "usage": "Примеры использования" },
-    "inputs":       { "variants": "Варианты", "states": "Состояния", "withIcons": "С иконками", "specialTypes": "Специальные типы", "multiline": "Многострочное", "description": "С описанием", "density": "Плотность" },
-    "layout":       { "structure": "Структура", "examples": "Примеры" },
+    "buttons": {
+      "variants": "Варианты",
+      "withIcons": "С иконками",
+      "sizes": "Размеры",
+      "states": "Состояния",
+      "whenToUse": "Когда что использовать"
+    },
+    "button-group": {
+      "neutral": "VBtnGroup — нейтральная группировка",
+      "single": "VBtnToggle — одиночный выбор",
+      "multiple": "VBtnToggle — множественный выбор",
+      "styling": "Варианты оформления VBtnToggle"
+    },
+    "kanban": {
+      "title": "Канбан-доска",
+      "note": "Собрана из KanbanBoard / KanbanColumn / KanbanCard. KanbanBoard оборачивает колонки в общий EdgeScroller (layout/components) — full-bleed горизонтальный скролл с краевыми тенями. У каждой колонки фиксированная ширина и собственный вертикальный стек карточек.",
+      "addCard": "Добавить карточку"
+    },
+    "edge-scroller": {
+      "title": "EdgeScroller",
+      "note": "Переиспользуемая обёртка из layout/ для любого широкого контента: горизонтальный скролл с мягкими краевыми тенями, которые проявляются с той стороны, где ещё спрятан контент, плюс опциональный проп `bleed` — выносит контент к краям экрана (гасит паддинг страницы), при этом первая колонка остаётся выровненной с заголовком. Канбан-доска использует её; здесь она оборачивает широкую таблицу — прокрути вбок, чтобы увидеть краевые тени и выход к краям."
+    },
+    "cards": {
+      "variants": "Варианты",
+      "structure": "Структура",
+      "rounded": "Скругление и тень",
+      "states": "Состояния",
+      "clickable": "Кликабельная",
+      "usage": "Примеры использования"
+    },
+    "code-block": {
+      "props": "Настройки компонента",
+      "demo": "Демо",
+      "allVariants": "Все варианты",
+      "languages": "Языки"
+    },
+    "date-pickers": {
+      "date": "Выбор даты",
+      "time": "Выбор времени",
+      "dateTime": "Выбор даты и времени",
+      "range": "Диапазон дат"
+    },
+    "dialogs": {
+      "variants": "Варианты",
+      "app_dialog": "AppDialog — окно проекта",
+      "open": "Открыть",
+      "sample": {
+        "narrow_title": "Запустить поиск?",
+        "narrow_text": "Запрос уйдёт в выбранный движок и потратит квоту сервиса.",
+        "base_title": "Новая группа",
+        "base_desc": "Полка, на которую складываются исследования одной темы.",
+        "field": "Название",
+        "scroll_title": "Длинное содержимое",
+        "scroll_line": "Строка тела: прокручивается только тело, шапка и полоса кнопок стоят на месте.",
+        "confirm_title": "Удалить группу?",
+        "confirm_text": "Исследования останутся, но потеряют полку. Действие необратимо."
+      }
+    },
+    "dividers": {
+      "horizontal": "Горизонтальные",
+      "vertical": "Вертикальные",
+      "usage": "Примеры использования"
+    },
+    "file-cards": {
+      "withHeader": "С заголовком",
+      "states": "Состояния доверия",
+      "kinds": "Типы файлов",
+      "list": "Линейный вариант",
+      "usage": "Примеры использования"
+    },
+    "inputs": {
+      "variants": "Варианты",
+      "states": "Состояния",
+      "withIcons": "С иконками",
+      "specialTypes": "Специальные типы",
+      "multiline": "Многострочное",
+      "description": "С описанием",
+      "density": "Плотность"
+    },
+    "layout": {
+      "structure": "Структура",
+      "examples": "Примеры"
+    },
+    "error-states": {
+      "rule": "Правило: экран, состояние или сообщение",
+      "rule_note": "Экран во весь контент даётся тогда, когда умерла НАВИГАЦИЯ — человек пришёл по адресу, и смотреть тут нечего. Если умерла ОПЕРАЦИЯ (нажал кнопку, запрос не прошёл), экран отбирать нельзя: контекст дороже, ответ идёт рядом с действием.",
+      "screens": "Экраны отказа",
+      "section": "Состояние внутри раздела",
+      "section_note": "Навигация жива, шелл и меню остаются на месте. «Не найдено» отличается от сбоя по статусу ответа, предметное существительное приносит сам бэкенд.",
+      "usage": "Использование",
+      "col": {
+        "case": "Сценарий",
+        "form": "Форма",
+        "who": "Кто показывает"
+      },
+      "rules": {
+        "route": {
+          "case": "Маршрута нет (опечатка, битая ссылка)",
+          "form": "Экран 404 на исходном адресе",
+          "who": "catch-all роутера"
+        },
+        "entity": {
+          "case": "Сущности нет (404 на чтение)",
+          "form": "Состояние внутри раздела",
+          "who": "SectionError"
+        },
+        "forbidden": {
+          "case": "Прав на раздел нет (403)",
+          "form": "Экран, адрес НЕ меняется",
+          "who": "клиент API → setShellError"
+        },
+        "operation": {
+          "case": "Операция не прошла (создание, сохранение)",
+          "form": "Сообщение рядом с действием",
+          "who": "тост либо форма (report: false)"
+        },
+        "failure": {
+          "case": "Сбой рендера, 500",
+          "form": "Экран «что-то сломалось» + повтор",
+          "who": "app.config.errorHandler"
+        },
+        "offline": {
+          "case": "Нет связи, таймаут",
+          "form": "Сообщение; экран — если данных нет вовсе",
+          "who": "клиент API"
+        },
+        "chunk": {
+          "case": "Чанк не загрузился после выкладки",
+          "form": "НЕ экран: тихая перезагрузка на тот же путь",
+          "who": "router/reload.ts"
+        }
+      }
+    },
+    "section-header": {
+      "levels": "Уровни",
+      "parts": "Части",
+      "page_level": "Уровень страницы",
+      "page_level_note": "PageHeader = кнопка «назад» + тот же компонент уровнем 1. Анатомия заголовка одна на страницу и на секцию внутри неё.",
+      "toggle": "Переключить загрузку",
+      "usage": "Использование",
+      "sample": {
+        "title": "Области",
+        "page_title": "Исследование",
+        "desc": "Разделы, на которые разбит разбор темы.",
+        "action": "Обновить"
+      }
+    },
+    "callout": {
+      "tones": "Тона",
+      "title_lead": "С зачином",
+      "dense": "Плотный — под полем формы",
+      "vs_alert": "Callout против VAlert",
+      "vs_alert_note": "Алерт сообщает о СОБЫТИИ (что-то не прошло, на что-то надо посмотреть) и его закрывают. Плашка пояснения была тут всегда. Если пояснения выглядят как алерты, настоящие алерты перестают замечать.",
+      "usage": "Использование",
+      "sample": {
+        "info": "Найденные страницы сохраняются в markdown и переиспользуются между исследованиями.",
+        "muted": "Нейтральная ремарка — без нажима, просто контекст.",
+        "warn": "Движок отдаёт только ссылки: содержимое страниц заберёт движок контента.",
+        "error": "Ключ сервиса не задан — поиск этим движком завершится ошибкой.",
+        "lead_title": "Движок выключен",
+        "lead_text": "Пока коннектор выключен в настройках, запрос к нему падает до обращения к сети.",
+        "field": "Поисковый движок",
+        "dense": "Tavily умеет и поиск, и получение содержимого страниц.",
+        "alert": "Не удалось создать запрос",
+        "callout": "Запрос выполняется синхронно: страница обновится, когда движок ответит."
+      }
+    },
+    "toasts": {
+      "levels": "Уровни",
+      "queue": "Очередь и поведение",
+      "usage": "Использование",
+      "show": "Показать",
+      "burst": "Четыре разом",
+      "clear": "Очистить",
+      "same": "Тот же текст ещё раз",
+      "dedupe_note": "Повтор игнорируется, пока прежнее висит",
+      "sample": {
+        "success": "Настройки сохранены",
+        "info": "Поиск поставлен в очередь",
+        "warn": "Движок отключён в настройках",
+        "error": "Не удалось выполнить запрос",
+        "sticky": "Сервер перезапускается…"
+      }
+    },
     "alerts": {
       "types": "Типы",
       "variants": "Варианты",
@@ -156,23 +875,205 @@
         "tracking": "Часть изображений и все ссылки отключены для защиты от трекинга."
       }
     },
-    "loaders":      { "spin": ".spin — кастомный спиннер" },
-    "markdown":     { "props": "Настройки компонента", "liveEditor": "Живой редактор", "fullDemo": "Полное демо — все элементы", "jobContent": "Типичный контент вакансии" },
-    "chat":         { "feed": "Лента переписки", "events": "События и структура", "kinds": "Типы сообщений", "incoming": "Входящее", "outgoing": "Исходящее", "agent": "Агент", "note": "Заметка", "tones": "Тона", "empty": "Пустое состояние", "composer": "Поле ввода", "composer_placeholder": "Введите ответ и нажмите Enter…", "instruction": "Инструкция агенту", "instruction_for": "Инструкция для", "instruction_label": "Инструкция для AI", "instruction_edit": "Изменить", "instruction_updated": "Обновлено", "instruction_empty": "Для этого контакта пока нет инструкции — напишите её ниже и сохраните.", "instruction_placeholder": "Опишите для AI, как вести себя с этим контактом, и нажмите «Сохранить»…", "no_messages": "Сообщений пока нет", "usage": "Пример использования", "slots": "Схема слотов", "example": "Пример", "tracking_blocked": "Часть изображений и трекеров заблокирована", "show_images": "Показать изображения", "note_divider": "Внутренняя заметка · клиенту не отправляется" },
-    "message":      { "controls": "Настройки", "controls_safe": "Настройки — только безопасность", "controls_safe_note": "С hide-format переключатель оформление/текст убран — остаётся только тумблер безопасного режима, для страниц одиночного сообщения без выбора формата (например, страница письма).", "reply": "Ответ с историей", "forward": "Пересланное сообщение", "plain": "Простой текст", "images": "Изображения и лайтбокс", "images_note": "В текстовом представлении изображения рендерятся как Markdown ![alt](src); при наведении показывается подсказка увеличения, по клику открывается лайтбокс. В представлении с оформлением переключатель безопасности гейтит удалённые изображения. Превью обёрнуты в реальный пузырь чата (ChatMessage), ровно как их рендерят вью переписок.", "reaction": "Инлайн-картинка (реакция)", "reaction_note": "Картинка в одном абзаце с текстом стоит на строке предложения (vertical-align:middle, без блочного отступа), а не переносится на отдельную строку — например, реакция 👍.", "usage": "Пример использования", "data": "Форма данных от бэкенда", "example": "Пример", "note": "Режим представления (оформление / текст) и флаг безопасности — глобальные пользовательские настройки (stores/settings.ts → message.*); тулбар пишет в них, поэтому каждое сообщение в приложении следует одному выбору, и он сохраняется.", "data_note": "Бэкенд (content_processors.build_message_view) готовит `html` и `text` из исходного тела; компонент только рендерит." },
-    "members-cell": { "basic": "Базовый", "mono": "Email-колонка (mono)", "empty": "Пустые состояния", "no_team": "Нет команды", "event": "Событие выбора", "usage": "Примеры использования" },
-    "spoiler":      { "basic": "Базовый", "variants": "Темы оформления", "slots": "Слоты заголовка и действий", "states": "Состояния", "colors": "Свои цвета", "usage": "Подключение и использование", "sample": { "title": "Технические детали", "openTitle": "Открыт по умолчанию", "body": "Скрытое содержимое раскрывается при разворачивании спойлера.", "attachments": "Вложения", "disabledTitle": "Заблокированная секция", "colorTitle": "Акцентная шапка", "dangerTitle": "Опасная зона" }, "variantSample": { "default": "Тема default", "minimal": "Тема minimal", "card": "Тема card" } },
-    "numbers":      { "modifiers": "Модификаторы", "stepPrecision": "Шаг и точность", "currency": "Валюта" },
-    "pagination":   { "basic": "Базовый", "density": "Плотность", "shape": "Форма кнопок", "arrowIcons": "Иконки на стрелках", "states": "Состояния", "pageSize": "С выбором размера страницы", "component": "TablePaginationBar — стандартный подвал", "componentNote": "Стандартный подвал таблицы для всех списочных вью. Диапазон + выбор размера + пагинатор в одну строку; ниже брейкпоинта sm раскладка меняется — пагинатор сверху, разделитель, затем диапазон (слева) | выбор размера (справа). Сузьте окно ниже 600px, чтобы увидеть." },
-    "selects":      { "variants": "Варианты", "states": "Состояния", "withIcons": "С иконками", "objects": "Объекты", "density": "Плотность", "sizes": "Размеры", "searchInDropdown": "Поиск внутри списка" },
-    "skeleton":     { "basicTypes": "Базовые типы", "presets": "Составные пресеты", "custom": "Кастомная композиция", "loadingToContent": "Загрузка → контент" },
-    "sliders":      { "states": "Состояния", "range": "VRangeSlider — диапазон" },
-    "status-badge": { "colors": "Цвета", "mapping": "Типовой маппинг" },
-    "chips": { "variants": "Варианты", "theme": "Цвета темы", "palette": "Вся палитра", "sizes": "Размеры", "content": "Иконки и аватар", "closable": "Закрываемые", "filter": "Фильтр-группа", "states": "Состояния", "all_removed": "Все удалены" },
-    "switch-panel": { "basic": "Базовый", "stateText": "Текст по состоянию", "tones": "Тона", "toneDesc": "Фон панели и цвет переключателя зависят от тона.", "switchTone": "Тон переключателя", "switchToneDesc": "Нейтральная плашка — цвет получает только переключатель.", "states": "Состояния", "usage": "Подключение и использование", "sample": { "title": "Импорт на паузе", "desc": "Письма не будут синхронизироваться, пока переключатель выключен.", "activeTitle": "Ящик активен", "slot": "Произвольное содержимое через слот по умолчанию.", "onTitle": "Импорт включён", "offTitle": "Импорт выключен", "onDesc": "Письма синхронизируются по расписанию.", "offDesc": "Синхронизация приостановлена.", "disabledTitle": "Управляется системой", "disabledDesc": "Этот переключатель недоступен для ручного изменения." }, "toneSample": { "default": "Нейтральная", "primary": "Акцент", "info": "Информация", "success": "Успех", "warning": "Предупреждение", "error": "Ошибка", "transparent": "Без оформления" } },
-    "toggle":       { "checkboxVariants": "VCheckbox — варианты", "checkboxGroup": "VCheckbox — группа", "radioGroup": "VRadio — группа", "switchVariants": "VSwitch — варианты", "density": "Плотность" },
-    "tokens":       { "colors": "Цвета", "radii": "Скругления", "fonts": "Шрифты" },
-    "tooltips":     { "basic": "Базовые", "placement": "Расположение", "multiline": "Многострочные", "structured": "Со структурой", "delays": "Задержки" },
-    "typography":   { "headings": "Заголовки", "text": "Текст", "code": "Код", "links": "Ссылки", "families": "Семейства" }
+    "loaders": {
+      "spin": ".spin — кастомный спиннер"
+    },
+    "markdown": {
+      "props": "Настройки компонента",
+      "liveEditor": "Живой редактор",
+      "fullDemo": "Полное демо — все элементы",
+      "jobContent": "Типичный контент вакансии"
+    },
+    "chat": {
+      "feed": "Лента переписки",
+      "events": "События и структура",
+      "kinds": "Типы сообщений",
+      "incoming": "Входящее",
+      "outgoing": "Исходящее",
+      "agent": "Агент",
+      "note": "Заметка",
+      "tones": "Тона",
+      "empty": "Пустое состояние",
+      "composer": "Поле ввода",
+      "composer_placeholder": "Введите ответ и нажмите Enter…",
+      "instruction": "Инструкция агенту",
+      "instruction_for": "Инструкция для",
+      "instruction_label": "Инструкция для AI",
+      "instruction_edit": "Изменить",
+      "instruction_updated": "Обновлено",
+      "instruction_empty": "Для этого контакта пока нет инструкции — напишите её ниже и сохраните.",
+      "instruction_placeholder": "Опишите для AI, как вести себя с этим контактом, и нажмите «Сохранить»…",
+      "no_messages": "Сообщений пока нет",
+      "usage": "Пример использования",
+      "slots": "Схема слотов",
+      "example": "Пример",
+      "tracking_blocked": "Часть изображений и трекеров заблокирована",
+      "show_images": "Показать изображения",
+      "note_divider": "Внутренняя заметка · клиенту не отправляется"
+    },
+    "message": {
+      "controls": "Настройки",
+      "controls_safe": "Настройки — только безопасность",
+      "controls_safe_note": "С hide-format переключатель оформление/текст убран — остаётся только тумблер безопасного режима, для страниц одиночного сообщения без выбора формата (например, страница письма).",
+      "reply": "Ответ с историей",
+      "forward": "Пересланное сообщение",
+      "plain": "Простой текст",
+      "images": "Изображения и лайтбокс",
+      "images_note": "В текстовом представлении изображения рендерятся как Markdown ![alt](src); при наведении показывается подсказка увеличения, по клику открывается лайтбокс. В представлении с оформлением переключатель безопасности гейтит удалённые изображения. Превью обёрнуты в реальный пузырь чата (ChatMessage), ровно как их рендерят вью переписок.",
+      "reaction": "Инлайн-картинка (реакция)",
+      "reaction_note": "Картинка в одном абзаце с текстом стоит на строке предложения (vertical-align:middle, без блочного отступа), а не переносится на отдельную строку — например, реакция 👍.",
+      "usage": "Пример использования",
+      "data": "Форма данных от бэкенда",
+      "example": "Пример",
+      "note": "Режим представления (оформление / текст) и флаг безопасности — глобальные пользовательские настройки (stores/settings.ts → message.*); тулбар пишет в них, поэтому каждое сообщение в приложении следует одному выбору, и он сохраняется.",
+      "data_note": "Бэкенд (content_processors.build_message_view) готовит `html` и `text` из исходного тела; компонент только рендерит."
+    },
+    "members-cell": {
+      "basic": "Базовый",
+      "mono": "Email-колонка (mono)",
+      "empty": "Пустые состояния",
+      "no_team": "Нет команды",
+      "event": "Событие выбора",
+      "usage": "Примеры использования"
+    },
+    "spoiler": {
+      "basic": "Базовый",
+      "variants": "Темы оформления",
+      "slots": "Слоты заголовка и действий",
+      "states": "Состояния",
+      "colors": "Свои цвета",
+      "usage": "Подключение и использование",
+      "sample": {
+        "title": "Технические детали",
+        "openTitle": "Открыт по умолчанию",
+        "body": "Скрытое содержимое раскрывается при разворачивании спойлера.",
+        "attachments": "Вложения",
+        "disabledTitle": "Заблокированная секция",
+        "colorTitle": "Акцентная шапка",
+        "dangerTitle": "Опасная зона"
+      },
+      "variantSample": {
+        "default": "Тема default",
+        "minimal": "Тема minimal",
+        "card": "Тема card"
+      }
+    },
+    "numbers": {
+      "modifiers": "Модификаторы",
+      "stepPrecision": "Шаг и точность",
+      "currency": "Валюта"
+    },
+    "pagination": {
+      "basic": "Базовый",
+      "density": "Плотность",
+      "shape": "Форма кнопок",
+      "arrowIcons": "Иконки на стрелках",
+      "states": "Состояния",
+      "pageSize": "С выбором размера страницы",
+      "component": "TablePaginationBar — стандартный подвал",
+      "componentNote": "Стандартный подвал таблицы для всех списочных вью. Диапазон + выбор размера + пагинатор в одну строку; ниже брейкпоинта sm раскладка меняется — пагинатор сверху, разделитель, затем диапазон (слева) | выбор размера (справа). Сузьте окно ниже 600px, чтобы увидеть."
+    },
+    "selects": {
+      "variants": "Варианты",
+      "states": "Состояния",
+      "withIcons": "С иконками",
+      "objects": "Объекты",
+      "density": "Плотность",
+      "sizes": "Размеры",
+      "searchInDropdown": "Поиск внутри списка"
+    },
+    "skeleton": {
+      "basicTypes": "Базовые типы",
+      "presets": "Составные пресеты",
+      "custom": "Кастомная композиция",
+      "loadingToContent": "Загрузка → контент"
+    },
+    "sliders": {
+      "states": "Состояния",
+      "range": "VRangeSlider — диапазон"
+    },
+    "status-badge": {
+      "colors": "Цвета",
+      "mapping": "Типовой маппинг"
+    },
+    "chips": {
+      "variants": "Варианты",
+      "theme": "Цвета темы",
+      "palette": "Вся палитра",
+      "sizes": "Размеры",
+      "content": "Иконки и аватар",
+      "closable": "Закрываемые",
+      "filter": "Фильтр-группа",
+      "states": "Состояния",
+      "all_removed": "Все удалены"
+    },
+    "switch-panel": {
+      "basic": "Базовый",
+      "stateText": "Текст по состоянию",
+      "tones": "Тона",
+      "toneDesc": "Фон панели и цвет переключателя зависят от тона.",
+      "switchTone": "Тон переключателя",
+      "switchToneDesc": "Нейтральная плашка — цвет получает только переключатель.",
+      "states": "Состояния",
+      "usage": "Подключение и использование",
+      "sample": {
+        "title": "Импорт на паузе",
+        "desc": "Письма не будут синхронизироваться, пока переключатель выключен.",
+        "activeTitle": "Ящик активен",
+        "slot": "Произвольное содержимое через слот по умолчанию.",
+        "onTitle": "Импорт включён",
+        "offTitle": "Импорт выключен",
+        "onDesc": "Письма синхронизируются по расписанию.",
+        "offDesc": "Синхронизация приостановлена.",
+        "disabledTitle": "Управляется системой",
+        "disabledDesc": "Этот переключатель недоступен для ручного изменения."
+      },
+      "toneSample": {
+        "default": "Нейтральная",
+        "primary": "Акцент",
+        "info": "Информация",
+        "success": "Успех",
+        "warning": "Предупреждение",
+        "error": "Ошибка",
+        "transparent": "Без оформления"
+      }
+    },
+    "toggle": {
+      "checkboxVariants": "VCheckbox — варианты",
+      "checkboxGroup": "VCheckbox — группа",
+      "radioGroup": "VRadio — группа",
+      "switchVariants": "VSwitch — варианты",
+      "density": "Плотность"
+    },
+    "tokens": {
+      "colors": "Цвета",
+      "radii": "Скругления",
+      "fonts": "Шрифты"
+    },
+    "tooltips": {
+      "basic": "Базовые",
+      "placement": "Расположение",
+      "multiline": "Многострочные",
+      "structured": "Со структурой",
+      "delays": "Задержки"
+    },
+    "typography": {
+      "headings": "Заголовки",
+      "text": "Текст",
+      "code": "Код",
+      "links": "Ссылки",
+      "families": "Семейства"
+    },
+    "icon-picker": {
+      "basic": "Панель и выбор",
+      "height": "Высота прокрутки"
+    },
+    "color-picker": {
+      "basic": "Палитра и выбор",
+      "plate": "Плашка иконки"
+    },
+    "icon-color-picker": {
+      "basic": "Панель и выбор"
+    }
   }
 }

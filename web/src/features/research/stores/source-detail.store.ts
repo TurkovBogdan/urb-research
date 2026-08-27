@@ -7,7 +7,9 @@ import { getSourceDocument, type SourceDocumentDetail } from '../api'
 export const useSourceDetailStore = defineStore('research-source-detail', () => {
   const source = ref<SourceDocumentDetail | null>(null)
   const loading = ref(false)
-  const error = ref<string | null>(null)
+  // Держим сам отказ, а не его текст: показ (`SectionError`) отличает «сущности нет» от сбоя
+  // по статусу ответа, а формулировку берёт из `errorText`.
+  const error = ref<unknown>(null)
 
   let current = ''
 
@@ -21,7 +23,7 @@ export const useSourceDetailStore = defineStore('research-source-detail', () => 
       source.value = data
     } catch (e) {
       if (current !== code) return
-      error.value = e instanceof Error ? e.message : String(e)
+      error.value = e
       source.value = null
     } finally {
       if (current === code) loading.value = false

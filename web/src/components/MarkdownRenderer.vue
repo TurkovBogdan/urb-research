@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, getCurrentInstance, h, nextTick, onBeforeUnmount, onMounted, ref, render, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { marked } from 'marked'
-import DOMPurify from 'dompurify'
+import CodeBlock from './CodeBlock.vue'
+import { renderMarkdown, type HeadingAnchor } from './markdown/render'
 
 const router = useRouter()
 
@@ -20,88 +20,12 @@ const props = defineProps<{
 
 const REF_LABEL_MAX = 48
 
-const emit = defineEmits<{ imageClick: [src: string] }>()
-
-function escapeAttr(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
-
-// Only override elements without inline children — block elements with nested
-// content (list, listitem, heading, paragraph, blockquote, strong, em) require
-// this.parser.parseInline() in marked v18 and must be left to the default renderer.
-// Style them via tag selectors in CSS. Images are wrapped in a positioned <span> so
-// the hover loupe affordance has an anchor (an <img> can't carry ::after).
-marked.use({
-  renderer: {
-    code({ text, lang }) {
-      const cls = lang ? ` language-${lang}` : ''
-      return `<pre class="md-pre"><code class="md-code${cls}">${text}</code></pre>\n`
-    },
-    codespan({ text }) {
-      return `<code class="md-codespan">${text}</code>`
-    },
-    // External links open in a new tab so they never navigate the SPA away (e.g. a
-    // settings token link would otherwise discard unsaved input). Internal links
-    // (href starting with `/`) stay in-app — the router intercepts them in onClick.
-    link({ href, title, tokens }) {
-      const text = this.parser.parseInline(tokens)
-      const titleAttr = title ? ` title="${escapeAttr(title)}"` : ''
-      const isExternal = !!href && !href.startsWith('/')
-      const externalAttrs = isExternal ? ' target="_blank" rel="noopener noreferrer"' : ''
-      return `<a href="${escapeAttr(href ?? '')}"${titleAttr}${externalAttrs}>${text}</a>`
-    },
-    image({ href, title, text }) {
-      const titleAttr = title ? ` title="${escapeAttr(title)}"` : ''
-      return `<span class="md-img"><img src="${escapeAttr(href ?? '')}" alt="${escapeAttr(text ?? '')}"${titleAttr}></span>`
-    },
-  },
-})
-
-// Research entity cross-references: a `TYPE@<22-hex>` token in a body (RESEARCH / AREA /
-// NOTE / QUERY / SOURCE) becomes a link to that entity's page. Codes are exactly 22 hex
-// chars (research.codes / hashing._HASH_LEN); the negative lookahead rejects a longer hex
-// run. The tokenizer runs during inline parsing, so a code inside a `code span` is untouched.
-const REF_ROUTE: Record<string, string> = {
-  RESEARCH: 'researches',
-  AREA: 'areas',
-  NOTE: 'notes',
-  QUERY: 'queries',
-  SOURCE: 'sources',
-}
-const REF_TYPES = Object.keys(REF_ROUTE).join('|')
-const REF_HEAD = new RegExp(`(?:${REF_TYPES})@`)
-const REF_TOKEN = new RegExp(`^(${REF_TYPES})@([0-9a-f]{22})(?![0-9a-f])`)
-marked.use({
-  extensions: [
-    {
-      name: 'entityRef',
-      level: 'inline',
-      start(src: string) {
-        const m = REF_HEAD.exec(src)
-        return m ? m.index : undefined
-      },
-      tokenizer(src: string) {
-        const match = REF_TOKEN.exec(src)
-        if (!match) return undefined
-        return { type: 'entityRef', raw: match[0], refType: match[1], hash: match[2] }
-      },
-      renderer(token) {
-        const t = token as unknown as { refType: string; hash: string }
-        const code = `${t.refType}@${t.hash}`
-        // The 22-hex hash is opaque in prose — show a short prefix as the transient label,
-        // keep the full code in href (navigation) + title (tooltip); a resolved title replaces it.
-        return `<a class="md-ref" href="/research/${REF_ROUTE[t.refType]}/${code}" title="${code}">${t.hash.slice(0, 6)}</a>`
-      },
-    },
-  ],
-})
-
-const ALLOWED_TAGS = [
-  'h1','h2','h3','h4','h5','h6',
-  'p','ul','ol','li','blockquote','pre','code','hr',
-  'strong','em','a','br','input',
-]
-const ALLOWED_ATTR = ['class','href','target','rel','type','checked','disabled','title']
+const emit = defineEmits<{
+  imageClick: [src: string]
+  // Оглавление тела: заголовки с проставленными `id`. Отдаём событием, а не через expose —
+  // потребителю (боковой навигации) нужен готовый список, а не доступ внутрь рендерера.
+  headings: [items: HeadingAnchor[]]
+}>()
 
 // Swap each reference pill's label from the short hash to the resolved entity title
 // (truncated). Runs on the already-sanitized HTML; textContent/setAttribute escape, so no
@@ -122,13 +46,55 @@ function withRefLabels(sanitized: string): string {
   return changed ? doc.body.innerHTML : sanitized
 }
 
-const html = computed(() => {
-  const tags = props.allowImages ? [...ALLOWED_TAGS, 'img', 'span'] : ALLOWED_TAGS
-  const attr = props.allowImages ? [...ALLOWED_ATTR, 'src', 'alt', 'title'] : ALLOWED_ATTR
-  const rendered = marked(props.text, { breaks: props.breaks ?? false }) as string
-  const clean = DOMPurify.sanitize(rendered, { ALLOWED_TAGS: tags, ALLOWED_ATTR: attr })
-  return withRefLabels(clean)
+const rendered = computed(() => renderMarkdown(props.text, {
+  breaks: props.breaks ?? false,
+  allowImages: props.allowImages ?? false,
+}))
+
+const html = computed(() => withRefLabels(rendered.value.html))
+
+watch(() => rendered.value.headings, (items) => emit('headings', items), { immediate: true })
+
+// Code blocks are not part of the HTML: the parser leaves an empty slot for each one and the
+// real component is mounted into it here, so a body gets highlighting, a copy button and a
+// language badge. A one-liner takes the compact variant — a command reads as a chip, not as a
+// panel with a header.
+const body = ref<HTMLElement | null>(null)
+const appContext = getCurrentInstance()?.appContext ?? null
+let mountedSlots: HTMLElement[] = []
+
+function unmountCodeBlocks() {
+  for (const slot of mountedSlots) render(null, slot)
+  mountedSlots = []
+}
+
+function mountCodeBlocks() {
+  const container = body.value
+  if (!container) return
+  container.querySelectorAll<HTMLElement>('.md-code-slot').forEach((slot) => {
+    const block = rendered.value.codeBlocks[Number(slot.dataset.codeIndex)]
+    if (!block) return
+    const isOneLiner = !block.code.trim().includes('\n')
+    const vnode = h(CodeBlock, {
+      code: block.code.replace(/\n$/, ''),
+      lang: block.language || undefined,
+      variant: isOneLiner ? 'compact' : 'icon',
+    })
+    vnode.appContext = appContext
+    render(vnode, slot)
+    mountedSlots.push(slot)
+  })
+}
+
+// v-html replaces the container's children, so the previous instances are unmounted first —
+// while their slots (detached by then or not) are still known here.
+watch(html, () => {
+  unmountCodeBlocks()
+  nextTick(mountCodeBlocks)
 })
+
+onMounted(mountCodeBlocks)
+onBeforeUnmount(unmountCodeBlocks)
 
 function onClick(event: MouseEvent) {
   const anchor = (event.target as HTMLElement).closest('a')
@@ -149,45 +115,120 @@ function onClick(event: MouseEvent) {
 </script>
 
 <template>
-  <div class="md-body" :class="{ 'md-body--compact': compact }" v-html="html" @click="onClick" />
+  <div ref="body" class="md-body" :class="{ 'md-body--compact': compact }" v-html="html" @click="onClick" />
 </template>
 
 <style scoped>
+/* The reading zone. A research body is read top to bottom rather than scanned, so it
+   runs on the reading font role and a larger base than the interface — and every size
+   below is expressed in `em`, which leaves `--prose-size` as the single knob the
+   compact variant has to move. */
 .md-body {
-  font-size: 14px;
+  /* `--reading-size` is the user's choice, written onto <html> by the settings store; the
+     literal is what the zone falls back to before the store has run. */
+  --prose-size: var(--reading-size, 14px);
+  /* One indent for lists and for the task-list hanging indent, so the two cannot drift. */
+  --prose-indent: 1.5em;
+
+  font-family: var(--font-reading);
+  font-size: var(--prose-size);
   line-height: 1.7;
   color: var(--text);
-  /* Reset inherited white-space (chat bubbles set pre-wrap for plain-text bodies): marked
+  /* Reset inherited white-space (chat bubbles set pre-wrap for plain-text bodies): the parser
      emits literal newlines between block tags, which under pre-wrap render as phantom empty
      lines (bottom gap after a lone paragraph, huge gaps inside blockquotes). Intentional
      line breaks come from the `breaks` option as real <br>, unaffected by this. */
   white-space: normal;
 }
 
+/* main.scss styles bare `p` and `h1`–`h6` for the views that are not prose, and those rules
+   sit outside any cascade layer — inheriting from `.md-body` does not beat them. So the zone
+   restates the properties they claim; without this a paragraph keeps the interface font at
+   13px no matter what the body is set to. */
+.md-body :deep(:is(p, h1, h2, h3, h4, h5, h6)) {
+  font-family: inherit;
+}
+.md-body :deep(p) {
+  font-size: 1em;
+  line-height: inherit;
+}
+
+/* Measure — the width running text is allowed to reach on a wide monitor. The value is the
+   user's choice, written onto <html> by the settings store in `ch`, so the column follows the
+   reading family when it is switched; the literal is the fallback before the store has run.
+   Running text only: tables, code blocks and images keep the whole width — they are scanned,
+   not read line by line. */
+.md-body :deep(:is(p, ul, ol, blockquote, h1, h2, h3, h4, h5, h6)) {
+  max-width: var(--reading-measure, 92ch);
+}
+
+/* Two different wrapping jobs, so two different values.
+   `balance` evens the line lengths of a block that is short by nature — a heading, a cell —
+   where a one-word second line reads as a mistake. On running text it does the wrong thing:
+   a two-line paragraph gets pulled away from the right edge into two half-width lines.
+   `pretty` leaves the ragged edge alone and only prevents the last line from being a single
+   orphaned word, which is what running text actually needs. */
+.md-body :deep(:is(th, td, h1, h2, h3, h4, h5, h6)) {
+  text-wrap: balance;
+}
+.md-body :deep(:is(p, li, blockquote)) {
+  text-wrap: pretty;
+}
+
+/* A block's first element never adds a top margin: it would stack with the padding of
+   whatever card or panel the body sits in. */
+.md-body :deep(> :first-child) {
+  margin-top: 0;
+}
+
 /* ── Headings ─────────────────────────────────────────────── */
 
-.md-body :deep(h1),
-.md-body :deep(h2),
-.md-body :deep(h3),
-.md-body :deep(h4),
-.md-body :deep(h5),
-.md-body :deep(h6) {
+.md-body :deep(:is(h1, h2, h3, h4, h5, h6)) {
   font-weight: 600;
   color: var(--text);
-  line-height: 1.3;
-  margin: 1.1em 0 0.4em;
+  /* Trims the half-leading the browser adds above and below a text box — without it the
+     margins below are not the distances actually seen, and the gap depends on the chosen
+     font. Silently ignored where unsupported, which only restores the old spacing. */
+  text-box: trim-both cap alphabetic;
 }
-.md-body :deep(h1) { font-size: 20px; }
-.md-body :deep(h2) { font-size: 17px; }
-.md-body :deep(h3) { font-size: 15px; }
-.md-body :deep(h4),
-.md-body :deep(h5),
-.md-body :deep(h6) { font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+
+/* Space above a heading is several times the space below it: the heading belongs to the
+   text that follows, and that asymmetry is what separates one section from the previous.
+   Tracking tightens as the size grows — the gaps that read as normal at text size look
+   slack once the glyphs are half again as large. */
+.md-body :deep(h1) { font-size: 1.5em;   line-height: 1.25; margin: 1.6em 0 0.6em;  letter-spacing: -0.018em; }
+.md-body :deep(h2) { font-size: 1.25em;  line-height: 1.3;  margin: 2em 0 0.75em;   letter-spacing: -0.012em; }
+.md-body :deep(h3) { font-size: 1.125em; line-height: 1.35; margin: 1.6em 0 0.5em;  letter-spacing: -0.006em; }
+.md-body :deep(:is(h4, h5, h6)) { font-size: 1em; line-height: 1.4; margin: 1.4em 0 0.4em; }
+
+/* Below h3 the size stops carrying the level — three more steps would land inside the noise
+   of the body text. The distinction moves to colour and case instead: h4 stays a full-strength
+   heading, h5 steps back, h6 becomes a label. */
+.md-body :deep(h5) { color: var(--text-muted); }
+.md-body :deep(h6) {
+  font-size: 0.875em;
+  text-transform: uppercase;
+  /* Uppercase needs the extra room: without positive tracking capitals set solid. */
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+/* A heading immediately followed by a deeper one is a single heading block — «Списки» then
+   «Маркированный» — so the gap between them collapses. The pairs are spelled out descending
+   on purpose: when a *shallower* heading follows (h6 then h2) that is the next section
+   starting, and it keeps its full space above. */
+.md-body :deep(h1 + h2),
+.md-body :deep(h2 + h3),
+.md-body :deep(h3 + h4),
+.md-body :deep(h4 + h5),
+.md-body :deep(h5 + h6) {
+  margin-top: 0.6em;
+}
 
 /* ── Paragraph ────────────────────────────────────────────── */
 
 .md-body :deep(p) {
-  margin: 0 0 0.75em;
+  margin: 0 0 1em;
 }
 .md-body :deep(p:last-child) {
   margin-bottom: 0;
@@ -195,86 +236,180 @@ function onClick(event: MouseEvent) {
 
 /* ── Lists ────────────────────────────────────────────────── */
 
-.md-body :deep(ul),
-.md-body :deep(ol) {
-  margin: 0.4em 0 0.75em;
-  padding-left: 20px;
+.md-body :deep(:is(ul, ol)) {
+  margin: 0.75em 0 1em;
+  padding-left: var(--prose-indent);
 }
-.md-body :deep(ul:last-child),
-.md-body :deep(ol:last-child) {
+.md-body :deep(:is(ul, ol):last-child) {
   margin-bottom: 0;
 }
 .md-body :deep(ul) { list-style: disc; }
 .md-body :deep(ol) { list-style: decimal; }
 
 .md-body :deep(li) {
-  margin: 0.2em 0;
+  margin: 0.35em 0;
   line-height: 1.6;
 }
 
-/* Nested lists */
-.md-body :deep(li > ul),
-.md-body :deep(li > ol) {
-  margin: 0.2em 0;
+/* The marker is punctuation, not content: at full text colour a column of bullets reads as
+   a second column of text down the left edge. */
+.md-body :deep(li)::marker {
+  color: var(--text-faint);
 }
 
-/* Task list */
+/* Nested lists */
+.md-body :deep(li > :is(ul, ol)) {
+  margin: 0.35em 0;
+}
+
+/* Task list: the checkbox replaces the bullet, so the item gives back the marker indent; the
+   negative text-indent keeps wrapped lines hanging under the text rather than the checkbox. */
+.md-body :deep(li.md-task) {
+  list-style: none;
+  margin-left: calc(var(--prose-indent) * -1);
+  padding-left: var(--prose-indent);
+  text-indent: calc(var(--prose-indent) * -1);
+}
 .md-body :deep(li input[type="checkbox"]) {
-  margin-right: 6px;
+  margin-right: 0.4em;
   cursor: default;
   accent-color: rgb(var(--v-theme-primary));
 }
 
 /* ── Blockquote ───────────────────────────────────────────── */
 
+/* Marked by the rule and by the space around it, not by italics: a quote in these bodies
+   runs to a full paragraph, and italics at that length measurably slow reading down. */
 .md-body :deep(blockquote) {
-  border-left: 3px solid var(--border);
-  margin: 0.6em 0;
-  padding: 0.3em 0 0.3em 14px;
+  /* The rule is the whole signal here, so it is drawn off the text colour rather than the
+     border token — at `--border` it sinks into the card and a one-line quote stops reading
+     as a quote at all. */
+  border-left: 3px solid color-mix(in srgb, var(--text) 22%, transparent);
+  margin: 1.4em 0;
+  padding: 0.2em 0 0.2em 1em;
   color: var(--text-muted);
-  font-style: italic;
+}
+.md-body :deep(blockquote:last-child) {
+  margin-bottom: 0;
 }
 
 /* ── Code ─────────────────────────────────────────────────── */
 
-.md-body :deep(.md-pre) {
-  background: var(--surface-hi);
-  border: 1px solid var(--border-soft);
-  border-radius: 6px;
-  padding: 12px 14px;
-  overflow-x: auto;
-  margin: 0.6em 0;
+/* A fenced block is a mounted CodeBlock component; this only spaces it in the flow.
+   A self-contained block gets more air than a paragraph — the more autonomous the
+   element, the wider the gap that reads as "this is a separate thing". */
+.md-body :deep(.md-code-slot) {
+  margin: 1.5em 0;
 }
-.md-body :deep(.md-code) {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--text);
+.md-body :deep(.md-code-slot:last-child) {
+  margin-bottom: 0;
 }
+/* These bodies are dense with inline code — a sentence often carries three or four spans. A
+   bordered chip on each one turns the paragraph into a row of boxes and the prose stops being
+   the thing you see first, so the border is gone and the fill is only just enough to read as
+   a distinct run. Padding is in `em` so the chip keeps its proportions at any prose size. */
 .md-body :deep(.md-codespan) {
   font-family: var(--font-mono);
-  font-size: 12px;
+  /* A monospace face looks bigger than a proportional one at the same size; 0.875em is the
+     correction, and in `em` it follows the prose scale instead of freezing at one pixel size. */
+  font-size: 0.875em;
   color: var(--text);
-  background: var(--surface-hi);
-  border: 1px solid var(--border-soft);
-  border-radius: 3px;
-  padding: 1px 5px;
+  /* A film of the text colour rather than a surface token: this zone is rendered on cards,
+     panels and chat bubbles of different shades, and a fixed fill washes out against half
+     of them. */
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  /* Explicit, not inherited-away: the bare `code` rule in main.scss draws an accent-coloured
+     outline, and dropping it here is the whole point of the block above. */
+  border: none;
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+  /* A span that wraps mid-token is two fragments; without this the padding and the rounding
+     go to the outer edges only and the halves read as one broken plate. */
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
+
+/* ── Table ────────────────────────────────────────────────── */
+
+/* Bodies carry wide comparison tables (up to a dozen columns): the wrapper scrolls, the table
+   keeps its natural width instead of squeezing cells into vertical strings. */
+.md-body :deep(.md-table-wrap) {
+  overflow-x: auto;
+  margin: 2em 0;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+}
+.md-body :deep(.md-table-wrap:last-child) {
+  margin-bottom: 0;
+}
+.md-body :deep(.md-table) {
+  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+  /* A table is scanned, not read: one step below the prose size fits more of it on
+     screen without crossing into unreadable. */
+  font-size: 0.875em;
+}
+.md-body :deep(.md-table th),
+.md-body :deep(.md-table td) {
+  border-right: 1px solid var(--border-soft);
+  border-bottom: 1px solid var(--border-soft);
+  /* Figures line up into columns instead of drifting by the width of a `1` — these bodies
+     compare sizes, prices and limits, and a ragged numeric column is read as noise. */
+  font-variant-numeric: tabular-nums;
+  padding: 0.45em 0.65em;
+  text-align: left;
+  vertical-align: top;
+  line-height: 1.5;
+  /* Without a cap a prose-heavy cell claims its full one-line width (the table is sized by
+     max-content) and a two-column table scrolls like a wide one. */
+  max-width: 60ch;
+}
+.md-body :deep(.md-table th:last-child),
+.md-body :deep(.md-table td:last-child) { border-right: none; }
+.md-body :deep(.md-table tbody tr:last-child td) { border-bottom: none; }
+.md-body :deep(.md-table th) {
+  background: var(--surface-hi);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.md-body :deep(.md-table tbody tr:nth-child(even)) {
+  background: color-mix(in srgb, var(--surface-hi) 45%, transparent);
+}
+/* Column alignment has to out-specify the cell rule above, so it names the cell too. */
+.md-body :deep(.md-table .md-align-left)   { text-align: left; }
+.md-body :deep(.md-table .md-align-center) { text-align: center; }
+.md-body :deep(.md-table .md-align-right)  { text-align: right; }
 
 /* ── Misc ─────────────────────────────────────────────────── */
 
+.md-body :deep(s) { text-decoration: line-through; color: var(--text-muted); }
+
+/* The widest gap in the body: a rule separates whole parts, so it needs more air than
+   any heading — otherwise it reads as decoration on the paragraph above it. */
 .md-body :deep(hr) {
   border: none;
   border-top: 1px solid var(--border-soft);
-  margin: 1em 0;
+  margin: 3em 0;
 }
 .md-body :deep(strong) { font-weight: 600; }
 .md-body :deep(em)     { font-style: italic; }
 
-.md-body :deep(a) {
+/* A link in running text is underlined, not just tinted: colour alone is the one distinction
+   that disappears for a colour-blind reader, and in a body this dense a blue word is easy to
+   miss. The rule is set faint and dropped below the baseline so it marks the word without
+   cutting through its descenders; hover brings it up to full strength. `md-ref` is excluded —
+   it is a pill with its own shape and an underline would only smear it. */
+.md-body :deep(a:not(.md-ref)) {
   color: rgb(var(--v-theme-primary));
-  text-decoration: none;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, rgb(var(--v-theme-primary)) 40%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
 }
-.md-body :deep(a:hover) { text-decoration: underline; }
+.md-body :deep(a:not(.md-ref):hover) {
+  text-decoration-color: currentColor;
+}
 
 /* Entity reference (TYPE@<code>): a compact inline pill with a link glyph. Renders like a
    footnote marker in prose — the short hash (or resolved title) is the label, the full code
@@ -303,6 +438,11 @@ function onClick(event: MouseEvent) {
   flex: none;
   width: 11px;
   height: 11px;
+  /* `cap` is the cap height of the current font, so the glyph tracks the text it sits in
+     instead of freezing at a size picked for one prose scale. The px pair above is the
+     fallback for engines without the unit. */
+  width: 1cap;
+  height: 1cap;
   background: currentColor;
   -webkit-mask: var(--md-ref-icon) center / contain no-repeat;
   mask: var(--md-ref-icon) center / contain no-repeat;
@@ -353,14 +493,23 @@ function onClick(event: MouseEvent) {
 
 /* ── Compact mode ─────────────────────────────────────────── */
 
-.md-body--compact { font-size: 13px; line-height: 1.6; }
-.md-body--compact :deep(p)           { margin-bottom: 0.5em; }
-.md-body--compact :deep(ul),
-.md-body--compact :deep(ol)          { margin-bottom: 0.5em; }
-.md-body--compact :deep(h1),
-.md-body--compact :deep(h2),
-.md-body--compact :deep(h3),
-.md-body--compact :deep(h4),
-.md-body--compact :deep(h5),
-.md-body--compact :deep(h6)          { margin-top: 0.8em; }
+/* Compact is the interface role, not the reading one: it renders setting descriptions and
+   chat bubbles, which live inside UI chrome. So it takes the interface family and size,
+   drops the measure cap (its container is already narrow) and tightens every gap back to
+   what a dense panel wants. */
+.md-body--compact {
+  /* Pinned, not `--reading-size`: this is interface chrome, and it has to stay in step with
+     the labels and rows around it whatever size the reading zone is set to. */
+  --prose-size: 13px;
+  font-family: var(--font);
+  line-height: 1.6;
+}
+.md-body--compact :deep(:is(p, ul, ol, blockquote, h1, h2, h3, h4, h5, h6)) { max-width: none; }
+.md-body--compact :deep(p)                       { margin-bottom: 0.5em; }
+.md-body--compact :deep(:is(ul, ol))             { margin: 0.4em 0 0.5em; }
+.md-body--compact :deep(:is(h1, h2, h3, h4, h5, h6)) { margin-top: 0.8em; margin-bottom: 0.3em; }
+.md-body--compact :deep(blockquote)              { margin: 0.6em 0; }
+.md-body--compact :deep(.md-code-slot)           { margin: 0.6em 0; }
+.md-body--compact :deep(.md-table-wrap)          { margin: 0.7em 0; }
+.md-body--compact :deep(hr)                      { margin: 1em 0; }
 </style>

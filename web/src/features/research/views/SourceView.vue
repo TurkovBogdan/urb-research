@@ -6,6 +6,7 @@ import { IconExternalLink } from '@tabler/icons-vue'
 
 import PageLayout from '@/layout/templates/PageLayout.vue'
 import PageHeader from '@/layout/components/PageHeader.vue'
+import SectionError from '@/components/SectionError.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 
@@ -33,9 +34,7 @@ watch(() => route.params.code, reload)
       back-to="/research/researches"
     />
 
-    <VAlert v-if="store.error" type="error" variant="tonal" class="mb-3">
-      {{ store.error }}
-    </VAlert>
+    <SectionError v-if="store.error" :error="store.error" />
 
     <template v-if="store.source">
       <VCard variant="outlined" rounded="lg" class="mb-3">

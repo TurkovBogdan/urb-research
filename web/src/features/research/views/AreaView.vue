@@ -6,10 +6,15 @@ import { IconChevronRight } from '@tabler/icons-vue'
 
 import PageLayout from '@/layout/templates/PageLayout.vue'
 import PageHeader from '@/layout/components/PageHeader.vue'
+import SectionError from '@/components/SectionError.vue'
+import SectionHeader from '@/components/SectionHeader.vue'
 
 import ResearchBody from '../components/ResearchBody.vue'
 import DocumentsTable from '../components/DocumentsTable.vue'
+import TitleEditor from '../components/TitleEditor.vue'
 import { useAreaDetailStore } from '../stores/area-detail.store'
+import { useSourcesRefetch } from '../useSourcesRefetch'
+import { refetchAreaDocuments } from '../api'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -25,6 +30,12 @@ function reload() {
 }
 onActivated(reload)
 watch(() => route.params.code, reload)
+
+// Повтор получения материала: ручка уровня зоны чинит источники её поисков.
+const { refetchingAll, refetchingCode, refetchAllSources, refetchOneSource } = useSourcesRefetch(
+  () => refetchAreaDocuments(store.area?.code ?? ''),
+  reload,
+)
 </script>
 
 <template>
@@ -35,14 +46,18 @@ watch(() => route.params.code, reload)
       back-to="/research/researches"
     />
 
-    <VAlert v-if="store.error" type="error" variant="tonal" class="mb-3">
-      {{ store.error }}
-    </VAlert>
+    <SectionError v-if="store.error" :error="store.error" />
 
     <template v-if="store.area">
       <VCard variant="outlined" rounded="lg" class="mb-3">
         <VCardText>
-          <div class="area-title">{{ store.area.title }}</div>
+          <TitleEditor
+            class="area-title"
+            :title="store.area.title"
+            :label="t('research.area.detail.title_label')"
+            :saving="store.renaming"
+            @save="store.rename"
+          />
           <div v-if="store.area.description" class="area-desc">{{ store.area.description }}</div>
         </VCardText>
       </VCard>
@@ -69,7 +84,7 @@ watch(() => route.params.code, reload)
         </VCardText>
       </VCard>
 
-      <h2 class="section-title">{{ t('research.area.detail.body') }}</h2>
+      <SectionHeader :title="t('research.area.detail.body')" />
       <VCard variant="outlined" rounded="lg" class="mb-4">
         <VCardText>
           <ResearchBody v-if="store.area.body" :text="store.area.body" />
@@ -79,10 +94,7 @@ watch(() => route.params.code, reload)
         </VCardText>
       </VCard>
 
-      <h2 class="section-title">
-        {{ t('research.area.detail.queries') }}
-        <span class="count">{{ store.queries.length }}</span>
-      </h2>
+      <SectionHeader :title="t('research.area.detail.queries')" :count="store.queries.length" />
       <VCard v-if="store.queries.length" variant="outlined" rounded="lg" class="mb-4">
         <VList class="row-list">
           <template v-for="(q, i) in store.queries" :key="q.code">
@@ -98,17 +110,24 @@ watch(() => route.params.code, reload)
         <VCardText class="empty text-medium-emphasis">{{ t('research.area.detail.no_queries') }}</VCardText>
       </VCard>
 
-      <h2 class="section-title">{{ t('research.area.detail.documents') }}</h2>
-      <DocumentsTable scope="area" :code="store.area.code" />
+      <SectionHeader :title="t('research.area.detail.documents')" />
+      <DocumentsTable
+        :items="store.sources"
+        :loading="store.loading"
+        :refetching-all="refetchingAll"
+        :refetching-code="refetchingCode"
+        @refetch-all="refetchAllSources"
+        @refetch-one="refetchOneSource"
+      />
     </template>
   </PageLayout>
 </template>
 
 <style scoped>
+/* Кегль строки редактора задаётся его же токенами: подменять `font-size` снаружи нельзя —
+   на нём держится равная высота покоя и правки. */
 .area-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text);
+  --ile-size: 16px;
 }
 
 .area-desc {
@@ -135,21 +154,6 @@ watch(() => route.params.code, reload)
   color: var(--text-muted);
   line-height: 1.55;
   white-space: pre-wrap;
-}
-
-.section-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  margin: 4px 0 10px;
-}
-
-.section-title .count {
-  font-size: 12px;
-  color: var(--text-faint);
-  font-weight: 500;
 }
 
 .row-item {

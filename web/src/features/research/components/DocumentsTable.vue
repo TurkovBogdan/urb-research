@@ -1,125 +1,287 @@
 <script setup lang="ts">
-import { computed, onActivated, ref, watch } from 'vue'
+// Источники — карточка с панелью фильтров и таблицей. Строки приходят пропом: ими владеет стор
+// страницы (по ним же ищет глобальный поиск деталки), а здесь остаются показ и собственные
+// фильтры. Данные ограничены (≤ несколько сотен), поэтому фильтрация, сортировка и
+// постраничность — клиентские, мгновенные и без запроса на каждое движение.
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { IconExternalLink } from '@tabler/icons-vue'
+import {
+  IconCheck,
+  IconCopy,
+  IconDotsVertical,
+  IconExternalLink,
+  IconFileText,
+  IconRefresh,
+  IconSearch,
+} from '@tabler/icons-vue'
 
 import StatusBadge from '@/components/StatusBadge.vue'
-import {
-  listAreaDocuments,
-  listResearchDocuments,
-  type SourceDocumentRow,
-  type SourceStatus,
-} from '../api'
+import TablePaginationBar from '@/components/TablePaginationBar.vue'
+import { useClipboard } from '@/composables/useClipboard'
+import { fmtDateTime } from '@/shared/utils/date'
+
+import { type SourceDocumentRow, type SourceStatus } from '../api'
 import { SOURCE_STATUS_COLOR } from '../labels'
 
-// Все найденные документы области или исследования: таблица + фильтр по статусу по клику.
-// Данные ограничены (≤ несколько сотен) → грузим разом, фильтруем на клиенте (мгновенно).
-const props = defineProps<{ scope: 'area' | 'research'; code: string }>()
+const props = defineProps<{
+  items: SourceDocumentRow[]
+  loading?: boolean
+  /** Идёт повтор получения по всему разделу. */
+  refetchingAll?: boolean
+  /** Код строки, материал которой сейчас качается. */
+  refetchingCode?: string | null
+}>()
+
+// Само действие принадлежит странице: у исследования и зоны свои ручки и свой стор источников.
+const emit = defineEmits<{ refetchAll: []; refetchOne: [code: string] }>()
 
 const { t } = useI18n()
 const router = useRouter()
+const { copy, isCopied } = useClipboard()
 
-const docs = ref<SourceDocumentRow[]>([])
-const loading = ref(false)
-const error = ref<string | null>(null)
-const status = ref<SourceStatus | null>(null)
+// Полосы релевантности вместо десяти отдельных значений: у балла спрашивают «стоит ли читать»,
+// а не «ровно ли восемь». Отдельная полоса — «не оценён» (relevance = null).
+type RelevanceBand = 'high' | 'medium' | 'low' | 'unrated'
 
-let current = ''
-
-async function load() {
-  const key = `${props.scope}:${props.code}`
-  current = key
-  loading.value = true
-  error.value = null
-  try {
-    const rows =
-      props.scope === 'area'
-        ? await listAreaDocuments(props.code)
-        : await listResearchDocuments(props.code)
-    if (current !== key) return
-    docs.value = rows
-  } catch (e) {
-    if (current !== key) return
-    error.value = e instanceof Error ? e.message : String(e)
-    docs.value = []
-  } finally {
-    if (current === key) loading.value = false
-  }
+const RELEVANCE_BANDS: Record<RelevanceBand, (relevance: number | null) => boolean> = {
+  high: (relevance) => relevance !== null && relevance >= 8,
+  medium: (relevance) => relevance !== null && relevance >= 4 && relevance <= 7,
+  low: (relevance) => relevance !== null && relevance <= 3,
+  unrated: (relevance) => relevance === null,
 }
 
-onActivated(load)
-watch(() => `${props.scope}:${props.code}`, () => (status.value = null))
-watch(() => [props.scope, props.code], load, { immediate: true })
+const STATUSES: SourceStatus[] = ['kept', 'filtered', 'pending', 'error']
 
-const STATUSES: SourceStatus[] = ['kept', 'filtered', 'pending', 'fetch_error']
+const query = ref('')
+const status = ref<SourceStatus | null>(null)
+const relevanceBand = ref<RelevanceBand | null>(null)
+const page = ref(1)
+const pageSize = ref(25)
+
+function clearFilters() {
+  query.value = ''
+  status.value = null
+  relevanceBand.value = null
+  page.value = 1
+}
 
 const counts = computed(() => {
   const map: Record<string, number> = {}
-  for (const d of docs.value) map[d.status] = (map[d.status] ?? 0) + 1
+  for (const doc of props.items) map[doc.status] = (map[doc.status] ?? 0) + 1
   return map
 })
 
-const visibleStatuses = computed(() => STATUSES.filter((s) => (counts.value[s] ?? 0) > 0))
-
-const filtered = computed(() =>
-  status.value ? docs.value.filter((d) => d.status === status.value) : docs.value,
+// В списке статусов только встречающиеся: пустой пункт обещает выборку, которой нет.
+const statusItems = computed(() =>
+  STATUSES.filter((s) => (counts.value[s] ?? 0) > 0).map((s) => ({
+    title: `${t(`research.source.status.${s}`)} · ${counts.value[s]}`,
+    value: s,
+  })),
 )
 
-function toggle(s: SourceStatus) {
-  status.value = status.value === s ? null : s
+// Кнопка появляется, только когда чинить есть что: пустая обещала бы работу, которой нет.
+// Считаем по видимым строкам, а чинит ручка весь раздел — об этом говорит подпись кнопки.
+const hasBrokenSources = computed(() => (counts.value.error ?? 0) > 0)
+
+const relevanceItems = computed(() =>
+  (Object.keys(RELEVANCE_BANDS) as RelevanceBand[]).map((band) => ({
+    title: t(`research.doc.relevance.${band}`),
+    value: band,
+  })),
+)
+
+// Ищем по тому, что видно в строке, — заголовку и адресу. Тела и заметки в таблице нет, и
+// попадание в невидимый текст читалось бы как сбой фильтра. (Глобальный поиск деталки —
+// наоборот, смотрит и в разбор источника: там вопрос «где про X», а не «сузь список».)
+function matchesRow(doc: SourceDocumentRow, needle: string): boolean {
+  return `${doc.title ?? ''} ${doc.url ?? ''}`.toLowerCase().includes(needle)
 }
 
-function openSource(_: unknown, row: { item: SourceDocumentRow }) {
-  router.push(`/research/sources/${row.item.code}`)
-}
+const filtered = computed(() => {
+  const needle = query.value.trim().toLowerCase()
+  const band = relevanceBand.value
+  return props.items.filter((doc) => {
+    if (status.value && doc.status !== status.value) return false
+    if (band && !RELEVANCE_BANDS[band](doc.relevance)) return false
+    return !needle || matchesRow(doc, needle)
+  })
+})
+
+const hasActiveFilters = computed(
+  () => !!query.value || status.value !== null || relevanceBand.value !== null,
+)
+
+const pageCount = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize.value)))
+
+// Схлопнувшаяся выборка не должна оставлять человека на несуществующей странице.
+watch(filtered, () => {
+  if (page.value > pageCount.value) page.value = 1
+})
 
 const headers = [
-  { title: t('research.doc.col.title'), key: 'title', sortable: false },
-  { title: t('research.doc.col.status'), key: 'status', sortable: false, width: 130 },
-  { title: t('research.doc.col.relevance'), key: 'relevance', sortable: false, width: 110 },
-  { title: '', key: 'open', sortable: false, width: 52 },
+  { title: '', key: 'actions', sortable: false, width: 84 },
+  {
+    title: t('research.doc.col.title'),
+    key: 'title',
+    // Сортируем по тому же тексту, что и показываем: без заголовка в ячейке стоит адрес.
+    value: (item: SourceDocumentRow) => item.title || item.url || '',
+  },
+  { title: t('research.doc.col.status'), key: 'status', width: 150 },
+  { title: t('research.doc.col.relevance'), key: 'relevance', width: 140, align: 'end' as const },
+  { title: t('research.doc.col.updated_at'), key: 'updated_at', width: 170 },
 ]
+
+const sourcePath = (code: string) => `/research/sources/${code}`
+
+function openSource(_: unknown, row: { item: SourceDocumentRow }) {
+  router.push(sourcePath(row.item.code))
+}
+
+function onPageSizeChange(size: number) {
+  pageSize.value = size
+  page.value = 1
+}
 </script>
 
 <template>
-  <div>
-    <div class="doc-filters">
-      <VChip
+  <VCard variant="outlined" rounded="lg">
+    <!-- Действие над всем разделом стоит своей строкой, а не в ряду фильтров: в ряду оно отъедало
+         ширину у поиска, схлопывая его до иконки. -->
+    <div v-if="hasBrokenSources" class="doc-toolbar">
+      <VBtn
+        variant="tonal"
         size="small"
-        :variant="status === null ? 'flat' : 'tonal'"
-        :color="status === null ? 'primary' : undefined"
-        @click="status = null"
+        :prepend-icon="IconRefresh"
+        :loading="props.refetchingAll"
+        :title="t('research.doc.action.refetch_all_hint')"
+        @click="emit('refetchAll')"
       >
-        {{ t('research.doc.filter.all') }} · {{ docs.length }}
-      </VChip>
-      <VChip
-        v-for="s in visibleStatuses"
-        :key="s"
-        size="small"
-        :variant="status === s ? 'flat' : 'tonal'"
-        :color="status === s ? SOURCE_STATUS_COLOR[s] : undefined"
-        @click="toggle(s)"
-      >
-        {{ t(`research.source.status.${s}`) }} · {{ counts[s] }}
-      </VChip>
+        {{ t('research.doc.action.refetch_all') }}
+      </VBtn>
     </div>
 
-    <VAlert v-if="error" type="error" variant="tonal" density="compact" class="mb-2">
-      {{ error }}
-    </VAlert>
+    <div class="doc-filters">
+      <VTextField
+        v-model="query"
+        :label="t('research.doc.filter.query')"
+        :prepend-inner-icon="IconSearch"
+        variant="outlined"
+        density="comfortable"
+        hide-details
+        clearable
+        class="doc-filters__search"
+      />
+      <VSelect
+        v-model="status"
+        :items="statusItems"
+        :label="t('research.doc.filter.status')"
+        variant="outlined"
+        density="comfortable"
+        hide-details
+        clearable
+      />
+      <VSelect
+        v-model="relevanceBand"
+        :items="relevanceItems"
+        :label="t('research.doc.filter.relevance')"
+        variant="outlined"
+        density="comfortable"
+        hide-details
+        clearable
+      />
+    </div>
+
+    <div v-if="hasActiveFilters" class="doc-filters__chips">
+      <VChip v-if="query" size="small" closable @click:close="query = ''">{{ query }}</VChip>
+      <VChip v-if="status" size="small" closable @click:close="status = null">
+        {{ t(`research.source.status.${status}`) }}
+      </VChip>
+      <VChip v-if="relevanceBand" size="small" closable @click:close="relevanceBand = null">
+        {{ t(`research.doc.relevance.${relevanceBand}`) }}
+      </VChip>
+      <VBtn variant="text" size="small" @click="clearFilters">
+        {{ t('research.action.clear_filters') }}
+      </VBtn>
+    </div>
+
+    <VDivider />
 
     <VDataTable
+      v-model:page="page"
       :headers="headers"
       :items="filtered"
       :loading="loading"
-      :items-per-page="20"
+      :items-per-page="pageSize"
       item-value="code"
       density="comfortable"
       hover
+      hide-default-footer
       :no-data-text="t('research.doc.empty')"
       @click:row="openSource"
     >
+      <!-- Действия строки: клик по ним не должен уводить на карточку источника. -->
+      <template #[`item.actions`]="{ item }">
+        <div class="doc-actions" @click.stop>
+          <VMenu location="bottom start" :offset="4">
+            <template #activator="{ props: menu }">
+              <VBtn
+                v-bind="menu"
+                icon
+                variant="text"
+                class="doc-actions__btn"
+                :title="t('research.doc.action.actions')"
+              >
+                <IconDotsVertical :size="16" :stroke-width="1.6" />
+              </VBtn>
+            </template>
+
+            <VList density="compact" class="doc-actions__menu">
+              <VListItem :prepend-icon="IconFileText" :to="sourcePath(item.code)">
+                <VListItemTitle>{{ t('research.doc.action.open_card') }}</VListItemTitle>
+              </VListItem>
+              <VListItem
+                :prepend-icon="IconExternalLink"
+                :disabled="!item.url"
+                :href="item.url ?? undefined"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <VListItemTitle>{{ t('research.doc.action.open_source') }}</VListItemTitle>
+              </VListItem>
+
+              <VDivider class="my-1" />
+
+              <!-- Работает в любом статусе: материал качается заново, поэтому прежний разбор
+                   снимается и источник возвращается в очередь. -->
+              <VListItem
+                :prepend-icon="IconRefresh"
+                :disabled="props.refetchingCode === item.code"
+                @click="emit('refetchOne', item.code)"
+              >
+                <VListItemTitle>{{ t('research.doc.action.refetch_one') }}</VListItemTitle>
+              </VListItem>
+            </VList>
+          </VMenu>
+
+          <VBtn
+            icon
+            variant="text"
+            class="doc-actions__btn"
+            :title="isCopied(item.code) ? t('research.doc.action.copied') : t('research.doc.action.copy')"
+            @click="copy(item.code)"
+          >
+            <IconCheck
+              v-if="isCopied(item.code)"
+              :size="16"
+              :stroke-width="1.6"
+              class="doc-actions__btn--done"
+            />
+            <IconCopy v-else :size="16" :stroke-width="1.6" />
+          </VBtn>
+        </div>
+      </template>
+
       <template #[`item.title`]="{ item }">
         <div class="doc-title">{{ item.title || item.url }}</div>
         <div v-if="item.url" class="doc-url">{{ item.url }}</div>
@@ -130,36 +292,79 @@ const headers = [
         </StatusBadge>
       </template>
       <template #[`item.relevance`]="{ item }">
-        <span class="relevance">{{ item.relevance ?? '—' }}</span>
+        <span class="doc-relevance">{{ item.relevance ?? '—' }}</span>
       </template>
-      <template #[`item.open`]="{ item }">
-        <VBtn
-          v-if="item.url"
-          :href="item.url"
-          target="_blank"
-          rel="noopener noreferrer"
-          icon
-          variant="text"
-          size="small"
-          @click.stop
-        >
-          <IconExternalLink :size="16" />
-        </VBtn>
+      <template #[`item.updated_at`]="{ item }">
+        <span class="doc-date">{{ fmtDateTime(item.updated_at) }}</span>
       </template>
     </VDataTable>
-  </div>
+
+    <TablePaginationBar
+      :page="page"
+      :page-size="pageSize"
+      :total="filtered.length"
+      :page-count="pageCount"
+      @update:page="page = $event"
+      @update:page-size="onPageSizeChange"
+    />
+  </VCard>
 </template>
 
 <style scoped>
-.doc-filters {
+/* Своя строка появляется только со сломанными источниками, поэтому нижний отступ несёт она, а не
+   фильтры под ней — иначе без кнопки карточка начиналась бы с пустоты. */
+.doc-toolbar {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
+  justify-content: flex-end;
+  padding: 12px 12px 0;
 }
 
-.doc-filters .v-chip {
-  cursor: pointer;
+.doc-filters {
+  display: grid;
+  grid-template-columns: 1fr 200px 200px;
+  gap: 12px;
+  padding: 12px;
+}
+
+@media (max-width: 899px) {
+  .doc-filters {
+    grid-template-columns: 1fr;
+  }
+}
+
+.doc-filters__chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+/* Обе кнопки — одна группа управления, поэтому между собой они теснее, чем до края ячейки. */
+.doc-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Коробка задана здесь, а не пропсами `size`/`density`: у иконочной кнопки Vuetify считает сторону
+   как `--v-btn-height + 12px`, а density правит только высоту. Незаслоённое правило перебивает
+   `@layer vuetify-components` (см. docs/frontend/vuetify-css-patterns). */
+.doc-actions__btn {
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  color: var(--text-faint);
+}
+
+.doc-actions__btn:hover { color: var(--text); }
+
+.doc-actions__btn--done { color: var(--success); }
+
+/* Vuetify отбивает иконку пункта от подписи на 32px (под аватарки) — в узком меню это читается
+   как два несвязанных столбца. */
+.doc-actions__menu {
+  --v-list-prepend-gap: 10px;
 }
 
 .doc-title {
@@ -172,8 +377,13 @@ const headers = [
   word-break: break-all;
 }
 
-.relevance {
+.doc-relevance {
   font-family: var(--font-mono);
-  color: var(--text-faint);
+  color: var(--text-muted);
+}
+
+.doc-date {
+  white-space: nowrap;
+  color: var(--text-muted);
 }
 </style>
