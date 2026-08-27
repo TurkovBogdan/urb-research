@@ -14,7 +14,7 @@ tags: [research, maintenance, cleanup]
 
 - Deleted all 13 research topic folders (all tied to the old project: intercom-api,
   gmail-import, fastmcp, fastapi-auth, lmstudio-api, anthropic-structured-output,
-  country-business-data, semaphore-company, nginx-mcp-streaming, llm-scoring-best-practices,
+  country-business-data, donor-project-company, nginx-mcp-streaming, llm-scoring-best-practices,
   python-html-sanitization, python-rate-limiting, vuetify-btn-group-height).
 - Kept `INDEX.md` (Inventory reset to `_No research logged yet._`) and `TEMPLATE.md`.
 

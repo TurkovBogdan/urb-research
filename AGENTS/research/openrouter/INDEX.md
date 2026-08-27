@@ -8,7 +8,7 @@ tags: [external-service, billing]
 ## Scope
 
 Только **баланс** (для мониторинга коннекторов) — не инференс. Полный `OpenRouterProvider`
-(chat completions, provider-routing, structured output, каталог моделей) из semaphore-core в
+(chat completions, provider-routing, structured output, каталог моделей) из донорского проекта в
 коннекторы не тянем. Сверено живьём: `dev/bench/core_connectors/openrouter/run_balance.py`
 (упрощённый httpx-шлюз, ключ из ENV `OPENROUTER_API_KEY`). База `https://openrouter.ai/api/v1`,
 auth `Authorization: Bearer <key>`.
@@ -38,4 +38,4 @@ auth `Authorization: Bearer <key>`.
 
 - Docs: https://openrouter.ai/docs/api-reference/limits
 - Живой бенч: `dev/bench/core_connectors/openrouter/run_balance.py` (+ `tmp/balance.json`)
-- Полный провайдер (референс, НЕ тянем): `AGENTS/semaphore-core/src/modules/llm_providers/providers/openrouter.py`
+- Полный провайдер (LLM-инференс) есть в донорском проекте — здесь его сознательно НЕ тянем

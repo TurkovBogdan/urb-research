@@ -28,6 +28,25 @@ Filename stem **==** the Alembic `revision` id, in the form **`<abbr>m_<NNN>_<de
 
 This is the canonical scheme for new migrations; some older module chains predated it (form `<prefix><NN>_…`) and were left as-is.
 
+## Adding a FK column ⇒ `batch_alter_table` (SQLite)
+
+**Any migration that adds, drops or changes a constraint must go through `op.batch_alter_table`** — including `op.add_column` with a `ForeignKey` on the column. SQLite has no `ALTER … ADD CONSTRAINT`, and alembic's SQLite dialect raises `NotImplementedError: No support for ALTER of constraints in SQLite dialect` when it reaches one.
+
+**Why it's worse than a plain failure:** alembic's SQLite dialect is `transactional_ddl = False`, so the `ADD COLUMN` that precedes the constraint is **already committed** when the exception fires. The migration aborts without stamping `alembic_version`, leaving the column present, the index missing and the revision unapplied — and every later `migrate upgrade` then dies on `duplicate column name`. Recovery is manual: drop the leftover column (`ALTER TABLE … DROP COLUMN`, SQLite ≥ 3.35) and re-run.
+
+```python
+with op.batch_alter_table("research_index") as batch_op:
+    batch_op.add_column(sa.Column("group_code", sa.String(length=25), nullable=True))
+    batch_op.create_foreign_key(
+        "fk_research_index_group_code", "research_group", ["group_code"], ["code"], ondelete="SET NULL"
+    )
+op.create_index("ix_research_index_group_code", "research_index", ["group_code"])
+```
+
+Batch mode copy-and-moves the table on SQLite (so the FK really lands in the DDL) and degrades to a plain `ALTER` on PostgreSQL — both backends end up with the constraint. Name the constraint explicitly and repeat that name in the model's `ForeignKey(..., name=...)`, so a `create_all`-built test DB and a migration-built dev DB agree. Child tables keep referencing the rebuilt table by name; verify with `PRAGMA foreign_key_check` + `PRAGMA integrity_check` after applying.
+
+**Watch the dev backend while you do this.** `.env` ships `DB_AUTO_MIGRATE=true`, so a running dev backend re-migrates on every hot-reload — writing a migration file makes it apply that file *concurrently with your CLI run*. Two writers on one SQLite file is how the half-applied state above gets created twice over. Set `DB_AUTO_MIGRATE=false` in dev (as `CLAUDE.md` advises) or stop the backend before applying.
+
 ## Cross-module FK → depends_on
 
 Each module has its own independent Alembic revision chain (own `version_locations`). Order **within** a chain comes from `down_revision`; order **between** chains is undefined unless a revision declares `depends_on`.

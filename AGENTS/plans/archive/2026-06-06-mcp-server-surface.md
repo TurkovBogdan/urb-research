@@ -20,7 +20,7 @@ CRUD-набором инструментов, защищённое единым 
 - Старые in-process MCP-приложения мы удалили при миграции на веб-сервер (`860a6f9`), но
   per-module код инструментов ещё лежит в git: `src/modules/team/mcp/{member,contact}.py`
   + `src/apps/mcp_team/server.py` (instructions, обход установки версии). Это prior art для
-  воскрешения; рабочая копия выгружена в `temp/semaphore-old-mcp` (ветка `old-mcp` =
+  воскрешения; рабочая копия выгружена во временный чекаут ветки `old-mcp` (=
   `860a6f9^`). Старые файлы используют **bundled** `mcp.server.fastmcp.FastMCP` и держат в
   каждом `register(mcp)` вложенные `@mcp.tool()` — CRUD уже полный.
 - Решения, принятые в обсуждении (этот чат):
@@ -225,7 +225,7 @@ def mount_mcp_servers(app, modules, config) -> list[Lifespan]: ...  # строи
 
 ### team — эталонный потребитель (per-module паттерн)
 
-Воскрешение из `temp/semaphore-old-mcp` (= `860a6f9^`): `mv` файлы, правим только изменённое.
+Воскрешение из временного чекаута `860a6f9^`: `mv` файлы, правим только изменённое.
 Старый `__init__.py` был пустой (сборку держал `apps/mcp_team/server.py`) — теперь в нём
 живёт конструктор `mcp_server`. Старые `member.py`/`contact.py` держат `register(mcp)` как
 есть; меняем только импорт `FastMCP` (bundled → форк, под `TYPE_CHECKING`) и декораторы под
@@ -317,7 +317,7 @@ request-time:
    (там живёт инициализация session-manager форка). Файлы: `src/core/router/mounting.py`,
    `src/core/app_factory.py`.
 7. **MCP-сервер team** — `mv` `src/modules/team/mcp/{__init__,member,contact}.py` из
-   `temp/semaphore-old-mcp` (= `860a6f9^`); `member.py`/`contact.py` держат `register(mcp)`
+   временного чекаута `860a6f9^`; `member.py`/`contact.py` держат `register(mcp)`
    как есть, меняем только импорт `FastMCP` (bundled `mcp.server.fastmcp` → форк `fastmcp`,
    под TYPE_CHECKING) и декораторы под форк 3.x. В `__init__.py` пишем
    `def mcp_server(ctx): mcp = make_mcp_server("team", <instructions из старого
@@ -400,7 +400,7 @@ request-time:
 - Исследование: `AGENTS/research/fastmcp/INDEX.md`,
   `AGENTS/research/nginx-mcp-streaming/INDEX.md`
 - Prior art (git): `860a6f9^:src/modules/team/mcp/*`, `860a6f9^:src/apps/mcp_team/server.py`;
-  рабочая копия — `temp/semaphore-old-mcp` (ветка `old-mcp`)
+  рабочая копия — временный чекаут ветки `old-mcp`
 - Память: `project_core_llm_module`, `project_llm_providers_mcp_servers`
 - Текущий каркас ядра: `src/core/router/mcp.py`, `src/core/router/mounting.py`,
   `src/core/module.py`, `src/core/app_factory.py`

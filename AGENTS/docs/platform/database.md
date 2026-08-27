@@ -111,7 +111,7 @@ equals the role name**, plus the scram password. `Config` carries `db_client_cer
 (env `DB_CLIENT_CERT` / `DB_CLIENT_KEY`); `db_connect_args` calls `ctx.load_cert_chain(...)` when both
 are set (a validator enforces they come as a pair). The client cert is optional — without it the
 context does server-only verify-full. A standalone validation kit (asyncpg + SQLAlchemy, positive + 3
-negative cases) lives at the server-side repo `…/server_semaphore-dev/test/check_connection.py`.
+negative cases) lives in the server-side repository, not here.
 
 **Prod cert layout:** `assets/prod/` (gitignored) holds the prod `.env` + `cert/` (root-ca.crt +
 per-role client cert/key). `.env` cert paths are relative (`cert/root-ca.crt`) and resolve against

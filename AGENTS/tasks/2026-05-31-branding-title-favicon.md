@@ -2,20 +2,20 @@
 title: Branding — app title, favicon, default language
 date: 2026-05-31
 status: completed
-description: "Rename remaining 'Uroboros Second Brain' strings to Semaphore.Core; add a favicon set from assets/app.ico; large language switcher on the home page; default locale → English."
+description: "Rename remaining legacy title strings to Uroboros.Research; add a favicon set from assets/app.ico; large language switcher on the home page; default locale → English."
 tags: [frontend, branding, build]
 ---
 
 ## Task
 
-Follow-ups after the home landing page: replace the old "Uroboros Second Brain"
-title strings with "Semaphore.Core", add a large language switcher under the
+Follow-ups after the home landing page: replace the old legacy
+title strings with "Uroboros.Research", add a large language switcher under the
 welcome hero, make English the default language, and use `assets/app.ico` as the
 website favicon (converting if needed).
 
 ## What was done
 
-- Title rename "Uroboros Second Brain" → "Semaphore.Core" in the 4 places that
+- Title rename to "Uroboros.Research" in the 4 places that
   still carried the old name: `web/index.html` `<title>`, `src/core/app_factory.py`
   FastAPI `title`, `src/apps/app/gui.py` `setApplicationName`, `app_build.py`
   `.desktop` `Name=`. (`src/gui/gui_window.py` `_WINDOW_TITLE` was already correct.)
@@ -35,5 +35,5 @@ website favicon (converting if needed).
 ## Result
 
 UI, browser tab, Qt app, Swagger and the built `.desktop` entry all read
-"Semaphore.Core"; the home page favicon is the teal semaphore icon; English is the
+"Uroboros.Research"; the home page favicon is the teal app icon; English is the
 out-of-the-box language. Changed: the files listed above + new `web/public/` assets.

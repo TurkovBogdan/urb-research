@@ -2,14 +2,14 @@
 title: core_monitoring — раздел «Задачи» (список задач + запуски + логи)
 date: 2026-07-03
 status: completed  # in-work | completed | deferred
-description: "Портировать из semaphore-core модуль core_monitoring: бэкенд /tasks (список задач + 24ч-статистика + запуски + логи запуска) и фронт-фичу (TasksView + TaskRunsView). Без auth: guard'ы, кнопка запуска и раздел «Запросы» опущены."
+description: "Портировать из донорского проекта модуль core_monitoring: бэкенд /tasks (список задач + 24ч-статистика + запуски + логи запуска) и фронт-фичу (TasksView + TaskRunsView). Без auth: guard'ы, кнопка запуска и раздел «Запросы» опущены."
 tags: [core_monitoring, tasks, frontend, observability]
 ---
 
 ## Task
 
-«Как раньше выводили список задач и их логов — сделай так-же» (эталон
-`AGENTS/semaphore-core` + `.../web`). Портировать раздел мониторинга задач.
+«Как раньше выводили список задач и их логов — сделай так-же» (эталон —
+донорский проект, бэкенд + фронт). Портировать раздел мониторинга задач.
 
 ## Context
 

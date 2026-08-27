@@ -6,7 +6,7 @@
 
 ## Goal
 
-Heavy cleanup of the forked semaphore core: delete every non-`core_` module so only the platform core remains.
+Heavy cleanup of the forked donor core: delete every non-`core_` module so only the platform core remains.
 
 Removed modules: `content_processors`, `conversation_insights`, `conversations`, `intercom`, `llm_providers`, `mail_sync`, `twenty`, `user_contacts` (phase 1), then `core_geo` (ph3), `core_security` (ph4), `core_monitoring` (ph5), then the **last three — `core_mcp`, `core_storage`, `core_users` (ph6)**.
 **End state: ZERO modules — bare `src/core`** (module framework, scheduler, DB/Alembic, router zones + guard registry, settings-store, loggers, locks, MCP-mount infra). No auth, no permission model.

@@ -11,8 +11,8 @@ tags: [testing, database, env]
 Переписать использование тестов на in-memory базу (желательно NoSQL, работающую в памяти) и убрать из env Postgres-пул:
 
 ```
-TEST_DB_NAME=core_semaphore_test_u1,...,core_semaphore_test_u8
-TEST_DB_USER=core_semaphore_test
+TEST_DB_NAME=urb_research_test_u1,...,urb_research_test_u8
+TEST_DB_USER=urb_research_test
 TEST_DB_PASSWORD=CHANGE_ME
 ```
 

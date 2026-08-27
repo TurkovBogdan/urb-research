@@ -2,34 +2,34 @@
 
 ## About the project
 
-`core_semaphore` — platform core: module system, scheduler, LLM providers, agent infrastructure. Architecture: Vue 3 web UI + FastAPI backend + PostgreSQL DB, run **headless from source** (no packaged binary). Unified entry `src/app.py` boots a server and/or worker process; the built SPA is served by nginx (prod) / Vite (dev). Deploy = `git pull` + `uv sync` (see [`dev/docs/BUILD.md`](dev/docs/BUILD.md)).
+`urb-research` (UI brand **Uroboros.Research**) — an MCP server over a research registry: module `research` (registry + 30 MCP tools) on top of `web_search` (web search + saved pages) and `core_connectors` (Tavily / Firecrawl / xAI / OpenRouter / OpenAI / Anthropic), plus the infra modules `core_setup` / `core_monitoring` / `core_mcp`. Architecture: Vue 3 web UI + FastAPI backend + a DB (SQLite by default, PostgreSQL optional via `DB_PROVIDER`), run **headless from source** (no packaged binary). Unified entry `src/app.py` boots a server and/or worker process (`--backend` / `--worker` / `--mcp-stdio` / `migrate`); the built SPA in `web/dist/` is served by the backend itself (`src/core/router/spa.py`) — no nginx needed; in dev Vite serves it with HMR. Deploy = `git pull` + `uv sync` (see [`README.md`](README.md)).
 
 ## Structure
 
-- `src/app.py` — unified entry point: launch a process (`--backend` server / `--worker`) and the `migrate` subcommand (role = flag > env > default).
-- `src/apps/` — application composition (`app` — the only app; the old MCP apps were removed). Each app builds its module list in `apps/app/modules.py::build_modules` and calls `create_app(modules, config)` (`src/core/app_factory.py`).
-- `src/modules/` — domain modules. One infra module so far: `core_setup` (ENV/`.env` editor page + `os.execv` restart — see [`docs/core_setup/INDEX.md`](docs/core_setup/INDEX.md)); `build_modules()` returns `[CoreSetupModule()]`. A module exposes a `Module` subclass via `__init__.py` — lifecycle hooks `configure`/`on_settings_change`/`on_startup`/`shutdown` (`src/core/module.py`); `core_*` prefix marks an infra module.
+- `src/app.py` — unified entry point: launch a process (`--backend` server / `--worker` / `--mcp-stdio` shim) and the `migrate` subcommand (role = flag > env > default).
+- `src/apps/` — application composition (`app` — the only app). It builds its module list in `apps/app/modules.py::build_modules` and calls `create_app(modules, config)` (`src/core/app_factory.py`).
+- `src/modules/` — domain modules. `build_modules()` returns six: infra `core_setup` (ENV/`.env` editor page + `os.execv` restart — see [`docs/core_setup/INDEX.md`](docs/core_setup/INDEX.md)), `core_connectors`, `core_monitoring`, `core_mcp`, plus the domain pair `web_search` and `research`. A module exposes a `Module` subclass via `__init__.py` — lifecycle hooks `configure`/`on_settings_change`/`on_startup`/`shutdown` (`src/core/module.py`); `core_*` prefix marks an infra module.
 - `src/core/` — platform: database, scheduler, locks, loggers, CRUD helpers, API/router zones, settings store.
 - `web/` — Vue 3 + Vuetify 4 frontend (Vite, pnpm workspace). `web/static/` = Vite `publicDir` (favicons etc., copied verbatim into the build); `web/dist/` = build output.
 - `web/dist/` — built SPA, **committed to git** (deploy = `git pull`). Served by the backend itself — the core HTTP server mounts it for any GET outside the API prefixes (`core/router/spa.py`; no nginx/Docker needed). `web/static/` = Vite `publicDir` (source favicons, copied into `web/dist` on build).
-- `storage/` — file storage: `public/` (served directly by nginx via its own `location`) + `protected/` (served only via backend auth).
-- `tools/` — ops scripts.
+- `/storage` — a router zone served by the backend (`src/core/router/storage.py`), assembled from module `storage_router`s; no `storage/` directory in the tree today.
+- `AGENTS/tools/` — ops scripts (`stop-all.sh`, `restart-backend.sh`, `dev-query.sh` — see [`AGENTS/tools/INDEX.md`](AGENTS/tools/INDEX.md)).
 - `tests/` — pytest suite, mirrors `src/` layout; `live/` subfolders gated by `@pytest.mark.live`.
 - `dev/bench/<module>/<area>/` — local benches: `constants.py` + `run_*.py` getters, artifacts in `tmp/`.
-- `dev/.run/` — IDE run configurations. `dev/docs/` — BUILD / DEVELOPMENT / ENV guides.
+- `dev/.run/` — IDE run configurations (see [`docs/platform/run-configs.md`](AGENTS/docs/platform/run-configs.md)). Install/run guide for humans: [`README.md`](README.md).
 - `runtime/dev|test|prod/` — runtime artifacts per profile (DB, cache, user, logs).
 
 ## Inventory: dev / prod / test
 
 - Dev: `runtime/dev/` — DB, cache, user files for local run (`APP_ENV=dev`, default). Vite serves the SPA; backend on `SERVER_PORT`.
-- Prod: `runtime/prod/` — headless from source; nginx serves `web/dist/`, backend runs `src/app.py --backend` on `SERVER_PORT` (`.env.example.prod` → 13410), worker runs `src/app.py --worker` as a separate process. No packaged binary.
+- Prod: `runtime/prod/` — headless from source; the backend (`src/app.py --backend` on `SERVER_PORT`, `.env.example.prod` → 13410) serves both the API and `web/dist/`; the worker can run in the same process (`--worker`) or as a separate one. No packaged binary, no nginx.
 - Test: `runtime/test/` — pytest artifacts; `tests/conftest.py` sets `APP_ENV=test` before importing `src`.
-- Do not write runtime/build artifacts into the committed tree (`web/dist/storage`, `storage/` contents are git-ignored except `.gitkeep`/symlinks).
-- `runtime/{dev,test,prod}/*` and `storage/{public,protected}/*` are in `.gitignore` (the profile/folder dirs themselves are kept).
+- Do not write runtime/build artifacts into the committed tree.
+- `runtime/{dev,test,prod}/*` is in `.gitignore` (the profile dirs themselves are kept).
 
 ## Running and building
 
-IDE run configs live in `dev/.run/`. Full guides: [`dev/docs/DEVELOPMENT.md`](dev/docs/DEVELOPMENT.md) (dev) + [`dev/docs/BUILD.md`](dev/docs/BUILD.md) (deploy). Ports from `.env`: `SERVER_VITE_PORT=12100` (Vite), `SERVER_PORT=12200` (backend).
+IDE run configs live in `dev/.run/` (taxonomy: [`docs/platform/run-configs.md`](AGENTS/docs/platform/run-configs.md)); stack + run scenarios: [`docs/platform/overview.md`](AGENTS/docs/platform/overview.md); install/deploy for humans: [`README.md`](README.md). Ports from `.env`: `SERVER_VITE_PORT=12100` (Vite), `SERVER_PORT=12200` (backend).
 
 - **Run in dev:** front + back are separate processes. Front: `pnpm --dir web dev` (Vite + HMR on `:12100`, proxies `/api`/`/internal` → backend; run config `watch-web`). Back: `src/app.py` with `--hot-reload`, role composed from `--backend`/`--worker` (flag > env):
   - `run-server-worker` — `uv run python src/app.py --backend --worker --hot-reload` (server + embedded worker, one process).
@@ -38,7 +38,7 @@ IDE run configs live in `dev/.run/`. Full guides: [`dev/docs/DEVELOPMENT.md`](de
   - Set `DB_AUTO_MIGRATE=false` in dev so `--reload` doesn't apply a half-written migration on every save.
 - **Migrations:** `uv run python src/app.py migrate check` (dry-run drift; exit 1 on drift) / `migrate upgrade` (apply core + modules to head; run config `tool-migrate`).
 - **Front build:** `pnpm --dir web build` (vue-tsc `--noEmit` + vite build) → outputs to `web/dist/` (committed; run config `build-web`).
-- **Deploy (prod):** `git pull` + `uv sync` — no build artifact. nginx serves `web/dist/` + proxies to `src/app.py --backend`; `src/app.py --worker` runs separately. See [`dev/docs/BUILD.md`](dev/docs/BUILD.md). Docker/compose/nginx.conf artifacts are TBD (task `2026-06-02-server-docker-migration`).
+- **Deploy (prod):** `git pull` + `uv sync` — no build artifact, no web server in front: `src/app.py --backend --worker` serves the API and `web/dist/` on `SERVER_PORT`. See [`README.md`](README.md).
 - **Entry point:** `src/app.py` is the process launcher (parses role, runs uvicorn/worker/migrate). The ASGI app is `src/apps/app/server.py::app`, built via `create_app(build_modules(), config)`.
 
 ## Testing
@@ -58,7 +58,7 @@ Pytest + `pytest-xdist`. Each test carries exactly one type marker. Full human g
 uv run pytest --core
 
 # A module you touched
-uv run pytest --module=core_users
+uv run pytest --module=web_search
 
 # Full suite — final verification only (heavy skips without TEST_PG_DSN)
 uv run pytest --all

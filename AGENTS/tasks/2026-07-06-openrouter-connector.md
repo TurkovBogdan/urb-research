@@ -8,7 +8,7 @@ tags: [core_connectors, openrouter, balance]
 
 ## Task
 
-«Добавляем в core_connectors коннектор openrouter.» Предыстория: полный `OpenRouterProvider` из semaphore-core слишком функциональный, нужен только баланс; проверен на верстаке (`2026-07-06-connector-balance-metrics-and-openrouter-bench`).
+«Добавляем в core_connectors коннектор openrouter.» Предыстория: полный `OpenRouterProvider` из донорского проекта слишком функциональный, нужен только баланс; проверен на верстаке (`2026-07-06-connector-balance-metrics-and-openrouter-bench`).
 
 ## What was done
 

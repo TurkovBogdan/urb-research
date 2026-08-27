@@ -9,7 +9,7 @@ metadata:
 
 Driving the dev SPA login (Vite :12100 → backend :12200) via the Chrome MCP:
 
-- **Working dev creds:** stored in the local password manager / `.env` — not recorded here. (The dev DB `admin@semaphore.local` hash did NOT match `semaphore` despite `.env`, so the admin login 401s — use the personal dev account.)
+- **Working dev creds:** stored in the local password manager / `.env` — not recorded here. (The dev DB `admin@example.local` password hash did NOT match the one in `.env`, so that admin login 401s — use the personal dev account.)
 - **Gotcha:** Chrome MCP `fill_form` / `fill` sets the input `.value` but does NOT reliably fire the event Vuetify's `v-model` listens to → form submits empty creds → 401 "Неверный email или пароль". Fix: set the value via the native setter + dispatch `input` + `change`:
   ```js
   const set = (el,v) => { Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el),'value').set.call(el,v); el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true})); };

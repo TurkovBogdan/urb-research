@@ -18,7 +18,7 @@ tags: [research_registry, research, mcp]
 `Исследование → Запросы → Отчёт по запросу → Документы` + оркестрацией; потребляет
 `web_content` (поиск/контент) и `core_gateway` (внешние API), сам сеть не трогает.
 
-Архитектурный эталон — `AGENTS/semaphore-core/.../conversation_insights`: слоёный
+Архитектурный эталон — модуль `conversation_insights` донорского проекта: слоёный
 модуль (models → migrations → crud → dto → services → agents), поверх два тонких
 интерфейса-сиблинга над ОДНИМ CRUD — web (`api.py::internal_router`, `@guard`,
 HTTPException) и MCP (`mcp/` → `mcp_server`, `@mcp.tool()`, ValueError, docstrings=

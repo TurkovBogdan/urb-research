@@ -7,7 +7,7 @@ metadata:
 
 The real dev database is the **SQLite file** `runtime/dev/app.sqlite3` — `.env` has
 `DB_PROVIDER=sqlite`, so the app (and lifespan `create_all`) uses it, NOT the
-Postgres creds that also sit in `.env` (`DB_HOST/DB_NAME=core_semaphore_dev/...`,
+Postgres creds that also sit in `.env` (`DB_HOST/DB_NAME=urb_research_dev/...`,
 a stale DB with old modules' tables).
 
 `AGENTS/tools/dev-query.sh` → `dev_query.py` now **branches on `DB_PROVIDER`**

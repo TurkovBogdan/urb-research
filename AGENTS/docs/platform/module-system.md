@@ -152,6 +152,29 @@ Two separate concepts, both per-module:
 
 Field types for `ModuleSchema`: `StrField`, `IntField`, `FloatField`, `BoolField`, `ChoiceField`, `ListField`, `MultiChoiceField`, `DateField`, `DateTimeField`.
 
+### Layout: `group` and `visible_when`
+
+Every field also carries two presentation attributes, so the schema stays the single source of truth
+and `/settings/modules` needs no per-module frontend code:
+
+| attribute | meaning |
+|-----------|---------|
+| `group: str` | Title of the on-screen block the field belongs to. Fields of one group must sit **contiguously** in the schema — the frontend closes a block at the first field with a different group. Empty = ungrouped. |
+| `visible_when: VisibleWhen \| None` | `VisibleWhen(key, equals=True)` — the field shows only while another field **of the same module** holds that value. Validated at build time: an unknown or self-referencing key is a fail-fast `ValueError`. |
+
+The condition is evaluated **on the frontend against the form's current values**, not on the backend:
+until the form is saved, the pending value exists only there. Hiding is presentation only — a hidden
+field keeps its stored value, code keeps reading it, and it returns to screen with its condition.
+
+A group whose **first** field is a `BoolField` renders that toggle as the block header (a
+`SwitchPanel`), with the rest of the group indented beneath it; the group title is then not printed
+separately, since the toggle's own label already names the block. Canonical example —
+`core_connectors`: one group per connector, `<service>_gateway_enabled` at its head, the API keys
+below it under `visible_when=VisibleWhen("<service>_gateway_enabled")`.
+
+The ENV page (`core_setup`) has its own, older copy of this idea (`keys.py::VisibleWhen`); the two
+subsystems are separate by design (see [core_setup/INDEX.md](../core_setup/INDEX.md)).
+
 ## Registering a new module
 
 1. Create `src/modules/<name>/module.py` with a class inheriting `Module`.

@@ -1,4 +1,4 @@
-# core_semaphore — documentation
+# urb-research — documentation
 
 Reference documents cited repeatedly. Update when the described subject changes — stale descriptions are worse than no documentation.
 
@@ -116,11 +116,11 @@ Both emit 22 lowercase-hex chars (88-bit). (Renamed 2026-06-05 from `fingerprint
 
 #### [platform/overview.md](platform/overview.md) — project overview & stack
 
-`core_semaphore` extracted from `hh-support-agent`; runs **headless from source** (no binary; Qt GUI + MCP apps removed).
+`urb-research` runs **headless from source** (no packaged binary).
 
-- Stack: Vue3 + Vuetify4 + Pinia + Vite → `static/` (committed); FastAPI + uvicorn via `src/app.py` (`--backend`/`--worker`/`migrate`); pnpm
+- Stack: Vue3 + Vuetify4 + Pinia + Vite → `web/dist/` (committed, served by the backend); FastAPI + uvicorn via `src/app.py` (`--backend`/`--worker`/`--mcp-stdio`/`migrate`); pnpm
 - Ports + `APP_ENV` (`dev`/`test`/`prod`)
-- Two run scenarios: dev (Vite + embedded worker) / prod (nginx + split processes)
+- Two run scenarios: dev (Vite + backend) / prod (one backend process serving API + SPA)
 
 #### [platform/run-configs.md](platform/run-configs.md) — IDE run configurations
 

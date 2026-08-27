@@ -23,8 +23,8 @@ tags: [security, git, cleanup]
 - **🔴 Удалены реальные API-ключи** из `AGENTS/tasks/2026-07-02-web-search-provider-in-core-setup.md`
   (Tavily `tvly-dev-…`, Firecrawl `fc-…`) → заменены на отсылку к менеджеру секретов.
   Ключи считать скомпрометированными — пользователь отзывает/ротирует на стороне сервисов.
-- **Симлинки в приватные сторы** `AGENTS/obsidian` (→ second-brain) и `AGENTS/semaphore-core`
-  (→ другой проект) добавлены в `.gitignore` (на диске не тронуты, локальный воркфлоу цел).
+- **Симлинк в приватный стор** `AGENTS/obsidian` (→ second-brain) добавлен в `.gitignore`
+  (на диске не тронут, локальный воркфлоу цел).
 - **Реальные email клиентов** (домены реальных компаний) в демо design-system
   (`MembersCellView.vue`, `MessageContentView.vue`) + email команды → заменены на `acme.example`.
 - **Внутренние абсолютные пути** (store-mount пути + домашние пути с username) и

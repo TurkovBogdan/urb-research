@@ -9,7 +9,7 @@ tags: [scheduler, tasks, deploy, architecture]
 ## Goal
 
 Background tasks and cron no longer run inside the API process. A dedicated `worker` process
-(same `semaphore-core` image, worker mode, no FastAPI) owns the ticker and executes all task
+(same application image, worker mode, no FastAPI) owns the ticker and executes all task
 handlers. The API process serves requests only (`SCHEDULER_ENABLED=false`) and triggers
 on-demand runs by **persisting a run-request row** that the worker picks up — never by calling
 `run_entry` in-process. Cron needs no cross-process signal (the worker checks schedules off the DB).

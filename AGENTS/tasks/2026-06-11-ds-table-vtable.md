@@ -26,7 +26,7 @@ tags: [frontend, design-system]
 
 ## Problems
 
-- Dev login flakiness: the Chrome MCP `fill_form` didn't reliably sync Vuetify's `v-model` (login 401 with correct creds). Fixed by setting input values via the native value setter + dispatching `input`/`change` events. Working dev creds live in the local password manager/`.env` (the dev DB `admin@semaphore.local` hash didn't match `semaphore` despite `.env`).
+- Dev login flakiness: the Chrome MCP `fill_form` didn't reliably sync Vuetify's `v-model` (login 401 with correct creds). Fixed by setting input values via the native value setter + dispatching `input`/`change` events. Working dev creds live in the local password manager/`.env` (the dev DB `admin@example.local` hash didn't match the dev password despite `.env`).
 
 ## Result
 

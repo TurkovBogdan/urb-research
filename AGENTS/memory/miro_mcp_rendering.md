@@ -7,7 +7,7 @@ metadata:
   originSessionId: 69932c9e-1171-4736-8f4c-0d413056fd6a
 ---
 
-Miro MCP (server `miro` and `claude_ai_Miro`, board "Semaphore.Core" `uXjVGnsP8fI=`) rendering gotchas, learned building the conversation_insights axes reference:
+Miro MCP (server `miro` and `claude_ai_Miro`, project working board `uXjVGnsP8fI=`) rendering gotchas, learned building the conversation_insights axes reference:
 
 - **Table cells truncate** long text to one line with «…» (no wrap) and column width is NOT API-settable → tables are unreadable for anything longer than a few words. Avoid `table_create` / DSL `TABLE` for descriptions.
 - **`table_create` and `layout_create` TABLE (data_table_format) are flaky** — intermittently fail ("Unable to execute the tool" / "Failed to create data_table_format"); need long backoffs and retries. Other item types (SHAPE/TEXT/diagram) are reliable.

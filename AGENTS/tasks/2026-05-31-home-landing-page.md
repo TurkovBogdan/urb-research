@@ -17,7 +17,7 @@ the logo / project name navigates to this page.
 `web/src/router/index.ts` redirected `/` → `/hh/vacancies`, a path with no
 matching route (no `hh` feature exists) → broken landing. A stub `views/HomeView.vue`
 existed but was unused. The MCP servers' `instructions` text frames the platform as
-"the semaphore-core system for running a company through AI agents" — used as the
+"the platform core system for running a company through AI agents" — used as the
 basis for the welcome copy.
 
 ## What was done
@@ -29,7 +29,7 @@ basis for the welcome copy.
   (title, lead, hint, capabilities.{modules,scheduler,llm,agents}.{title,text}).
 - `web/src/router/index.ts` — `/` now redirects to `/home`; added a `/home` route
   rendering `HomeView` with `meta.scroll: 'y'`.
-- `web/src/layout/components/AppSidebar.vue` — wrapped the logo glyph + "Semaphore.Core"
+- `web/src/layout/components/AppSidebar.vue` — wrapped the logo glyph + "Uroboros.Research"
   text in a `<button class="logo-link">` that does `router.push('/home')`; scoped
   styles reset the button to behave like the previous inline flex items.
 
@@ -43,7 +43,7 @@ copy switches with the RU/EN locale toggle. Changed files: the four listed above
 ## Update 2026-07-09 — rewrite + redesign for the actual project
 
 The original copy still described the generic "platform core for running a company
-through AI agents" (inherited `core_semaphore` framing), which no longer matches this
+through AI agents" (inherited donor-project framing), which no longer matches this
 project — an **experimental MCP server for research with long-term memory** over
 researches, documents and a web UI.
 

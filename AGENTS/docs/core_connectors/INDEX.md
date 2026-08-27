@@ -169,7 +169,7 @@ server-side `tools`; ответ = синтез модели + `citations[]` (**�
 
 ## services/openrouter
 
-Коннектор OpenRouter — **только баланс** (не инференс: полный провайдер из semaphore-core не
+Коннектор OpenRouter — **только баланс** (не инференс: полный провайдер из донорского проекта не
 тянем). `OpenRouterGateway(ServiceGateway)`: `openrouter.ai/api/v1`, ключ `openrouter_api_key`,
 тумблер `openrouter_gateway_enabled`. Настройки — пока runtime-секрет (как у прочих; миграция на
 ENV — когда у модуля появится env-хранилище). Баланс = **две метрики** (сверено живьём,

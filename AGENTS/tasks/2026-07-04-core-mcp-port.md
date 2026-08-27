@@ -2,13 +2,13 @@
 title: Port core_mcp module (MCP-server introspection page)
 date: 2026-07-04
 status: completed
-description: "Port the core_mcp module (backend + frontend) 1:1 from semaphore-core into this project: read-only «MCP-серверы» introspection page over app.state.mcp_servers."
+description: "Port the core_mcp module (backend + frontend) 1:1 from the donor project into this project: read-only «MCP-серверы» introspection page over app.state.mcp_servers."
 tags: [core_mcp, mcp, frontend]
 ---
 
 ## Task
 
-«перенеси его 1 к 1 в текущий проект» — port the `core_mcp` module (backend `src/modules/core_mcp` + frontend feature) from `AGENTS/semaphore-core` into `src/` + `web/`.
+«перенеси его 1 к 1 в текущий проект» — port the `core_mcp` module (backend `src/modules/core_mcp` + frontend feature) from the donor project into `src/` + `web/`.
 
 ## Context
 

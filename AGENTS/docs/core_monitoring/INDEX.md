@@ -3,7 +3,7 @@
 Инфра-модуль наблюдаемости (`src/modules/core_monitoring/`): read-only HTTP-поверхность
 над планировщиком. Своих таблиц/миграций/настроек **нет** — читает core-CRUD
 (`core/crud/tasks`, `core/crud/tasks_logs`) и реестр планировщика (`core/scheduler/registry`).
-Портирован из `AGENTS/semaphore-core` без auth-частей (проект без auth / без `core_users`).
+Портирован из донорского проекта без auth-частей (здесь нет ни auth, ни модуля пользователей).
 
 ## Backend
 

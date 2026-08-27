@@ -2,7 +2,7 @@
 title: Server-layout refactor (headless API + nginx static + storage split)
 date: 2026-06-03
 status: in-work  # in-work | completed | deferred
-description: "Refactor core_semaphore from the Qt-GUI + PyInstaller-binary model to the on-server layout described in new_structure/README.md: headless API (app_api.py) behind nginx, committed built static/, public/protected storage split. Deploy target: server core.example.com (docker-compose: nginx + thin uv backend)."
+description: "Refactor the platform core from the Qt-GUI + PyInstaller-binary model to the on-server layout described in new_structure/README.md: headless API (app_api.py) behind nginx, committed built static/, public/protected storage split. Deploy target: server core.example.com (docker-compose: nginx + thin uv backend)."
 tags: [deploy, build, frontend, layout]
 ---
 
@@ -89,7 +89,7 @@ several tickers exist; plus partial-unique `(module, code) WHERE status='running
 The ticker currently starts inside `create_app` lifespan → every uvicorn worker spins its own.
 
 Decisions confirmed with the user:
-- **Worker shares the codebase** (same `semaphore-core` booted in worker mode), NOT a separate system. The
+- **Worker shares the codebase** (the same app booted in worker mode), NOT a separate system. The
   task registry is built from module code (`entry.handler` is a Python fn registered via module `register`),
   so the worker must import the same modules to execute tasks. `new_structure/` is the deploy skeleton for
   the **API**, not the worker. → chosen layout = **A+**: dedicated `worker` container, one image, clean

@@ -16,7 +16,7 @@ Current run model (`app_run.py` → `run_gui_app`):
 - Qt `QApplication` (needs a display; forces `QT_QPA_PLATFORM=xcb` on Linux) boots a status window + embedded browser pointing at `http://SERVER_HOST:SERVER_PORT`.
 - FastAPI app (`src/apps/app/server.py:app`) runs in a daemon `ServerThread` (uvicorn) inside the same process.
 - The ASGI app is already server-ready on its own: `mount_spa` serves the built SPA (`_MEIPASS/web` frozen, else `dist/build/web`), `create_app` lifespan runs Alembic (`DB_AUTO_MIGRATE`) + scheduler + module startup; remote DB + verify-full TLS already hardened (see [[db_tls_strict_contract]], remote-database task).
-- `semaphore-core-mcp` is a separate binary; MCP servers are stdio (`app_run_mcp.py <name>`).
+- `urb-research-mcp` is a separate binary; MCP servers are stdio (`app_run_mcp.py <name>`).
 
 Findings:
 - Only Qt couples the app to a desktop. Headless = run `src.apps.app.server:app` under uvicorn without `run_gui_app`.

@@ -15,9 +15,9 @@ is delivered/run in the server world is an open question.
 ## Context
 
 Current packaging (see `app_build.py`, `app_run.py`, `src/apps/app/gui.py`):
-- Main app = single PyInstaller `--onefile` binary `semaphore-core`: Qt status window + embedded
+- Main app = single PyInstaller `--onefile` binary `urb-research`: Qt status window + embedded
   FastAPI (`ServerThread` runs uvicorn in a thread); serves its own SPA static on `:13410`.
-- MCP = separate PyInstaller binary `semaphore-core-mcp` (`app_run_mcp.py <server>`), 5 stdio servers.
+- MCP = separate PyInstaller binary `urb-research-mcp` (`app_run_mcp.py <server>`), 5 stdio servers.
 
 Key architecture findings for headless migration:
 - `src/apps/app/server.py` `app` is ALREADY a complete headless server: its `lifespan` runs
@@ -110,8 +110,8 @@ The user's draft used pre-`env_prefix_scheme` names (`APP_PROFILE`/`SERVER_WORKE
 `SCHEDULER_ENABLED`/`app_migrate.py`) which `Config` no longer has (`extra="ignore"` would
 silently drop them). Rewrote to current names: `APP_ENV`/`SERVER_PROCESSES`/`WORKER_ENABLED`,
 migrations via `app.py migrate upgrade`, `app_hash_password.py` (not the deleted PyInstaller
-hash binary). DB block uses prod values from the draft (`external-database`/`semaphore_core`).
-Flagged: admin hash is still the dev one (password "semaphore") → regenerate for prod.
+hash binary). DB block uses prod values from the draft (`external-database`/`urb_research`).
+Flagged: admin hash is still the dev one (dev password) → regenerate for prod.
 
 ## Stage (2026-06-04) — container artifacts live (supervisord, multi-process)
 

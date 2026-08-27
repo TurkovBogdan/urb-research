@@ -6,7 +6,7 @@
 
 ## Request
 
-Rename module `web_ingestion` → `web_content`; create migrations, models, CRUD and everything needed to save the three core tables (`web_content_search` → `web_content_search_result` → `web_content_page`). Reference modules: `AGENTS/semaphore-core/src/modules`. Providers + queue locks deferred to next.
+Rename module `web_ingestion` → `web_content`; create migrations, models, CRUD and everything needed to save the three core tables (`web_content_search` → `web_content_search_result` → `web_content_page`). Reference modules: the donor project's `src/modules`. Providers + queue locks deferred to next.
 
 ## What was done
 

@@ -32,7 +32,7 @@ nginx (prod) / Vite (dev), built front committed to `static/`, deploy = `git pul
   `src/core/config.py`); prod `dist/release` binary → headless from source +
   `runtime/prod/`; `.gitignore` block rewritten (runtime/* + storage/* kept-but-ignored).
 - **Running and building** — entire section was Qt/PyInstaller (`app_run.py`,
-  `app_build.py`, `watch-gui`, `dist/release/core-semaphore`, `run_gui_app` boots Qt).
+  `app_build.py`, `watch-gui`, `dist/release/<binary>`, `run_gui_app` boots Qt).
   None exist. Rewrote against `dev/.run/` (`run-server`/`run-worker`/`group-server*`/
   `build-web`/`tool-migrate`) + `dev/docs/DEVELOPMENT.md`/`BUILD.md`.
 - **Testing / At the start of work / Working rules** — verified accurate (markers +

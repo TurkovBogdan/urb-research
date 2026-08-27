@@ -8,12 +8,12 @@ tags: [core_connectors, balance, dto, openrouter, bench]
 
 ## Task
 
-«Переделаем DTO и вывод: у нас будут и лимиты по ключу, и фактический баланс — одно другое не отменяет, выводим что доступно.» Предыстория: пример `OpenRouterProvider` из semaphore-core слишком функциональный, чтобы тянуть в коннекторы; нужен только баланс. Просьба: на верстаке сделать упрощённый шлюз и проверить баланс.
+«Переделаем DTO и вывод: у нас будут и лимиты по ключу, и фактический баланс — одно другое не отменяет, выводим что доступно.» Предыстория: пример `OpenRouterProvider` из донорского проекта слишком функциональный, чтобы тянуть в коннекторы; нужен только баланс. Просьба: на верстаке сделать упрощённый шлюз и проверить баланс.
 
 ## What was done
 
 **OpenRouter — упрощённый бенч-шлюз (без инференса)**
-- `dev/bench/core_connectors/openrouter/run_balance.py`: минимальный `OpenRouterGateway` (httpx+Bearer, только `key_info()`/`credits()`). Ключ из ENV `OPENROUTER_API_KEY` (для прогона взят из `.env` semaphore-core; в src OpenRouter будет с ENV-кредами на уровне модуля коннекторов).
+- `dev/bench/core_connectors/openrouter/run_balance.py`: минимальный `OpenRouterGateway` (httpx+Bearer, только `key_info()`/`credits()`). Ключ из ENV `OPENROUTER_API_KEY` (для прогона взят из `.env` донорского проекта; в src OpenRouter будет с ENV-кредами на уровне модуля коннекторов).
 - Сверено живьём: `GET /api/v1/key` → usage 5.16 / limit 10 / limit_remaining 4.84; `GET /api/v1/credits` → total_credits 5 − total_usage 5.16 = **−0.16** (может быть отрицательным). Всё USD. → research `AGENTS/research/openrouter/INDEX.md`.
 
 **DTO баланса → список метрик** (`services/dto.py`)
