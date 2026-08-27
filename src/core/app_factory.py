@@ -85,7 +85,7 @@ def create_app(modules: Sequence[Module], config: Config) -> FastAPI:
     # Swagger/OpenAPI ОТКЛЮЧЕНЫ: API внутренний, схему наружу не публикуем (FastAPI
     # по умолчанию включил бы /docs + /openapi.json). Гейт SERVER_ENABLED — ниже.
     app = FastAPI(
-        title="Semaphore.Core",
+        title="Uroboros.Research",
         docs_url=None,
         redoc_url=None,
         openapi_url=None,

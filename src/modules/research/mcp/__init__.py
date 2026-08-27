@@ -4,7 +4,8 @@
 ``ResearchModule.mcp_servers["research"]``. Импорт ``make_mcp_server``
 (→ ``fastmcp``) ОТЛОЖЕН в тело функции: объявление словаря в ``module.py`` ссылается
 на функцию, не вызывая её, → ``build_modules()`` не тянет форк. Регистрирующие
-модули (research/area/source_document/note) держат ``FastMCP`` только под TYPE_CHECKING.
+модули (group/research/area/source_document/note/body/interface) держат ``FastMCP`` только под
+TYPE_CHECKING.
 """
 
 from __future__ import annotations
@@ -13,6 +14,8 @@ from typing import TYPE_CHECKING
 
 from src.modules.research.mcp.area import register as _register_area
 from src.modules.research.mcp.body import register as _register_body
+from src.modules.research.mcp.group import register as _register_group
+from src.modules.research.mcp.interface import register as _register_interface
 from src.modules.research.mcp.note import register as _register_note
 from src.modules.research.mcp.research import register as _register_research
 from src.modules.research.mcp.source_document import register as _register_source_document
@@ -27,9 +30,10 @@ _INSTRUCTIONS = (
     "reviewed web sources. It is your durable memory for a research: everything you create here "
     "is shown to the user in the app, so treat it as the deliverable, not a scratchpad.\n\n"
     "CODES. Every entity has a code tagged type@hash — RESEARCH@ (a research), AREA@ (a section), "
-    "NOTE@ (a note), QUERY@ (a search run), SOURCE@ (a found source). Always pass a code back exactly "
-    "as you received it, with its tag. The hierarchy is research → area → search (query) → source; "
-    "notes hang off the research.\n\n"
+    "NOTE@ (a note), QUERY@ (a search run), SOURCE@ (a found source), GROUP@ (a shelf researches "
+    "are filed under). Always pass a code back exactly as you received it, with its tag. The "
+    "hierarchy is research → area → search (query) → source; notes hang off the research, and "
+    "groups sit above researches as pure filing.\n\n"
     "─── THE PIPELINE (follow it in order) ───\n"
     "1. research_create(title, description?) — open the research. Keep the body for the final synthesis.\n"
     "2. area_create(research_code, title, description?, objective?, scope?, expectations?) — break the "
@@ -48,6 +52,13 @@ _INSTRUCTIONS = (
     "  a. query_search_run(area_code, query) — run a web search for the area (blocking). It records the "
     "run and returns the sources it found, each with status `pending`. Run it several times with "
     "different queries to cover the area's scope.\n"
+    "     A source whose page failed to download comes back `error`, not `pending`, and has no "
+    "body. Nothing loads later on its own — never wait or re-poll for a body, and never judge such "
+    "a source from its `summary`, which is the search engine's snippet rather than the material. "
+    "Call sources_refetch(codes) to download the material again (it does not search again) — pass "
+    "up to 6 codes at once, so one call fixes a whole area; what comes back `pending` is yours to "
+    "review, what stays `error` is a service that is down — say so to the user instead of "
+    "looping.\n"
     "  b. REVIEW EVERY SOURCE — this is mandatory, not optional. Each source starts `pending`; a source "
     "left `pending` is unfinished work. For each: source_get(source_code) to read the page body, then "
     "source_review(source_code, decision, relevance, note?) — decision `keep` (you will cite it) or "
@@ -62,10 +73,12 @@ _INSTRUCTIONS = (
     "reader gets from a claim to its evidence, so every non-trivial claim should carry the SOURCE@ code "
     "of a source you reviewed and KEPT. Do not cite a source you filtered or never reviewed, and do not "
     "invent codes — only use codes returned by query_search_run / sources_list.\n\n"
-    "─── TOOLS BY GROUP ───\n"
-    "Research: research_create(title, description?, body?) → its code; research_get(research_code) — the "
-    "research with its body, areas and notes; research_list() — all researches, recently updated first; "
-    "research_update(research_code, title?, description?, body?) — edit fields (omit to keep); "
+    "─── TOOL REFERENCE ───\n"
+    "Research: research_create(title, description?, body?, group_code?) → its code; "
+    "research_get(research_code) — the research with its body, areas and notes; "
+    "research_list(group_code?) — researches, recently updated first, optionally only those on one "
+    "shelf (empty string = only the unshelved ones); "
+    "research_update(research_code, title?, description?, body?, group_code?) — edit fields (omit to keep); "
     "research_delete(research_code) — remove it and everything under it (cascade).\n"
     "Areas: area_create(...) (above) → its code; areas_list(research_code) — the scan list; "
     "area_get(area_code) — the area with its brief and body; area_update(area_code, title?, description?, "
@@ -74,7 +87,10 @@ _INSTRUCTIONS = (
     "Searches & sources: query_search_run(area_code, query) (above); query_search_list(code) — the "
     "searches of an AREA@ or RESEARCH@; query_search_delete(query_code) — remove a run and its sources; "
     "sources_list(code, status?) — sources of a RESEARCH@ / AREA@ / QUERY@ (optional status filter: "
-    "pending / kept / filtered / fetch_error); source_get(source_code) — one source with the page body; "
+    "pending / kept / filtered / error); source_get(source_code) — one source with the page body; "
+    "sources_refetch(codes) — re-download the material for the `error` sources under up to 6 "
+    "SOURCE@ / QUERY@ / AREA@ / RESEARCH@ codes, returning the sources it touched plus the codes "
+    "it skipped and why; "
     "source_review(source_code, decision, relevance, note?) (above). Sources are found by search only — "
     "there is no manual source-create.\n"
     "Notes: the research's working memory — a self-contained mini-artifact (title, description?, body?) "
@@ -87,7 +103,21 @@ _INSTRUCTIONS = (
     "body_edit(code, action, text, find?, heading?) with action set / replace (unique find) / "
     "replace_block (a `#`/`##` heading block); body_add(code, text, position, anchor?) with position "
     "start / end / before / after (relative to anchor). Both return the updated body. Use these for "
-    "incremental edits instead of rewriting the whole body with *_update."
+    "incremental edits instead of rewriting the whole body with *_update.\n"
+    "Showing the user: interface_open(code) — opens that entity's page in the user's browser and "
+    "returns the address. Takes any code (RESEARCH@ / AREA@ / NOTE@ / QUERY@ / SOURCE@ / GROUP@, "
+    "and SEARCH@ / PAGE@ for the underlying web search). Use it when the user asks to see "
+    "something or when you have finished work worth looking at — it puts the artifact on screen "
+    "instead of describing it. It acts on the user's machine, so do not fire it after every call.\n"
+    "Groups (optional, low priority): shelves for the research list. A research MAY be filed on "
+    "one — pass group_code to research_create / research_update (empty string takes it off the "
+    "shelf) — and research_get / research_list report group_code + group_name, where group_name is "
+    "derived from the group and is not editable on the research. Grouping is cosmetic filing, not "
+    "part of the research pipeline: leave a research ungrouped unless the user asked for shelves. "
+    "group_create(title, description?) → its code; group_list(); group_get; group_update; "
+    "group_delete — deleting a group KEEPS its researches, they just become ungrouped. How a "
+    "shelf looks and where it sits in the list is the user's to set in the interface — you only "
+    "name it and file researches onto it."
 )
 
 
@@ -96,11 +126,13 @@ def mcp_server(ctx: "McpServerContext") -> "FastMCP":
     from src.core.mcp import make_mcp_server
 
     mcp = make_mcp_server("research", _INSTRUCTIONS, ctx)
+    _register_group(mcp)
     _register_research(mcp)
     _register_area(mcp)
     _register_source_document(mcp)
     _register_note(mcp)
     _register_body(mcp)
+    _register_interface(mcp)
     return mcp
 
 

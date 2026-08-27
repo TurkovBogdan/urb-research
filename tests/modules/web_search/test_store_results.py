@@ -1,7 +1,8 @@
 """web_search: сохранение выдачи (searcher._store_results: page + result) + переходы страницы.
 
-``_store_results`` создаёт страницы (в ``pending``) и строки выдачи и возвращает страницы,
-оставшиеся в ``pending`` (их дотягивает сервис поиска: ``processing`` → ``done``/``error``).
+``_store_results`` создаёт страницы (в ``pending``) и строки выдачи и возвращает страницы **без
+контента** — ``pending`` и осевшие в ``error`` от прошлых прогонов (их дотягивает сервис поиска:
+``processing`` → ``done``/``error``).
 """
 
 from __future__ import annotations
@@ -75,6 +76,22 @@ async def test_duplicate_url_in_one_query_dedups(db):
     assert len(pending) == 1  # одна страница по дедупу
     rows = await query_result_crud.results_for_query(query_code)
     assert len(rows) == 1  # unique (query_code, page_code)
+
+
+@pytest.mark.db
+async def test_dedup_returns_a_failed_page_for_another_attempt(db):
+    """Дедуп по url вечен: раз упавшая страница обязана попасть в докачку следующего прогона."""
+    failed = await page_crud.page_upsert("https://z.com/dead")
+    await page_crud.page_set_error(failed.code, error="ConnectError")
+    fetched = await page_crud.page_upsert("https://z.com/alive")
+    await page_crud.page_set_body(fetched.code, body="# body")
+
+    unfetched = await _store_results(
+        await _queue_query(),
+        [{"url": "https://z.com/dead", "rank": 1}, {"url": "https://z.com/alive", "rank": 2}],
+    )
+
+    assert {p.url for p in unfetched} == {"https://z.com/dead"}
 
 
 @pytest.mark.db

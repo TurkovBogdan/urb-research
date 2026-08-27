@@ -58,29 +58,38 @@ def call(mcp):
 
 
 class _StubSearch(SearchEngine, FetchEngine):
-    """Движок-заглушка (обе роли): отдаёт заданные ссылки + контент, без сети."""
+    """Движок-заглушка (обе роли): отдаёт заданные ссылки + контент, без сети.
+
+    Url без записи в ``pages`` отдаёт пустой контент → страница ``error``/``empty``;
+    ``fetch_raises`` роняет весь батч (эмуляция недоступного движка контента). ``results`` /
+    ``pages`` / ``fetch_raises`` публичны: тест меняет их между прогонами, чтобы разыграть
+    «сервис получения снова поднялся».
+    """
 
     code = "stub"
     enabled_field = "tavily_gateway_enabled"  # доступность из core_connectors (дефолт True)
 
-    def __init__(self, results=None, pages=None) -> None:
-        self._results = results or []
-        self._pages = pages or {}
+    def __init__(self, results=None, pages=None, fetch_raises=None) -> None:
+        self.results = results or []
+        self.pages = pages or {}
+        self.fetch_raises = fetch_raises
         self.pages_per_request = 20
 
     async def search(self, request: SearchRequest) -> list[dict[str, Any]]:
-        return self._results
+        return self.results
 
     async def fetch_pages(self, urls: list[str]) -> dict[str, str | None]:
-        return {url: self._pages.get(url) for url in urls}
+        if self.fetch_raises is not None:
+            raise self.fetch_raises
+        return {url: self.pages.get(url) for url in urls}
 
 
 @pytest.fixture
 def use_search(monkeypatch):
-    """Установить stub веб-поиска: ``use_search(results=[...], pages={url: body})``."""
+    """Установить stub веб-поиска: ``use_search(results=[...], pages={url: body}, fetch_raises=exc)``."""
 
-    def _install(results=None, pages=None) -> _StubSearch:
-        stub = _StubSearch(results=results, pages=pages)
+    def _install(results=None, pages=None, fetch_raises=None) -> _StubSearch:
+        stub = _StubSearch(results=results, pages=pages, fetch_raises=fetch_raises)
         registry.search_engines.register(stub)
         registry.fetch_engines.register(stub)
         monkeypatch.setattr(Searcher, "_default_search_engine", lambda: "stub")

@@ -16,6 +16,7 @@ from src.core.settings.fields import (
     ListField,
     MultiChoiceField,
     StrField,
+    VisibleWhen,
 )
 
 
@@ -204,3 +205,37 @@ def test_list_default_is_fresh_list():
 def test_repr_for_log_default_is_repr():
     f = IntField(key="x", label="X", default_=1)
     assert f.repr_for_log(42) == "42"
+
+
+# ── group / visible_when ─────────────────────────────────────────────────
+
+
+@pytest.mark.pure
+def test_ui_descriptor_carries_group_and_visibility():
+    f = StrField(
+        key="token",
+        label="Token",
+        group="Tavily",
+        visible_when=VisibleWhen("enabled"),
+    )
+    ui = f.ui_descriptor()
+    assert ui["group"] == "Tavily"
+    assert ui["visible_when"] == {"key": "enabled", "equals": True}
+
+
+@pytest.mark.pure
+def test_ui_descriptor_defaults_to_no_group_and_always_visible():
+    ui = IntField(key="x", label="X", default_=1).ui_descriptor()
+    assert ui["group"] == ""
+    assert ui["visible_when"] is None
+
+
+@pytest.mark.pure
+def test_list_item_descriptor_drops_group_and_visibility():
+    f = ListField(
+        key="xs",
+        label="Xs",
+        item=StrField(key="item", label="", group="ignored"),
+    )
+    assert "group" not in f.ui_descriptor()["item"]
+    assert "visible_when" not in f.ui_descriptor()["item"]

@@ -10,7 +10,16 @@ from fastmcp.exceptions import ToolError
 
 pytestmark = pytest.mark.db
 
-_SOURCE_KEYS = {"code", "status", "url", "title", "summary", "note", "relevance", "updated_at"}
+_SOURCE_KEYS = {
+    "code",
+    "status",
+    "url",
+    "title",
+    "summary",
+    "note",
+    "relevance",
+    "updated_at",
+}
 
 
 async def _seed(call, use_search, n: int = 2):
@@ -37,6 +46,165 @@ async def test_query_search_run_creates_and_returns_sources(call, use_search):
     assert s["status"] == "pending"
     assert s["url"] == "https://ex.com/0" and s["summary"] == "snip0"
     assert s["relevance"] is None
+
+
+async def _seed_unfetched(call, use_search, **stub):
+    """research + area + прогон, где контент страницы не дошёл. → список источников."""
+    engine = use_search(
+        results=[{"url": "https://ex.com/0", "rank": 1, "summary": "snip0"}], **stub
+    )
+    r = (await call("research_create", title="R"))["code"]
+    a = (await call("area_create", research_code=r, title="A"))["code"]
+    sources = (await call("query_search_run", area_code=a, query="q"))["result"]
+    return r, a, sources, engine
+
+
+async def test_query_search_run_marks_source_error_when_page_empty(call, use_search):
+    _, _, sources, _ = await _seed_unfetched(call, use_search, pages={})
+
+    assert len(sources) == 1
+    assert sources[0]["status"] == "error"
+
+
+async def test_query_search_run_marks_source_error_when_engine_unreachable(call, use_search):
+    _, _, sources, _ = await _seed_unfetched(
+        call, use_search, fetch_raises=ConnectionError("daemon down")
+    )
+
+    assert sources[0]["status"] == "error"
+
+
+async def test_unfetched_source_is_filtered_out_of_the_review_queue(call, use_search):
+    r, _, _, _ = await _seed_unfetched(call, use_search, pages={})
+
+    assert (await call("sources_list", code=r, status="pending"))["result"] == []
+    broken = (await call("sources_list", code=r, status="error"))["result"]
+    assert len(broken) == 1 and broken[0]["url"] == "https://ex.com/0"
+
+
+async def test_source_get_explains_a_missing_body(call, use_search):
+    _, _, sources, _ = await _seed_unfetched(call, use_search, pages={})
+
+    g = await call("source_get", source_code=sources[0]["code"])
+
+    assert g["body"] is None
+    assert g["status"] == "error"
+    assert g["summary"] == "snip0"
+
+
+async def test_sources_refetch_revives_a_source_once_the_material_arrives(call, use_search):
+    r, _, sources, engine = await _seed_unfetched(call, use_search, pages={})
+    engine.pages = {"https://ex.com/0": "# body 0"}
+
+    report = await call("sources_refetch", codes=[r])
+
+    assert len(report["sources"]) == 1 and report["skipped"] == []
+    revived = report["sources"][0]
+    assert revived["code"] == sources[0]["code"] and revived["status"] == "pending"
+    assert (await call("source_get", source_code=sources[0]["code"]))["body"] == "# body 0"
+
+
+async def test_sources_refetch_reports_a_source_that_failed_again(call, use_search):
+    r, _, _, _ = await _seed_unfetched(call, use_search, pages={})
+
+    report = await call("sources_refetch", codes=[r])
+
+    assert len(report["sources"]) == 1 and report["sources"][0]["status"] == "error"
+
+
+async def test_sources_refetch_takes_a_single_source_code(call, use_search):
+    _, _, sources, engine = await _seed_unfetched(call, use_search, pages={})
+    engine.pages = {"https://ex.com/0": "# body 0"}
+
+    report = await call("sources_refetch", codes=[sources[0]["code"]])
+
+    assert len(report["sources"]) == 1 and report["sources"][0]["status"] == "pending"
+
+
+async def test_sources_refetch_takes_several_codes_at_once(call, use_search):
+    """Пакет из кодов разных уровней — один прогон, источники со всех."""
+    _, _, first, engine = await _seed_unfetched(call, use_search, pages={})
+    second_research = (await call("research_create", title="R2"))["code"]
+    second_area = (await call("area_create", research_code=second_research, title="A2"))["code"]
+    engine.results = [{"url": "https://ex.com/9", "rank": 0, "summary": "snip9"}]
+    await call("query_search_run", area_code=second_area, query="q2")
+    engine.pages = {"https://ex.com/0": "# body 0", "https://ex.com/9": "# body 9"}
+
+    report = await call("sources_refetch", codes=[first[0]["code"], second_research])
+
+    assert {row["status"] for row in report["sources"]} == {"pending"}
+    assert len(report["sources"]) == 2 and report["skipped"] == []
+
+
+async def test_sources_refetch_does_not_download_an_overlapping_scope_twice(call, use_search):
+    """Исследование и его же область в одном вызове — источник в ответе один, не два."""
+    r, a, sources, engine = await _seed_unfetched(call, use_search, pages={})
+    engine.pages = {"https://ex.com/0": "# body 0"}
+
+    report = await call("sources_refetch", codes=[r, a, sources[0]["code"]])
+
+    assert [row["code"] for row in report["sources"]] == [sources[0]["code"]]
+
+
+async def test_sources_refetch_reports_a_code_with_nothing_to_fix(call, use_search):
+    r, _, _, _ = await _seed(call, use_search, n=2)
+
+    report = await call("sources_refetch", codes=[r])
+
+    assert report["sources"] == []
+    assert report["skipped"] == [{"code": r, "reason": "nothing_to_fix"}]
+
+
+async def test_sources_refetch_reports_bad_codes_without_dropping_the_good_one(call, use_search):
+    """Промах одного кода не отменяет работу по остальным — он уходит в отчёт со своей причиной."""
+    r, _, _, engine = await _seed_unfetched(call, use_search, pages={})
+    engine.pages = {"https://ex.com/0": "# body 0"}
+
+    report = await call(
+        "sources_refetch",
+        codes=["NOTE@x0000000000000000000", "SOURCE@missing00000000000", r],
+    )
+
+    assert len(report["sources"]) == 1 and report["sources"][0]["status"] == "pending"
+    assert report["skipped"] == [
+        {"code": "NOTE@x0000000000000000000", "reason": "not_a_source_code"},
+        {"code": "SOURCE@missing00000000000", "reason": "not_found"},
+    ]
+
+
+async def test_sources_refetch_caps_the_number_of_codes(call, use_search):
+    r, _, _, _ = await _seed_unfetched(call, use_search, pages={})
+
+    with pytest.raises(ToolError, match="At most 6 codes"):
+        await call("sources_refetch", codes=[r] * 7)
+
+
+async def test_sources_refetch_needs_at_least_one_code(call):
+    with pytest.raises(ToolError, match="at least one code"):
+        await call("sources_refetch", codes=[])
+
+
+async def test_sources_refetch_revives_the_same_page_in_another_research(call, use_search):
+    """Страница дедуплицирована на несколько исследований — оживает у всех, не только в скоупе."""
+    first, _, _, engine = await _seed_unfetched(call, use_search, pages={})
+    second = (await call("research_create", title="R2"))["code"]
+    other_area = (await call("area_create", research_code=second, title="A2"))["code"]
+    await call("query_search_run", area_code=other_area, query="q2")
+    engine.pages = {"https://ex.com/0": "# body 0"}
+
+    await call("sources_refetch", codes=[first])
+
+    assert (await call("sources_list", code=second, status="error"))["result"] == []
+    assert len((await call("sources_list", code=second, status="pending"))["result"]) == 1
+
+
+async def test_sources_refetch_refuses_a_disabled_fetch_engine(call, use_search, monkeypatch):
+    """Движок контента выключен — отказ до сети, а не сотня страниц, разложенных в ``error``."""
+    r, _, _, engine = await _seed_unfetched(call, use_search, pages={})
+    monkeypatch.setattr(engine, "available", lambda: False)
+
+    with pytest.raises(ToolError, match="fetch_engine_disabled"):
+        await call("sources_refetch", codes=[r])
 
 
 async def test_query_search_run_no_results_records_search(call, use_search):

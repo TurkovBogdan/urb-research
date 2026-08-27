@@ -103,10 +103,21 @@ async def note_delete(code: str) -> bool:
     return True
 
 
+async def note_bodies_by_research(research_code: str) -> list[tuple[str, str]]:
+    """``(code, body)`` всех заметок исследования — сырьё для глубокого поиска (только две
+    колонки: ради поиска целые ORM-объекты не нужны)."""
+    stmt = select(ResearchNote.code, ResearchNote.body).where(
+        ResearchNote.research_code == research_code
+    )
+    async with session_scope() as s:
+        return [(code, body) for code, body in (await s.execute(stmt)).all()]
+
+
 __all__ = [
     "note_code",
     "note_create",
     "note_get",
+    "note_bodies_by_research",
     "note_list_by_research",
     "note_update",
     "note_delete",

@@ -28,12 +28,31 @@ from typing import Any, ClassVar
 
 
 @dataclass(frozen=True)
+class VisibleWhen:
+    """Поле показывается, только когда ТЕКУЩЕЕ значение ``key`` равно ``equals``.
+
+    Условие вычисляется на фронте по значениям формы, а не на бэке: пока настройки не
+    сохранены, «текущее» значение живёт только там. Скрытое поле не перестаёт
+    существовать — оно хранится, читается кодом и вернётся на экран вместе с условием.
+    Значение по умолчанию ``True`` покрывает основной случай: ключ сервиса виден, пока
+    сам сервис включён.
+    """
+
+    key: str
+    equals: Any = True
+
+
+@dataclass(frozen=True)
 class Field(ABC):
     """Базовый класс поля настройки."""
 
     key: str
     label: str
     description: str = ""
+    #: Заголовок блока, в который поле собирается на экране. Пусто — поле само по себе.
+    group: str = ""
+    #: Условие видимости (см. ``VisibleWhen``); без него поле видно всегда.
+    visible_when: VisibleWhen | None = None
 
     kind: ClassVar[str] = ""
 
@@ -74,6 +93,15 @@ class Field(ABC):
             "label": self.label,
             "description": self.description,
             "default": self.default(),
+            "group": self.group,
+            "visible_when": (
+                None
+                if self.visible_when is None
+                else {
+                    "key": self.visible_when.key,
+                    "equals": self.visible_when.equals,
+                }
+            ),
         }
 
 
@@ -483,10 +511,10 @@ class ListField(Field):
     def ui_descriptor(self) -> dict[str, Any]:
         assert self.item is not None
         item_desc = self.item.ui_descriptor()
-        item_desc.pop("key", None)
-        item_desc.pop("label", None)
-        item_desc.pop("description", None)
-        item_desc.pop("default", None)
+        # Элемент списка — это тип значения, а не отдельная настройка: собственного ключа,
+        # подписи, места в блоке и условия видимости у него нет.
+        for own_field_only in ("key", "label", "description", "default", "group", "visible_when"):
+            item_desc.pop(own_field_only, None)
         return {
             **self._base_ui(),
             "min_items": self.min_items,
@@ -497,6 +525,7 @@ class ListField(Field):
 
 __all__ = [
     "Field",
+    "VisibleWhen",
     "IntField",
     "FloatField",
     "BoolField",

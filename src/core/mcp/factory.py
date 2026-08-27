@@ -16,7 +16,7 @@ from fastmcp import FastMCP
 if TYPE_CHECKING:
     from src.core.mcp.context import McpServerContext
 
-_SERVER_VERSION = "0.1"
+_SERVER_VERSION = "0.3"
 
 
 def make_mcp_server(

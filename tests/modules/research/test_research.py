@@ -40,13 +40,26 @@ async def test_research_list_lean(call):
     items = (await call("research_list"))["result"]
 
     assert {x["title"] for x in items} == {"First", "Second"}
-    assert set(items[0]) == {"code", "title", "description", "updated_at"}
+    assert set(items[0]) == {
+        "code",
+        "title",
+        "description",
+        "group_code",
+        "group_name",
+        "updated_at",
+    }
 
 
 async def test_research_update_returns_scan_without_dates(call):
     code = (await call("research_create", title="T"))["code"]
     r = await call("research_update", research_code=code, title="T2", description="d2")
-    assert r == {"code": code, "title": "T2", "description": "d2"}
+    assert r == {
+        "code": code,
+        "title": "T2",
+        "description": "d2",
+        "group_code": None,
+        "group_name": "",
+    }
 
 
 async def test_research_update_not_found(call):

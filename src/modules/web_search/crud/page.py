@@ -83,6 +83,18 @@ async def page_get_by_code(code: str) -> WebSearchPage | None:
         ).scalar_one_or_none()
 
 
+async def pages_by_codes(codes: list[str]) -> list[WebSearchPage]:
+    """Страницы по списку кодов (повтор получения контента); порядок не гарантирован."""
+    if not codes:
+        return []
+    async with session_scope() as s:
+        return list(
+            (await s.execute(select(WebSearchPage).where(WebSearchPage.code.in_(codes))))
+            .scalars()
+            .all()
+        )
+
+
 async def pages_mark_processing(codes: list[str], *, fetch_engine: str) -> None:
     """Пометить страницы ``processing`` перед получением контента (батч).
 
@@ -203,6 +215,7 @@ async def page_count(
 __all__ = [
     "page_upsert",
     "page_get_by_code",
+    "pages_by_codes",
     "pages_mark_processing",
     "page_set_body",
     "page_set_error",

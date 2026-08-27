@@ -123,6 +123,18 @@ async def area_delete(code: str) -> bool:
     return True
 
 
+async def area_bodies_by_research(research_code: str) -> list[tuple[str, str]]:
+    """``(code, body)`` всех зон исследования — сырьё для глубокого поиска.
+
+    Только две колонки: тела зон весят мегабайтами, тащить ради поиска целые ORM-объекты незачем.
+    """
+    stmt = select(ResearchArea.code, ResearchArea.body).where(
+        ResearchArea.research_code == research_code
+    )
+    async with session_scope() as s:
+        return [(code, body) for code, body in (await s.execute(stmt)).all()]
+
+
 async def area_count_by_research_codes(research_codes: list[str]) -> dict[str, int]:
     """``research_code → число областей`` одним GROUP BY (для списка исследований)."""
     if not research_codes:
@@ -143,5 +155,6 @@ __all__ = [
     "area_list_by_research",
     "area_update",
     "area_delete",
+    "area_bodies_by_research",
     "area_count_by_research_codes",
 ]

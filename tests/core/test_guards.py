@@ -26,7 +26,7 @@ pytestmark = pytest.mark.pure
 # Локальные test-double'ы вместо снятых core-моков (auth/ability теперь даёт core_users).
 # Ядро принципала не типизирует (duck-typed request.state.user) — достаточно объекта нужной формы.
 _STUB_USER = SimpleNamespace(
-    id=1, email="admin@semaphore.local", group="admin", is_active=True
+    id=1, email="admin@example.local", group="admin", is_active=True
 )
 
 
@@ -114,7 +114,7 @@ async def test_default_auth_allows_and_sets_user():
 
     res = await _get(_app(["auth"], routes), "/x")
     assert res.status_code == 200
-    assert res.json() == {"user": "admin@semaphore.local"}
+    assert res.json() == {"user": "admin@example.local"}
 
 
 async def test_allow_all_bypasses_default():

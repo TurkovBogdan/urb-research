@@ -33,7 +33,7 @@ from typing import Any
 
 from src.core.utils.date import utc_now
 from src.modules.web_search import settings
-from src.modules.web_search.constants import FETCH_STATUS_PENDING
+from src.modules.web_search.constants import FETCH_STATUS_ERROR, FETCH_STATUS_PENDING
 from src.modules.web_search.crud import page as page_crud
 from src.modules.web_search.crud import query as query_crud
 from src.modules.web_search.crud import query_result as query_result_crud
@@ -169,6 +169,20 @@ class Searcher:
         await query_crud.query_finish(code)
 
     @staticmethod
+    async def refetch(page_codes: list[str], *, fetch_engine: str | None = None) -> None:
+        """Повторно получить контент уже известных страниц (без поиска).
+
+        Единственный вход для «страница не скачалась — попробуем ещё раз»: фетч терминален и
+        сам не повторяется, а поисковый движок тут не участвует (слот-гейт не нужен, лимиты у
+        движка контента свои). Отключённый движок — ошибка до сети, а не сотня страниц в
+        ``error``; недоступный по сети — обычный исход, страница получает ``error``.
+        """
+        fetcher = fetch_engine_registry.get(fetch_engine or Searcher._default_fetch_engine())
+        if not fetcher.available():
+            raise RuntimeError("fetch_engine_disabled")
+        await _fetch_pages(fetcher, await page_crud.pages_by_codes(page_codes))
+
+    @staticmethod
     def _default_search_engine() -> str:
         """Дефолтный движок поиска (настройка), когда в запуске не передан явный."""
         return settings.search_engine()
@@ -213,15 +227,17 @@ async def _store_results(
     """Привязать ссылки выдачи к запросу (page → result); вернуть страницы под до-фетч.
 
     Под каждый url создаётся (или переиспользуется по дедупу) ``web_search_page`` в
-    ``pending``. Возвращает новые ``pending``-страницы (их дотягивает ``_fetch_pages``);
-    уже ``done`` по дедупу — переиспользуются и в список не попадают. Статус запроса тут не
-    трогается. Контент движок поиска не отдаёт — это отдельная роль (``_fetch_pages``).
+    ``pending``. Возвращает страницы **без контента** — новые ``pending`` и осевшие в
+    ``error`` от прошлых прогонов: дедуп по url вечен, поэтому иначе однажды упавшая страница
+    не скачалась бы уже никогда. Уже ``done`` — переиспользуются и в список не попадают.
+    Статус запроса тут не трогается. Контент движок поиска не отдаёт — это отдельная роль
+    (``_fetch_pages``).
     """
-    pending: dict[str, WebSearchPage] = {}
+    unfetched: dict[str, WebSearchPage] = {}
     for result in results:
         page = await page_crud.page_upsert(result["url"], title=result.get("title"))
-        if page.status == FETCH_STATUS_PENDING:
-            pending[page.code] = page
+        if page.status in (FETCH_STATUS_PENDING, FETCH_STATUS_ERROR):
+            unfetched[page.code] = page
         await query_result_crud.result_add(
             query_code=query_code,
             page_code=page.code,
@@ -230,7 +246,7 @@ async def _store_results(
             summary=result.get("summary"),
             meta=result.get("meta"),
         )
-    return list(pending.values())
+    return list(unfetched.values())
 
 
 async def _fetch_pages(fetcher: FetchEngine, pages: list[WebSearchPage]) -> None:

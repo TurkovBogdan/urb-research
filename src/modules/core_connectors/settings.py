@@ -8,9 +8,17 @@
 
 from __future__ import annotations
 
-from src.core.settings import BoolField, StrField, get_module_store
+from src.core.settings import BoolField, StrField, VisibleWhen, get_module_store
 
 MODULE = "core_connectors"
+
+_TAVILY = "Tavily"
+_FIRECRAWL = "Firecrawl"
+_XAI = "Grok (xAI)"
+_OPENROUTER = "OpenRouter"
+_OPENAI = "OpenAI"
+_ANTHROPIC = "Anthropic (Claude)"
+_WEB_SCRAPPER = "daemon-web-scrapper"
 
 SCHEMA = (
     BoolField(
@@ -18,90 +26,113 @@ SCHEMA = (
         label="Включить Tavily",
         description="Сервис для поиска информации в вебе и извлечения контента страниц.",
         default_=True,
+        group=_TAVILY,
     ),
     StrField(
         key="tavily_api_key",
         label="API-ключ Tavily",
         description="Секретный ключ доступа к API Tavily. Получить: [app.tavily.com](https://app.tavily.com/home).",
         secret=True,
+        group=_TAVILY,
+        visible_when=VisibleWhen("tavily_gateway_enabled"),
     ),
     BoolField(
         key="firecrawl_gateway_enabled",
         label="Включить Firecrawl",
         description="Сервис для скрапинга веб-страниц и поиска информации.",
         default_=True,
+        group=_FIRECRAWL,
     ),
     StrField(
         key="firecrawl_api_key",
         label="API-ключ Firecrawl",
         description="Секретный ключ доступа к API Firecrawl. Получить: [firecrawl.dev](https://www.firecrawl.dev/app/api-keys).",
         secret=True,
+        group=_FIRECRAWL,
+        visible_when=VisibleWhen("firecrawl_gateway_enabled"),
     ),
     BoolField(
         key="xai_gateway_enabled",
         label="Включить Grok (xAI)",
         description="ИИ-модель Grok для агентского поиска в вебе и соцсети X.",
         default_=True,
+        group=_XAI,
     ),
     StrField(
         key="xai_api_key",
         label="API-ключ xAI",
         description="Секретный ключ доступа к API xAI. Получить: [console.x.ai](https://console.x.ai).",
         secret=True,
+        group=_XAI,
+        visible_when=VisibleWhen("xai_gateway_enabled"),
     ),
     StrField(
         key="xai_management_api_key",
         label="Management-ключ xAI",
         description="Секретный ключ Management API xAI — для баланса и лимитов трат. Отдельный от основного API-ключа. Создать: [console.x.ai](https://console.x.ai) → Settings → Management Keys.",
         secret=True,
+        group=_XAI,
+        visible_when=VisibleWhen("xai_gateway_enabled"),
     ),
     BoolField(
         key="openrouter_gateway_enabled",
         label="Включить OpenRouter",
         description="Единый API-шлюз к LLM разных провайдеров.",
         default_=True,
+        group=_OPENROUTER,
     ),
     StrField(
         key="openrouter_api_key",
         label="API-ключ OpenRouter",
         description="Секретный ключ доступа к API OpenRouter. Получить: [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys).",
         secret=True,
+        group=_OPENROUTER,
+        visible_when=VisibleWhen("openrouter_gateway_enabled"),
     ),
     BoolField(
         key="openai_gateway_enabled",
         label="Включить OpenAI",
         description="LLM-провайдер OpenAI (GPT, o-серия). Для расхода нужен Admin-ключ.",
         default_=True,
+        group=_OPENAI,
     ),
     StrField(
         key="openai_admin_api_key",
         label="Admin-ключ OpenAI",
         description="Секретный Admin-ключ OpenAI (sk-admin-…) — для отчёта о расходах. Обычный API-ключ не подойдёт. Создать: [platform.openai.com](https://platform.openai.com/settings/organization/admin-keys).",
         secret=True,
+        group=_OPENAI,
+        visible_when=VisibleWhen("openai_gateway_enabled"),
     ),
     BoolField(
         key="anthropic_gateway_enabled",
         label="Включить Anthropic (Claude)",
         description="LLM-провайдер Anthropic (Claude). Для расхода нужен Admin-ключ.",
         default_=True,
+        group=_ANTHROPIC,
     ),
     StrField(
         key="anthropic_admin_api_key",
         label="Admin-ключ Anthropic",
         description="Секретный Admin-ключ Anthropic (sk-ant-admin…) — для отчёта о расходах. Обычный API-ключ не подойдёт. Создать: [console.anthropic.com](https://console.anthropic.com/settings/admin-keys).",
         secret=True,
+        group=_ANTHROPIC,
+        visible_when=VisibleWhen("anthropic_gateway_enabled"),
     ),
     BoolField(
         key="web_scrapper_gateway_enabled",
         label="Включить daemon-web-scrapper",
         description="Локальный браузерный демон (порт 19020) для скрейпинга страниц в markdown.",
         default_=True,
+        group=_WEB_SCRAPPER,
     ),
     StrField(
         key="web_scrapper_api_key",
         label="Токен daemon-web-scrapper",
         description="Bearer-токен демона (SCRAPER_API_KEY). Оставьте пустым, если у демона авторизация отключена.",
         secret=True,
+        group=_WEB_SCRAPPER,
+        visible_when=VisibleWhen("web_scrapper_gateway_enabled"),
     ),
 )
 

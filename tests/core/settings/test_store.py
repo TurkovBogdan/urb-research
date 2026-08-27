@@ -6,7 +6,13 @@ import dataclasses
 
 import pytest
 
-from src.core.settings.fields import IntField, MultiChoiceField, StrField
+from src.core.settings.fields import (
+    BoolField,
+    IntField,
+    MultiChoiceField,
+    StrField,
+    VisibleWhen,
+)
 from src.core.settings.schema import validate_schema
 from src.core.settings.store import build_store
 
@@ -33,6 +39,32 @@ def test_validate_schema_key_format():
     bad = (IntField(key="BadKey", label="X", default_=1),)
     with pytest.raises(ValueError):
         validate_schema("m", bad)
+
+
+@pytest.mark.pure
+def test_validate_schema_accepts_visible_when_pointing_at_a_sibling():
+    schema = (
+        BoolField(key="enabled", label="On", default_=True),
+        StrField(key="token", label="Token", visible_when=VisibleWhen("enabled")),
+    )
+    validate_schema("m", schema)
+
+
+@pytest.mark.pure
+def test_validate_schema_rejects_visible_when_unknown_key():
+    schema = (
+        BoolField(key="enabled", label="On", default_=True),
+        StrField(key="token", label="Token", visible_when=VisibleWhen("enbaled")),
+    )
+    with pytest.raises(ValueError, match="unknown key"):
+        validate_schema("m", schema)
+
+
+@pytest.mark.pure
+def test_validate_schema_rejects_visible_when_self_reference():
+    schema = (BoolField(key="enabled", label="On", visible_when=VisibleWhen("enabled")),)
+    with pytest.raises(ValueError, match="itself"):
+        validate_schema("m", schema)
 
 
 @pytest.mark.pure

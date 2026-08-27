@@ -2,9 +2,8 @@
 .claude/
 /AGENTS.md
 /CLAUDE.md
-# local-only symlinks into private stores (second-brain / other projects) — never publish
+# local-only symlink into a private store (second-brain) — never publish
 /AGENTS/obsidian
-/AGENTS/semaphore-core
 
 # env / secrets — real .env never committed; example templates are tracked
 .env

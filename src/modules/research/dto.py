@@ -16,6 +16,7 @@ from src.core.utils.date import DatetimeUTCStr
 from src.modules.research.codes import prefixed
 from src.modules.research.constants import (
     AREA_CODE_PREFIX,
+    GROUP_CODE_PREFIX,
     NOTE_CODE_PREFIX,
     RESEARCH_CODE_PREFIX,
     SOURCE_DOCUMENT_CODE_PREFIX,
@@ -23,11 +24,60 @@ from src.modules.research.constants import (
 )
 
 # Presentation-tagged code types: bare hash on the wire in, prefixed on the wire out.
+GroupCode = prefixed(GROUP_CODE_PREFIX)
 ResearchCode = prefixed(RESEARCH_CODE_PREFIX)
 AreaCode = prefixed(AREA_CODE_PREFIX)
 NoteCode = prefixed(NOTE_CODE_PREFIX)
 SourceQueryCode = prefixed(SOURCE_QUERY_CODE_PREFIX)
 SourceDocumentCode = prefixed(SOURCE_DOCUMENT_CODE_PREFIX)
+
+
+class GroupCreated(BaseModel):
+    """Возврат создания группы — только код."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    code: GroupCode
+
+
+class GroupScan(BaseModel):
+    """Группа для MCP: одна карточка — ни оформления, ни позиции в списке.
+
+    Как полка выглядит (``icon``/``color``) и где лежит (``sort``) — выбор человека в интерфейсе;
+    для агента это лишние поля, поэтому поверхности разведены: MCP отдаёт этот набор,
+    web-вьюер — ``GroupRow``.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    code: GroupCode
+    title: str
+    description: str = ""
+    updated_at: DatetimeUTCStr
+
+
+class GroupRow(BaseModel):
+    """Группа целиком для web-вьюера: у полки нет тела, скан и деталь — один набор полей."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    code: GroupCode
+    title: str
+    description: str = ""
+    icon: str = ""
+    color: str = ""
+    sort: int
+    updated_at: DatetimeUTCStr
+
+
+class GroupListRow(GroupRow):
+    """Строка списка полок для web-вьюера: карточка + сколько исследований на ней лежит.
+
+    Счётчик только тут: MCP отдаёт ``GroupRow`` без него — агенту он не нужен, а считать его
+    на каждый вызов тула значило бы платить за то, что читает только интерфейс.
+    """
+
+    research_count: int = 0
 
 
 class ResearchCreated(BaseModel):
@@ -39,23 +89,32 @@ class ResearchCreated(BaseModel):
 
 
 class ResearchScan(BaseModel):
-    """Скан research — код/заголовок/описание (без дат/тела). Возврат research_update."""
+    """Скан research — код/заголовок/описание + полка (без дат/тела). Возврат research_update.
+
+    ``group_code`` — ссылка (``None`` = не разложено), ``group_name`` — **вычисляемое** имя полки
+    из join'а с ``research_group``: в самом исследовании названия группы нет и хранить его там
+    было бы копией, разъезжающейся при переименовании. Пустая строка = группы нет.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
     code: ResearchCode
     title: str
     description: str = ""
+    group_code: GroupCode | None = None
+    group_name: str = ""
 
 
 class ResearchListItem(BaseModel):
-    """Строка research_list — код/заголовок/описание + ``updated_at`` (без ``created_at``)."""
+    """Строка research_list — скан-поля + полка + ``updated_at`` (без ``created_at``)."""
 
     model_config = ConfigDict(from_attributes=True)
 
     code: ResearchCode
     title: str
     description: str = ""
+    group_code: GroupCode | None = None
+    group_name: str = ""
     updated_at: DatetimeUTCStr
 
 
@@ -113,6 +172,8 @@ class ResearchSourceDocumentRow(BaseModel):
     """Источник (скан): код + оценка + url/title из join'а страницы; ``updated_at`` последним.
 
     Связочные коды (area/query/page) и domain не отдаём — агент в контексте, страницу видит по url.
+    Код причины сбоя (``web_search_page.error``) тоже не отдаём: решение о повторе не агентское,
+    ему достаточно ``status`` — материала нет. Причина видна человеку в разделе страниц.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -141,6 +202,25 @@ class ResearchSourceDocumentDetail(BaseModel):
     relevance: int | None = None
     body: str | None = None
     updated_at: DatetimeUTCStr
+
+
+class SkippedCode(BaseModel):
+    """Код, по которому качать оказалось нечего, и почему именно — как его передали."""
+
+    code: str
+    reason: str
+
+
+class SourcesRefetched(BaseModel):
+    """Итог повтора получения по нескольким кодам: что перекачано и что пропущено.
+
+    Два списка вместо одного, потому что вопросов у агента тоже два: «что теперь читать»
+    (``sources`` со свежим статусом) и «почему часть кодов ничего не дала» (``skipped``) —
+    склеенные в один список, они заставляли бы отличать одно от другого по пустым полям.
+    """
+
+    sources: list["ResearchSourceDocumentRow"] = []
+    skipped: list[SkippedCode] = []
 
 
 class AreaCreated(BaseModel):
@@ -211,13 +291,22 @@ class NoteDetail(BaseModel):
 
 
 class ResearchListRow(BaseModel):
-    """Строка списка исследований — со счётчиками (области/поиски/принято/отсеяно); ``updated_at`` последним."""
+    """Строка списка исследований — полка (опознание + вид) + счётчики; ``updated_at`` последним.
+
+    Вид полки (``group_icon``/``group_color``) едет вместе со строкой, а не добирается вторым
+    запросом за списком полок: строка и так знает, к какой полке относится, и отдать её метку
+    сразу дешевле, чем заставлять каждого потребителя списка держать ещё и справочник.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
     code: ResearchCode
     title: str
     description: str = ""
+    group_code: GroupCode | None = None
+    group_name: str = ""
+    group_icon: str = ""
+    group_color: str = ""
     area_count: int = 0
     query_count: int = 0
     document_kept: int = 0
@@ -226,13 +315,15 @@ class ResearchListRow(BaseModel):
 
 
 class ResearchDetail(BaseModel):
-    """Исследование + тело + области, запросы и заметки; ``updated_at`` последним."""
+    """Исследование + полка + тело + области, запросы и заметки; ``updated_at`` последним."""
 
     model_config = ConfigDict(from_attributes=True)
 
     code: ResearchCode
     title: str
     description: str = ""
+    group_code: GroupCode | None = None
+    group_name: str = ""
     body: str = ""
     areas: list[AreaRow] = []
     queries: list[ResearchSourceQueryRow] = []
@@ -256,6 +347,17 @@ class BodyView(BaseModel):
     updated_at: DatetimeUTCStr
 
 
+class DeepSearchResult(BaseModel):
+    """Коды сущностей, у которых запрос нашёлся **в теле**.
+
+    Только коды: фронт уже держит сами строки — ему нужно лишь, какие из них подсветить.
+    """
+
+    areas: list[AreaCode] = []
+    notes: list[NoteCode] = []
+    sources: list[SourceDocumentCode] = []
+
+
 class ReferencesBody(BaseModel):
     """Тело запроса разрешения ссылок-кодов в теле — набор ``TYPE@hash`` (или голых)."""
 
@@ -270,8 +372,40 @@ class CodeLabel(BaseModel):
 
 
 if TYPE_CHECKING:
+    from src.modules.research.models.group import ResearchGroup
+    from src.modules.research.models.research import Research
     from src.modules.research.models.source_document import ResearchSourceDocument
     from src.modules.web_search.models.page import WebSearchPage
+
+
+def group_fields(group: "ResearchGroup | None") -> dict:
+    """Пара полей полки для контрактов исследования; нет группы → ``None`` + пустое имя."""
+    return dict(
+        group_code=group.code if group else None,
+        group_name=group.title if group else "",
+    )
+
+
+def group_style_fields(group: "ResearchGroup | None") -> dict:
+    """Как полку рисовать — иконка и цвет. Отдельно от ``group_fields``, потому что нужны они
+    только интерфейсу: MCP-контракты делят с ним опознание полки (код и имя), но не её вид."""
+    return dict(
+        group_icon=group.icon if group else "",
+        group_color=group.color if group else "",
+    )
+
+
+def research_list_item(
+    row: "Research", group: "ResearchGroup | None"
+) -> ResearchListItem:
+    """Строка research_list: свои поля + имя полки из join'а группы."""
+    return ResearchListItem(
+        code=row.code,
+        title=row.title,
+        description=row.description,
+        **group_fields(group),
+        updated_at=row.updated_at,
+    )
 
 
 def _source_document_fields(
@@ -306,6 +440,9 @@ def source_document_detail(
 
 
 __all__ = [
+    "GroupCreated",
+    "GroupRow",
+    "GroupListRow",
     "ResearchCreated",
     "ResearchScan",
     "ResearchListItem",
@@ -322,12 +459,17 @@ __all__ = [
     "ResearchSourceQueryRow",
     "ResearchSourceDocumentRow",
     "ResearchSourceDocumentDetail",
+    "SkippedCode",
+    "SourcesRefetched",
     "ResearchListRow",
     "ResearchDetail",
     "SourceQueryDetail",
     "BodyView",
     "ReferencesBody",
     "CodeLabel",
+    "group_fields",
+    "group_style_fields",
+    "research_list_item",
     "source_document_row",
     "source_document_detail",
 ]

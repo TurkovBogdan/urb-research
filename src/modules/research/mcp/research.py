@@ -10,8 +10,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from src.modules.research.codes import code_prefix, strip_prefix
-from src.modules.research.constants import AREA_CODE_PREFIX, RESEARCH_CODE_PREFIX
+from src.modules.research.constants import (
+    AREA_CODE_PREFIX,
+    DOC_ERROR,
+    DOC_PENDING,
+    RESEARCH_CODE_PREFIX,
+)
 from src.modules.research.crud import area as area_crud
+from src.modules.research.crud import group as group_crud
 from src.modules.research.crud import note as note_crud
 from src.modules.research.crud import research as research_crud
 from src.modules.research.crud import source_document as source_document_crud
@@ -25,13 +31,27 @@ from src.modules.research.dto import (
     ResearchSourceDocumentRow,
     ResearchSourceQueryRow,
     ResearchView,
+    group_fields,
+    research_list_item,
     source_document_row,
 )
+from src.modules.web_search.constants import FETCH_STATUS_ERROR
 from src.modules.web_search.crud import query_result as query_result_crud
+from src.modules.web_search.models.page import WebSearchPage
 from src.modules.web_search.services.searcher import Searcher
 
 if TYPE_CHECKING:  # fork fastmcp — только backend (через mcp_server(ctx))
     from fastmcp import FastMCP
+
+
+def _initial_source_status(page: WebSearchPage) -> str:
+    """Стартовый статус источника: материал не дошёл → ``error``, иначе ждёт разбора.
+
+    Мостик между машинами статусов двух модулей: провал получения (``web_search_page.status``)
+    держит источник вне очереди на разбор — иначе он попадёт к агенту как обычный ``pending``
+    с пустым телом.
+    """
+    return DOC_ERROR if page.status == FETCH_STATUS_ERROR else DOC_PENDING
 
 
 def _oldest_first(rows: list) -> list:
@@ -39,11 +59,24 @@ def _oldest_first(rows: list) -> list:
     return sorted(rows, key=lambda row: row.updated_at)
 
 
+async def _resolve_group(group_code: str | None):
+    """Голый код полки → её строка; ``""``/``None`` — полка не задана. Промах кода — ошибка."""
+    if not group_code:
+        return None
+    group = await group_crud.group_get(group_code)
+    if group is None:
+        raise ValueError(f"Group {group_code} not found.")
+    return group
+
+
 def register(mcp: "FastMCP") -> None:
 
     @mcp.tool()
     async def research_create(
-        title: str, description: str | None = None, body: str | None = None
+        title: str,
+        description: str | None = None,
+        body: str | None = None,
+        group_code: str | None = None,
     ) -> ResearchCreated:
         """Start a research (knowledge artifact) and register it. Returns only its code.
 
@@ -51,9 +84,13 @@ def register(mcp: "FastMCP") -> None:
             title: The research title / name (up to 128 chars).
             description: Optional short description / abstract (up to 512 chars).
             body: Optional main body in markdown (fill in as the research progresses).
+            group_code: Optional GROUP@ code to file this research under (see group_list).
+                Grouping is cosmetic shelving — skip it unless the user asked for it.
         """
+        group_code = strip_prefix(group_code)
+        await _resolve_group(group_code)
         row = await research_crud.research_create(
-            title=title, description=description, body=body
+            title=title, description=description, body=body, group_code=group_code
         )
         return ResearchCreated.model_validate(row)
 
@@ -62,21 +99,25 @@ def register(mcp: "FastMCP") -> None:
         """Return one research in full — its fields and body, plus its areas and notes.
 
         Areas and notes are the scan layer (code, title, description, updated_at),
-        ordered by update time oldest first.
+        ordered by update time oldest first. group_code / group_name say which shelf the
+        research is filed under (empty when it is not filed anywhere); group_name is derived
+        from the group, so rename a shelf with group_update, never here.
 
         Args:
             research_code: The research code returned by research_create.
         """
         research_code = strip_prefix(research_code)
-        row = await research_crud.research_get(research_code)
-        if row is None:
+        found = await research_crud.research_get_with_group(research_code)
+        if found is None:
             raise ValueError(f"Research {research_code} not found.")
+        row, group = found
         areas = await area_crud.area_list_by_research(research_code)
         notes = await note_crud.note_list_by_research(research_code)
         return ResearchView(
             code=row.code,
             title=row.title,
             description=row.description,
+            **group_fields(group),
             body=row.body,
             areas=[AreaScan.model_validate(a) for a in _oldest_first(areas)],
             notes=[NoteScan.model_validate(n) for n in _oldest_first(notes)],
@@ -84,10 +125,25 @@ def register(mcp: "FastMCP") -> None:
         )
 
     @mcp.tool()
-    async def research_list() -> list[ResearchListItem]:
-        """List all researches, most recently updated first (code, title, description, updated_at)."""
-        rows = await research_crud.research_list()
-        return [ResearchListItem.model_validate(r) for r in rows]
+    async def research_list(group_code: str | None = None) -> list[ResearchListItem]:
+        """List researches, most recently updated first.
+
+        Each row: code, title, description, its group (group_code / group_name — empty when the
+        research is not filed on a shelf) and updated_at.
+
+        Args:
+            group_code: Omit for every research; pass a GROUP@ code for that shelf only, or an
+                empty string for the researches that sit on no shelf.
+        """
+        group_code = strip_prefix(group_code)
+        if group_code:
+            await _resolve_group(group_code)
+        return [
+            research_list_item(row, group)
+            for row, group in await research_crud.research_list_with_group(
+                group_code=group_code
+            )
+        ]
 
     @mcp.tool()
     async def research_update(
@@ -95,24 +151,41 @@ def register(mcp: "FastMCP") -> None:
         title: str | None = None,
         description: str | None = None,
         body: str | None = None,
+        group_code: str | None = None,
     ) -> ResearchScan:
-        """Update a research's title / description / body (omit a field to keep it).
+        """Update a research's title / description / body / group (omit a field to keep it).
 
-        Returns the updated scan (code, title, description). For incremental body edits use body_edit.
+        Returns the updated scan (code, title, description, group). For incremental body edits
+        use body_edit.
 
         Args:
             research_code: The research to update.
             title: New title (up to 128 chars), or omit to keep the current one.
             description: New short description (up to 512 chars), or omit to keep.
             body: New main body in markdown, or omit to keep the current one.
+            group_code: GROUP@ code to file this research under, or an empty string to take it
+                off its shelf; omit to keep. Optional — shelving is for the user's convenience.
         """
         research_code = strip_prefix(research_code)
+        group_code = strip_prefix(group_code)
+        group = await _resolve_group(group_code)
         row = await research_crud.research_update(
-            research_code, title=title, description=description, body=body
+            research_code,
+            title=title,
+            description=description,
+            body=body,
+            group_code=group_code,
         )
         if row is None:
             raise ValueError(f"Research {research_code} not found.")
-        return ResearchScan.model_validate(row)
+        if group is None and row.group_code:
+            group = await group_crud.group_get(row.group_code)
+        return ResearchScan(
+            code=row.code,
+            title=row.title,
+            description=row.description,
+            **group_fields(group),
+        )
 
     @mcp.tool()
     async def research_delete(research_code: str) -> bool:
@@ -130,13 +203,19 @@ def register(mcp: "FastMCP") -> None:
         """Run a web search for an area and return the sources it found (blocking).
 
         Runs web_search to completion, records the run as a source-query under the area's
-        research, registers each found page as a `pending` source, and returns the source
-        list (no body — read one with source_get). Prefer delegating an area's searches to a
-        dedicated sub-agent: the call blocks and every returned source must then be reviewed.
+        research, registers each found page as a source, and returns the source list (no body —
+        read one with source_get). Prefer delegating an area's searches to a dedicated
+        sub-agent: the call blocks and every returned source must then be reviewed.
 
         NEXT STEP IS MANDATORY: every source comes back `pending`. Read each with source_get
         and judge it with source_review (keep/filter + relevance) before writing any synthesis —
         a source left `pending` is unfinished work.
+
+        FETCHING IS SEPARATE FROM SEARCHING and can fail on its own: a source whose page did
+        not download comes back `error` instead of `pending`, and has no body to read. Nothing
+        is loading in the background — the run is already finished, so never wait or poll for a
+        body to appear. Do NOT review an `error` source and do NOT judge it from its `summary`:
+        that text is the search engine's snippet, not the material.
 
         Args:
             area_code: The area to search sources for (its research is taken from the area).
@@ -161,6 +240,7 @@ def register(mcp: "FastMCP") -> None:
                 query_code=sq.code,
                 page_code=page.code,
                 summary=result.summary,
+                status=_initial_source_status(page),
             )
             sources.append(source_document_row(doc, page))
         return sources

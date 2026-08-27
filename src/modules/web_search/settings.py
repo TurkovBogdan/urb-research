@@ -19,6 +19,9 @@ FETCH_CONCURRENCY_DEFAULT = 5
 DEFAULT_PAGES_DEFAULT = 10
 MAX_CONCURRENT_SEARCHES_DEFAULT = 3
 
+_ENGINES = "Движки"
+_LIMITS = "Ограничения"
+
 SCHEMA = (
     ChoiceField(
         key="search_engine",
@@ -26,6 +29,7 @@ SCHEMA = (
         description="Движок, который по запросу возвращает ссылки.",
         default_=SEARCH_ENGINE_DEFAULT,
         options=(("tavily", "Tavily"), ("firecrawl", "Firecrawl"), ("xai", "Grok (xAI)")),
+        group=_ENGINES,
     ),
     ChoiceField(
         key="fetch_engine",
@@ -37,6 +41,7 @@ SCHEMA = (
             ("firecrawl", "Firecrawl"),
             ("web_scrapper", "daemon-web-scrapper"),
         ),
+        group=_ENGINES,
     ),
     IntField(
         key="default_pages",
@@ -45,6 +50,7 @@ SCHEMA = (
         default_=DEFAULT_PAGES_DEFAULT,
         min=1,
         max=50,
+        group=_LIMITS,
     ),
     IntField(
         key="max_concurrent_searches",
@@ -56,6 +62,7 @@ SCHEMA = (
         default_=MAX_CONCURRENT_SEARCHES_DEFAULT,
         min=1,
         max=50,
+        group=_LIMITS,
     ),
     IntField(
         key="fetch_concurrency",
@@ -64,6 +71,7 @@ SCHEMA = (
         default_=FETCH_CONCURRENCY_DEFAULT,
         min=1,
         max=50,
+        group=_LIMITS,
     ),
 )
 
