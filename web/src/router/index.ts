@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import { setupGuards } from './guards'
+import { setupRoutePrefetch } from './prefetch'
 import { setupChunkReload } from './reload'
 import { designSystemRoutes } from './design-system'
 import { coreConnectorsRoutes } from '../features/core_connectors/routes'
@@ -41,6 +42,7 @@ const router = createRouter({
 })
 
 setupGuards(router)
+setupRoutePrefetch(router)
 setupChunkReload(router)
 
 export default router

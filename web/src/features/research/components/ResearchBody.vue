@@ -44,6 +44,7 @@ const refLabels = computed<Record<string, string>>(() => {
 
 <template>
   <MarkdownRenderer
+    heavy
     :text="props.text"
     :ref-labels="refLabels"
     @headings="emit('headings', $event)"

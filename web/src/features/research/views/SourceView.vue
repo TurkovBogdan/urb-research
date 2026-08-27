@@ -72,7 +72,7 @@ watch(() => route.params.code, reload)
 
       <VCard variant="outlined" rounded="lg">
         <VCardText>
-          <MarkdownRenderer v-if="store.source.body" :text="store.source.body" />
+          <MarkdownRenderer v-if="store.source.body" heavy :text="store.source.body" />
           <div v-else class="no-content text-medium-emphasis">
             {{ t('research.source.detail.no_body') }}
           </div>

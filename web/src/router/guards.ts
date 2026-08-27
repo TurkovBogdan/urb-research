@@ -2,6 +2,7 @@ import type { RouteLocationNormalized, Router } from 'vue-router'
 import { startNavigationProgress, stopNavigationProgress } from './progress'
 import { dismissHoverTooltips } from './overlays'
 import { recordNavigation } from '@/composables/useNavigationHistory'
+import { beginRouteTransition, endRouteTransition } from '@/composables/useRouteTransition'
 import { clearShellError } from '@/composables/useShellError'
 import { i18n } from '@/plugins/i18n'
 
@@ -34,17 +35,24 @@ export function setupGuards(router: Router): void {
     // Экран отказа принадлежит адресу, на котором его показали: уходим с адреса — снимаем.
     clearShellError()
 
+    // Раньше, чем смонтируется новая вьюха: она обязана увидеть переход уже начатым, иначе
+    // отложит своё тяжёлое содержимое не на анимацию, а в никуда. Снимает флаг сам переход.
+    beginRouteTransition()
+
     // Arm the content-zone loading bar; the show-delay swallows instant swaps.
     startNavigationProgress()
     return true
   })
 
   // Destination resolved (incl. lazy chunk loaded) — drop the bar.
-  router.afterEach((to, from) => {
+  router.afterEach((to, from, failure) => {
     recordNavigation(from)
     stopNavigationProgress()
     applyDocumentTitle(to)
     focusContent()
+    // Сорвавшийся переход (повторная навигация на тот же адрес, отмена) до анимации не доходит,
+    // и снять флаг будет некому — страница осталась прежней, а ждать её въезда уже нечего.
+    if (failure) endRouteTransition()
   })
   // Aborted/failed navigation never reaches afterEach — clear the bar here too.
   router.onError(() => stopNavigationProgress())

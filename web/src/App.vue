@@ -7,6 +7,7 @@ import AppSidebar from '@/layout/components/AppSidebar.vue'
 import ErrorScreen from '@/components/ErrorScreen.vue'
 import ToastStack from '@/components/ToastStack.vue'
 import { navigationLoading } from '@/router/progress'
+import { endRouteTransition } from '@/composables/useRouteTransition'
 import { shellError } from '@/composables/useShellError'
 import { useLayoutStore } from '@/layout/store'
 
@@ -70,8 +71,18 @@ const transitionName = computed(() => route.meta.transition ?? 'page')
            том же адресе: уход на отдельный `/403` стёр бы единственную улику — что человек
            открывал. Снимает его следующая навигация (гвард роутера). -->
       <ErrorScreen v-if="shellError" :kind="shellError" class="h-100" />
+      <!-- Конец въезда — единственный момент, когда точно известно, что анимация отыграна:
+           до него страницы придерживают тяжёлое содержимое (useRouteTransition). Отменённый
+           въезд (следующая навигация обогнала анимацию) считается тем же концом — ждать
+           перехода, которого уже нет, нельзя. -->
       <RouterView v-else v-slot="{ Component }">
-        <Transition :name="transitionName" mode="out-in" appear>
+        <Transition
+          :name="transitionName"
+          mode="out-in"
+          appear
+          @after-enter="endRouteTransition"
+          @enter-cancelled="endRouteTransition"
+        >
           <KeepAlive>
             <component :is="Component" class="h-100" />
           </KeepAlive>

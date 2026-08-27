@@ -64,7 +64,7 @@ watch(
 
       <VCard variant="outlined" rounded="lg">
         <VCardText>
-          <MarkdownRenderer v-if="store.page.body" :text="store.page.body" />
+          <MarkdownRenderer v-if="store.page.body" heavy :text="store.page.body" />
           <div v-else class="no-content text-medium-emphasis">
             {{ t('web_search.page.detail.no_content') }}
           </div>
