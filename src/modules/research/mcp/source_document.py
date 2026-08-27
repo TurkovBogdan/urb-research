@@ -105,7 +105,7 @@ def register(mcp: "FastMCP") -> None:
     ) -> list[ResearchSourceDocumentRow]:
         """List sources under a research / area / query, in search-launch order.
 
-        The level is taken from the code prefix (RESEARCH@ / AREA@ / QUERY@); url/title come
+        The level is the kind of code you pass (RESEARCH@ / AREA@ / QUERY@); url/title come
         joined from the page. Sources are found by query_search_run — there is no manual create.
 
         Args:
@@ -180,11 +180,11 @@ def register(mcp: "FastMCP") -> None:
         """Review a source in one call — decision + rating. Sets the source's status.
 
         Every source starts `pending` and must be reviewed; review them all before writing the
-        area/research synthesis. A `keep` source is one you will cite in a body as SOURCE@<code>.
+        area/research synthesis. A `keep` source is one you will cite in a body by its code.
 
         Args:
             source_code: The source to review.
-            decision: `keep` (goes into the synthesis, cite it as SOURCE@<code>) or `filter`
+            decision: `keep` (goes into the synthesis, cite it by its code) or `filter`
                 (rejected — give a reason in note).
             relevance: Importance 1–10 (1 = junk, 5 = medium/duplicate, 10 = key).
             note: Reason / usefulness — mainly for a filtered source.

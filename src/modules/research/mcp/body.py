@@ -27,8 +27,9 @@ def register(mcp: "FastMCP") -> None:
     ) -> BodyView:
         """Edit the body of a RESEARCH@ / AREA@ / NOTE@ entity. Returns the updated body.
 
-        Cite the sources you kept inline as SOURCE@<code> — they render as links in the user's
-        interface. Only cite reviewed, kept sources; never invent a code.
+        Any code written into a body — a source you kept, a sibling area, a note, a search —
+        renders as a link to that entity in the user's interface. Write it plain: no backticks,
+        quotes, brackets or escaping. Only cite reviewed, kept sources; never invent a code.
 
         Actions:
         - `set` — replace the whole body with `text`.
@@ -70,8 +71,9 @@ def register(mcp: "FastMCP") -> None:
     ) -> BodyView:
         """Add text to the body of a RESEARCH@ / AREA@ / NOTE@ entity. Returns the updated body.
 
-        Cite the sources you kept inline as SOURCE@<code> — they render as links in the user's
-        interface. Only cite reviewed, kept sources; never invent a code.
+        Any code written into a body — a source you kept, a sibling area, a note, a search —
+        renders as a link to that entity in the user's interface. Write it plain: no backticks,
+        quotes, brackets or escaping. Only cite reviewed, kept sources; never invent a code.
 
         Positions:
         - `start` / `end` — prepend / append to the whole body.
