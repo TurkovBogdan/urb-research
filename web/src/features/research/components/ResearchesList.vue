@@ -182,16 +182,20 @@ function afterChange() {
         </VCard>
       </div>
 
-      <!-- Полоса на полотне: линейка ей не нужна, отделять себя от плиток нечем и не от чего. -->
-      <TablePaginationBar
-        :page="store.page"
-        :page-size="store.pageSize"
-        :total="store.total"
-        :page-count="store.pageCount"
-        :divider="false"
-        @update:page="onPageChange"
-        @update:page-size="onPageSizeChange"
-      />
+      <!-- Постраничность в своей карточке — зеркало панели фильтров сверху: обе не часть сетки,
+           а управление ею, и на голом полотне висели бы без опоры. Линейка внутри не нужна:
+           карточка и есть граница, отделять полосу больше не от чего. -->
+      <VCard variant="outlined" rounded="lg" class="mt-3">
+        <TablePaginationBar
+          :page="store.page"
+          :page-size="store.pageSize"
+          :total="store.total"
+          :page-count="store.pageCount"
+          :divider="false"
+          @update:page="onPageChange"
+          @update:page-size="onPageSizeChange"
+        />
+      </VCard>
     </template>
 
     <!-- ТАБЛИЦА: фильтры, строки и постраничность — одна карточка, отбитые линейками. -->
@@ -284,12 +288,28 @@ function afterChange() {
   min-height: 120px;
 }
 
-/* Колонка не уже 300px — в неё должны помещаться четыре подписанных счётчика в один ряд.
-   Отступов у сетки нет: она лежит на полотне страницы, а поля страницы дал `PageLayout`. */
+/* Колонка не уже 300px — на этой ширине подвал плитки ещё держит плашку полки и дату одной
+   строкой. Отступов у сетки нет: она лежит на полотне страницы, а поля страницы дал `PageLayout`.
+
+   Сверху колонки ограничены числом: на широком мониторе `auto-fill` набирал пятую и шестую, и
+   плитка вырождалась в узкую полоску, где название переносится на четыре строки. Потолок задан
+   не медиазапросом, а нижней границей самой дорожки — «не уже доли ряда»: пока ряд узкий,
+   работает пол в 300px и колонок становится 3, 2, 1, а как только доля ряда его перерастает,
+   ширина дорожки упирается в неё, и больше `--cards-max-columns` штук уже не помещается. */
 .cards__grid {
+  --cards-gap: 12px;
+  --cards-max-columns: 4;
+  --cards-min-column: 300px;
+  --cards-column-share: calc(
+    (100% - (var(--cards-max-columns) - 1) * var(--cards-gap)) / var(--cards-max-columns)
+  );
+
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(max(var(--cards-min-column), var(--cards-column-share)), 1fr)
+  );
+  gap: var(--cards-gap);
 }
 
 /* Плитка одной высоты с соседками по ряду, а дата и группа прижаты к её низу: иначе подвал
