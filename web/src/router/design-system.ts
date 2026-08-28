@@ -54,6 +54,8 @@ const PAGES: Record<string, string> = {
   'section-header': 'structure/SectionHeaderView',
   kanban:          'interface/KanbanView',
   'edge-scroller': 'interface/EdgeScrollerView',
+  'research-card': 'project/ResearchCardView',
+  'group-select':  'project/GroupSelectView',
 }
 
 // Статический глоб: путь к вьюхе — переменная, а сборщику нужен разбираемый шаблон.

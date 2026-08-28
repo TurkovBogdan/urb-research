@@ -11,7 +11,7 @@ import {
   IconLayoutBottombarExpand, IconToggleLeft, IconPaperclip,
   IconMessages, IconMail, IconChevronDown, IconUsersGroup, IconMoodSmile,
   IconMoodSad, IconHeading, IconPalette, IconBrush, IconLayoutList, IconLayoutNavbar,
-  IconSearch,
+  IconSearch, IconFileText, IconFolders,
 } from '@tabler/icons-vue'
 import type { TablerIcon } from '@/shared/nav'
 import PageLayout from '@/layout/templates/PageLayout.vue'
@@ -116,6 +116,15 @@ const groups: Group[] = [
     pages: [
       { slug: 'kanban',        icon: IconLayoutKanban },
       { slug: 'edge-scroller', icon: IconArrowsHorizontal },
+    ],
+  },
+  // Проектные — то, что живёт в `features/` и знает про домен (исследования, полки). Остальные
+  // разделы держат кирпичи, которые можно унести в любой проект; эти — нет.
+  {
+    key: 'project',
+    pages: [
+      { slug: 'research-card', icon: IconFileText },
+      { slug: 'group-select',  icon: IconFolders },
     ],
   },
 ]

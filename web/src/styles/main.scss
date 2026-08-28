@@ -438,13 +438,17 @@ a { color: var(--accent); text-decoration: none; &:hover { text-decoration: unde
   &::before,
   &::after { box-shadow: none !important; }
 
+  // Обводку красит цвет САМОЙ карточки, если она его несёт (`.color-tones` + шаги палитры на
+  // элементе): полка и лежащие на ней исследования выделяются своим цветом, а не общим акцентом.
+  // Без цвета переменных нет, и запасной путь оставляет прежний акцент.
+  //
   // .v-card--link:hover (0,2,0) перебивает глобальный a:hover (0,1,1) без !important
-  &:hover { border-color: var(--accent); text-decoration: none; }
+  &:hover { border-color: var(--gc-ink, var(--accent)); text-decoration: none; }
 
   &:focus-visible {
     outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px var(--accent-soft) !important;
+    border-color: var(--gc-ink, var(--accent));
+    box-shadow: 0 0 0 2px var(--gc-fill, var(--accent-soft)) !important;
   }
 }
 
@@ -813,6 +817,11 @@ a { color: var(--accent); text-decoration: none; &:hover { text-decoration: unde
   box-shadow: 0 8px 24px rgba(0,0,0,.12) !important;  // inline elevation
   font-family: var(--font);
   padding: 4px;
+
+  // Иконка пункта отбита от подписи на 32px по умолчанию — место под аватарку, которой в
+  // выпадающих списках не бывает: на такой ширине иконки и подписи читаются как два
+  // несвязанных столбца. 10px — та же величина, что в боковом меню.
+  --v-list-prepend-gap: 10px;
 
   // Меньше отступ слева только в сценарии с чекбоксом (множественный выбор) —
   // одиночные списки без чекбокса сохраняют стандартный отступ.
@@ -1224,4 +1233,47 @@ a { color: var(--accent); text-decoration: none; &:hover { text-decoration: unde
 .icon-spin {
   animation: icon-spin 0.7s linear infinite;
   display: inline-block;
+}
+
+// ── Utility: поле с приросшей кнопкой (.field-group) ──────────────────────────
+// Пара «выпадающий список + иконочная кнопка», которая читается как одна ручка: направление
+// сортировки бессмысленно без поля, по которому сортируют, а кнопка на отступе рядом выглядит
+// самостоятельным действием. Живой пример и сниппет — /design-system/selects.
+//
+// Скругления срезаются на стыке, кнопка сдвинута на пиксель — иначе границы соседей рисуются
+// подряд и стык выходит вдвое толще. Коробка кнопки задана здесь же и следует за её density:
+// density правит только высоту, а сторону иконочной кнопки Vuetify считает от неё — без ширины
+// выходит прямоугольник.
+//
+// Склейка — про вид, а не про поведение: поле и кнопка делают разное, поэтому наведение и фокус
+// у каждой половины свои. Общий стык при этом рисует кнопка (см. её z-index ниже).
+.field-group {
+  display: flex;
+  align-items: stretch;
+
+  .v-field {
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
+  }
+}
+
+// Селектор с `.v-btn` намеренно: скругление иконочной кнопке задаёт `.v-btn.v-btn--icon` выше по
+// файлу, и правило в один класс до него не дотягивается — левые углы остались бы круглыми, а
+// стык с полем не склеился бы.
+.field-group__btn.v-btn {
+  // Стык у пары общий — границы наложены друг на друга, — и рисует его кнопка: без этого
+  // подсвеченное поле забирает столбец себе (его обводка позиционирована и лежит выше), и
+  // кнопка рядом с подсвеченным полем читается незакрытой слева.
+  position: relative;
+  z-index: 1;
+
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  margin-inline-start: -1px;
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+
+  &.v-btn--density-comfortable { width: 32px; min-width: 32px; height: 32px; }
+  &.v-btn--density-compact     { width: 28px; min-width: 28px; height: 28px; }
 }
