@@ -86,6 +86,7 @@ from src.modules.research.services.search import search_bodies, search_groups, s
 router = APIRouter()
 
 _MAX_PAGE_SIZE = 200
+_DEFAULT_PAGE_SIZE = 100
 # Значение ``group_code`` в списке, означающее «только не разложенные по группам».
 # Строка, а не ``None``: ``None`` в query-параметре неотличим от «параметр не передан».
 _UNGROUPED = ""
@@ -261,7 +262,7 @@ async def list_researches(
     ),
     sort_dir: str = Query("desc", pattern="^(asc|desc)$"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=_MAX_PAGE_SIZE),
+    page_size: int = Query(_DEFAULT_PAGE_SIZE, ge=1, le=_MAX_PAGE_SIZE),
 ) -> Paged[ResearchListRow]:
     group_code = strip_prefix(group_code)
     if group_code:

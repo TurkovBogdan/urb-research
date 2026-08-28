@@ -21,7 +21,7 @@ export const useResearchesStore = defineStore('research-researches', () => {
   const sortBy = ref<ResearchSortBy>('created_at')
   const sortDir = ref<SortDir>('desc')
   const page = ref(1)
-  const pageSize = ref(50)
+  const pageSize = ref(100)
 
   const items = ref<ResearchListRow[]>([])
   const total = ref(0)
