@@ -3,10 +3,10 @@
 // Данные и пагинация берутся из общего стора: обе страницы показывают один и тот же список,
 // отличаясь только тем, выставлен ли в сторе groupCode.
 //
-// Раскладок две — таблица и плитки, — и различаются они РОВНО отрисовкой строки: содержимое,
-// действия, фильтры, постраничность и окна у них общие. Поэтому раскладка выбирается внутри
-// одной карточки, а не отдельным компонентом на каждую: второй компонент означал бы два списка,
-// расходящиеся при первом же новом действии.
+// Раскладок три — таблица, плитки и плитки по полкам, — и различаются они РОВНО отрисовкой
+// строк: содержимое, действия, фильтры, постраничность и окна у них общие. Поэтому раскладка
+// выбирается внутри одной карточки, а не отдельным компонентом на каждую: второй компонент
+// означал бы два списка, расходящиеся при первом же новом действии.
 //
 // Карточка со всей обвязкой (фильтры → список → постраничность) — та же анатомия, что у таблицы
 // источников (`DocumentsTable`). Фильтры приходят слотом, потому что владеет ими страница:
@@ -15,15 +15,18 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import TablePaginationBar from '@/components/TablePaginationBar.vue'
+import { errorText } from '@/api/errorText'
 import { useSettingsStore } from '@/stores/settings'
 import { fmtDateTime } from '@/shared/utils/date'
 
+import GroupHeading from './GroupHeading.vue'
+import ResearchCard from './ResearchCard.vue'
 import ResearchGroupDialog from './ResearchGroupDialog.vue'
+import ResearchRenameDialog from './ResearchRenameDialog.vue'
 import ResearchDeleteDialog from './ResearchDeleteDialog.vue'
 import ResearchRowActions from './ResearchRowActions.vue'
-import { groupColorVars } from '../constants/groupColors'
-import { groupIcon } from '../constants/groupIcons'
 import { useGroupsStore } from '../stores/groups.store'
 import { useResearchesStore } from '../stores/researches.store'
 import { setResearchGroup, type ResearchListRow } from '../api'
@@ -35,7 +38,10 @@ const router = useRouter()
 const store = useResearchesStore()
 const settings = useSettingsStore()
 
-const cards = computed(() => settings.lists.researchView === 'cards')
+// Разложить по полкам можно только реестр: на странице самой полки все плитки принадлежат ей
+// одной, и раздел повторял бы заголовок страницы. Там выбранная раскладка падает в общий поток.
+const grouped = computed(() => settings.lists.researchView === 'grouped' && store.groupCode === null)
+const tiled = computed(() => settings.lists.researchView !== 'table')
 const emptyText = computed(() => props.emptyText ?? t('research.research.list.empty'))
 
 const DESCRIPTION_MAX = 128
@@ -63,6 +69,58 @@ function openCode(code: string) {
   router.push(researchesPath(code))
 }
 
+// Плашка полки на плитке — ещё и фильтр реестра. На странице самой полки список уже сужен ею
+// (`groupCode` — контекст страницы), и плашка вела бы в саму себя, поэтому там она просто метка.
+const groupFilterable = computed(() => store.groupCode === null)
+
+function filterByGroup(code: string) {
+  if (store.groupFilter === code) return
+  store.groupFilter = code
+  store.resetPage()
+  store.load()
+}
+
+// ── Разделы полок ─────────────────────────────────────────────────────────────
+// Порядок разделов задаёт панель: полка встаёт туда, где в отсортированном списке встретилось
+// первое её исследование, — то есть разделы упорядочены тем же полем, что и сам список.
+// Внутри раздела порядок свой и всегда один: свежие сверху.
+//
+// Раскладываем ТУ ЖЕ страницу выдачи, что показывают остальные раскладки: постраничность общая,
+// и раздел здесь означает «эти исследования на текущей странице», а не всю полку целиком.
+interface ResearchSection {
+  /** Пустая строка — не разложенные: у псевдо-полки кода нет. */
+  code: string
+  title: string
+  icon: string
+  color: string
+  items: ResearchListRow[]
+}
+
+// Даты приходят в SQL-формате (`YYYY-MM-DD HH:MM:SS`) — он сортируется как строка.
+const byUpdatedAtDesc = (a: ResearchListRow, b: ResearchListRow) =>
+  b.updated_at.localeCompare(a.updated_at)
+
+const sections = computed<ResearchSection[]>(() => {
+  const byGroup = new Map<string, ResearchSection>()
+  for (const item of store.items) {
+    const code = item.group_code ?? ''
+    let section = byGroup.get(code)
+    if (!section) {
+      section = {
+        code,
+        title: code ? item.group_name : t('research.group.ungrouped.title'),
+        icon: item.group_icon,
+        color: item.group_color,
+        items: [],
+      }
+      byGroup.set(code, section)
+    }
+    section.items.push(item)
+  }
+  for (const section of byGroup.values()) section.items.sort(byUpdatedAtDesc)
+  return [...byGroup.values()]
+})
+
 function onPageChange(page: number) {
   store.page = page
   store.load()
@@ -74,18 +132,28 @@ function onPageSizeChange(size: number) {
   store.load()
 }
 
-// ── Группа и удаление ─────────────────────────────────────────────────────────
+// ── Переименование, группа и удаление ─────────────────────────────────────────
 // Строка, над которой открыто окно. Держим саму строку, а не код: окнам нужны и название, и
 // счётчики, а перечитывать их ради уже показанных на экране данных незачем.
+const renameTarget = ref<ResearchListRow | null>(null)
+const renameDialog = ref(false)
 const groupTarget = ref<ResearchListRow | null>(null)
 const groupDialog = ref(false)
 const deleteTarget = ref<ResearchListRow | null>(null)
 const deleteDialog = ref(false)
-// Отвязка идёт без окна, поэтому у неё есть своё «в полёте» — иначе повторный клик по пункту
-// отправил бы второй запрос.
-const detaching = ref<string | null>(null)
+const detachTarget = ref<ResearchListRow | null>(null)
+const detachDialog = ref(false)
+const detaching = ref(false)
+// Отказ показываем в самом окне, рядом с кнопкой: тост увёл бы сообщение из поля зрения,
+// а окно остаётся открытым — видно, что полка не снята.
+const detachError = ref<string | null>(null)
 
 const groupsStore = useGroupsStore()
+
+function openRenameDialog(research: ResearchListRow) {
+  renameTarget.value = research
+  renameDialog.value = true
+}
 
 function openGroupDialog(research: ResearchListRow) {
   groupTarget.value = research
@@ -97,18 +165,27 @@ function openDeleteDialog(research: ResearchListRow) {
   deleteDialog.value = true
 }
 
-/** Отвязка обратима и выбора не требует — окна ей не нужно. */
-async function detach(research: ResearchListRow) {
-  if (detaching.value) return
-  detaching.value = research.code
+// Отвязка обратима, но незаметна: строка просто уезжает из полки, и промахнувшийся по соседнему
+// пункту меню узнаёт об этом, только заметив пропажу. Поэтому спрашиваем.
+function openDetachDialog(research: ResearchListRow) {
+  detachTarget.value = research
+  detachError.value = null
+  detachDialog.value = true
+}
+
+async function detach() {
+  const research = detachTarget.value
+  if (!research || detaching.value) return
+  detaching.value = true
+  detachError.value = null
   try {
-    await setResearchGroup(research.code, null)
+    await setResearchGroup(research.code, null, { report: false })
+    detachDialog.value = false
     afterChange()
-  } catch {
-    // Отказ уже показан тостом (у пункта меню нет своего места под сообщение), а вся оставшаяся
-    // реакция — оставить строку в прежней группе, что и происходит без перезагрузки списка.
+  } catch (e) {
+    detachError.value = errorText(e)
   } finally {
-    detaching.value = null
+    detaching.value = false
   }
 }
 
@@ -125,7 +202,7 @@ function afterChange() {
          вокруг дала бы рамку в рамке. Поэтому фильтры получают СВОЮ панель сверху — иначе им
          не в чем было бы жить. У таблицы наоборот: строки рамок не имеют, и панель с ними в одной
          карточке (ниже). -->
-    <template v-if="cards">
+    <template v-if="tiled">
       <VCard v-if="$slots.filters" variant="outlined" rounded="lg" class="filter-panel mb-3">
         <slot name="filters" />
       </VCard>
@@ -139,47 +216,45 @@ function afterChange() {
         <div class="cards__state text-medium-emphasis">{{ emptyText }}</div>
       </VCard>
 
-      <div v-else class="cards__grid">
-        <VCard
-          v-for="item in store.items"
-          :key="item.code"
-          variant="outlined"
-          rounded="lg"
-          class="card"
-          @click="openCode(item.code)"
-        >
-          <div class="card__head">
-            <h3 class="card__title">{{ item.title }}</h3>
-            <ResearchRowActions
+      <!-- Разложенные по полкам: те же плитки, но каждая полка — свой раздел под заголовком.
+           Плашка полки внутри плитки при этом убрана: раздел её уже назвал. -->
+      <div v-else-if="grouped" class="sections">
+        <section v-for="section in sections" :key="section.code" class="sections__item">
+          <GroupHeading
+            :title="section.title"
+            :icon="section.icon"
+            :color="section.color"
+            :ungrouped="!section.code"
+          />
+          <div class="cards__grid">
+            <ResearchCard
+              v-for="item in section.items"
+              :key="item.code"
               :research="item"
-              :detaching="detaching === item.code"
+              :with-group="false"
+              @open="openCode(item.code)"
+              @rename="openRenameDialog(item)"
               @group="openGroupDialog(item)"
-              @detach="detach(item)"
+              @detach="openDetachDialog(item)"
               @remove="openDeleteDialog(item)"
             />
           </div>
+        </section>
+      </div>
 
-          <p v-if="item.description" class="card__desc">
-            {{ truncate(item.description, DESCRIPTION_MAX) }}
-          </p>
-
-          <!-- Полка своей плашкой, как на карточке самой полки: иконка в цвете группы плюс имя.
-               Без полки подвал несёт только дату — пустой плашки «без группы» тут не нужно, её
-               отсутствие и есть ответ. -->
-          <footer class="card__foot">
-            <span
-              v-if="item.group_code"
-              class="card__group color-tones"
-              :style="groupColorVars(item.group_color)"
-            >
-              <span class="card__group-icon">
-                <component :is="groupIcon(item.group_icon)" :size="14" :stroke-width="1.7" />
-              </span>
-              {{ item.group_name }}
-            </span>
-            <span class="card__date">{{ fmtDateTime(item.updated_at) }}</span>
-          </footer>
-        </VCard>
+      <div v-else class="cards__grid">
+        <ResearchCard
+          v-for="item in store.items"
+          :key="item.code"
+          :research="item"
+          :group-filterable="groupFilterable"
+          @open="openCode(item.code)"
+          @rename="openRenameDialog(item)"
+          @group="openGroupDialog(item)"
+          @detach="openDetachDialog(item)"
+          @remove="openDeleteDialog(item)"
+          @filter-group="filterByGroup"
+        />
       </div>
 
       <!-- Постраничность в своей карточке — зеркало панели фильтров сверху: обе не часть сетки,
@@ -220,9 +295,9 @@ function afterChange() {
         <template #[`item.actions`]="{ item }">
           <ResearchRowActions
             :research="item"
-            :detaching="detaching === item.code"
+            @rename="openRenameDialog(item)"
             @group="openGroupDialog(item)"
-            @detach="detach(item)"
+            @detach="openDetachDialog(item)"
             @remove="openDeleteDialog(item)"
           />
         </template>
@@ -260,6 +335,12 @@ function afterChange() {
       />
     </VCard>
 
+    <!-- Переименование не трогает ни полки, ни счётчики — списку хватает своей перезагрузки. -->
+    <ResearchRenameDialog
+      v-model="renameDialog"
+      :research="renameTarget"
+      @saved="store.load()"
+    />
     <ResearchGroupDialog
       v-model="groupDialog"
       :research="groupTarget"
@@ -270,6 +351,22 @@ function afterChange() {
       :research="deleteTarget"
       @deleted="afterChange"
     />
+    <ConfirmDialog
+      v-model="detachDialog"
+      :title="t('research.research.detach.title')"
+      :confirm-label="t('research.research.action.unset_group')"
+      tone="primary"
+      :loading="detaching"
+      @confirm="detach"
+    >
+      {{ t('research.research.detach.text', {
+        title: detachTarget?.title ?? '',
+        group: detachTarget?.group_name ?? '',
+      }) }}
+      <VAlert v-if="detachError" type="error" variant="tonal" density="compact" class="mt-3">
+        {{ detachError }}
+      </VAlert>
+    </ConfirmDialog>
   </div>
 </template>
 
@@ -312,90 +409,18 @@ function afterChange() {
   gap: var(--cards-gap);
 }
 
-/* Плитка одной высоты с соседками по ряду, а дата и группа прижаты к её низу: иначе подвал
-   гулял бы по вертикали от длины описания, и ряд читался бы как набор разных карточек. */
-.card {
+/* Разделы полок отбиты друг от друга сильнее, чем плитки внутри раздела: расстояние и есть
+   граница раздела, а заголовок с линейкой лишь называет его. */
+.sections {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  cursor: pointer;
-  transition: border-color 0.12s ease, background 0.12s ease;
+  gap: 24px;
 }
 
-.card:hover {
-  border-color: var(--border);
-  background: var(--surface-hi);
-}
-
-/* Действия прижаты к правому краю и выровнены по ПЕРВОЙ строке названия: у длинного заголовка
-   центрирование увело бы их в середину плитки. */
-.card__head {
+.sections__item {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.card__title {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.4;
-  color: var(--text);
-}
-
-.card__desc {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--text-muted);
-}
-
-/* Подвал прижат к низу плитки: описание бывает и в строку, и в три, а ряд плиток должен
-   заканчиваться одной линией. */
-.card__foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: auto;
-  padding-top: 8px;
-  border-top: 1px solid var(--border-soft);
-}
-
-/* Полка названа иконкой в своём цвете + именем. Цвет несёт только иконка: именем он читался бы
-   как выделение, а плашка на всё имя спорила бы с рамкой самой плитки. */
-.card__group {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  font-size: 11px;
-  color: var(--text-muted);
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.card__group-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 6px;
-  flex: none;
-  /* Цвет полки, а без него — акцент: тот же запасной путь, что у карточки самой полки. */
-  color: var(--gc-ink, var(--accent));
-  background: var(--gc-fill, var(--accent-soft));
-}
-
-.card__date {
-  margin-left: auto;
-  font-size: 11px;
-  white-space: nowrap;
-  color: var(--text-faint);
+  flex-direction: column;
+  gap: 12px;
 }
 
 /* ── Таблица ────────────────────────────────────────────────────────────────── */

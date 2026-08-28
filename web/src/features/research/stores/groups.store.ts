@@ -10,6 +10,7 @@ import {
   type GroupSortBy,
   type SortDir,
 } from '../api'
+import { useGroupCatalogStore } from './group-catalog.store'
 
 // Полки реестра. Список короткий и без пагинации, а порядок задаёт бэк (сортировка — его белый
 // список ключей), поэтому стор сам ничего не сортирует: он лишь помнит выбор и перезапрашивает.
@@ -21,6 +22,8 @@ import {
 // коды приходят отдельно и работают маской (`visibleItems`). Поэтому сброс строки поиска ничего
 // не перезагружает, а счётчик на карточке остаётся счётчиком полки, а не находок.
 export const useGroupsStore = defineStore('research-groups', () => {
+  const catalog = useGroupCatalogStore()
+
   const items = ref<GroupListRow[]>([])
   const ungroupedCount = ref(0)
   const loading = ref(true)
@@ -58,6 +61,9 @@ export const useGroupsStore = defineStore('research-groups', () => {
       ])
       items.value = groups
       ungroupedCount.value = ungrouped.total
+      // Полки уже здесь — справочник забирает их без второго запроса; он же переживёт уход
+      // со страницы и накормит окна и фильтры (`group-catalog.store`).
+      catalog.adopt(groups)
     } catch (e) {
       error.value = e
     } finally {

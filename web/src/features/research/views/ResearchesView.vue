@@ -9,31 +9,30 @@ import SectionError from '@/components/SectionError.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { RESEARCH_LIST_VIEWS } from '@/constants/lists'
 
+import GroupSelect from '../components/GroupSelect.vue'
 import ResearchesList from '../components/ResearchesList.vue'
-import { useGroupsStore } from '../stores/groups.store'
+import { useGroupCatalogStore } from '../stores/group-catalog.store'
 import { useResearchesStore } from '../stores/researches.store'
 import { RESEARCH_SORT_FIELDS, UNGROUPED_CODE, type ResearchSortBy } from '../api'
 
 const { t } = useI18n()
 const store = useResearchesStore()
-const groupsStore = useGroupsStore()
+// Справочник полок нужен странице не ради выбора (его держит `GroupSelect`), а ради подписи
+// на чипе активного фильтра: там стоит имя выбранной полки.
+const groupCatalog = useGroupCatalogStore()
 // Тот же ключ, что и на странице настроек: выбор здесь — не «на этот раз», а смена предпочтения.
 const settings = useSettingsStore()
-
-// null — все полки; UNGROUPED_CODE — только не разложенные (бэк читает пустой код именно так).
-const groupOptions = computed(() => [
-  { title: t('research.research.filter.group_all'), value: null },
-  { title: t('research.group.ungrouped.title'), value: UNGROUPED_CODE },
-  ...groupsStore.items.map((g) => ({ title: g.title, value: g.code })),
-])
 
 const sortOptions = computed(() =>
   RESEARCH_SORT_FIELDS.map((field) => ({ title: t(`research.sort.by.${field}`), value: field })),
 )
 
-const groupFilterTitle = computed(() => (
-  groupOptions.value.find((o) => o.value === store.groupFilter)?.title ?? ''
-))
+// null — все полки; UNGROUPED_CODE — только не разложенные (бэк читает пустой код именно так).
+const groupFilterTitle = computed(() => {
+  if (store.groupFilter === null) return t('research.group.select.all')
+  if (store.groupFilter === UNGROUPED_CODE) return t('research.group.ungrouped.title')
+  return groupCatalog.items.find((group) => group.code === store.groupFilter)?.title ?? ''
+})
 
 const SEARCH_DEBOUNCE_MS = 350
 const queryInput = ref(store.query)
@@ -87,7 +86,6 @@ onActivated(() => {
     store.groupCode = null
     store.resetPage()
   }
-  if (!groupsStore.items.length) groupsStore.load()
   store.load()
 })
 </script>
@@ -123,40 +121,40 @@ onActivated(() => {
             clearable
             class="filter-grid__search"
           />
-          <VSelect
+          <GroupSelect
             :model-value="store.groupFilter"
-            :items="groupOptions"
-            :label="t('research.research.filter.group')"
-            :loading="groupsStore.loading"
-            variant="outlined"
-            density="comfortable"
-            hide-details
+            with-all
+            with-ungrouped
             class="filter-grid__select"
             @update:model-value="selectGroup"
           />
-          <VSelect
-            :model-value="store.sortBy"
-            :items="sortOptions"
-            :label="t('research.sort.label')"
-            variant="outlined"
-            density="comfortable"
-            hide-details
-            class="filter-grid__select filter-grid__sort"
-            @update:model-value="selectSortBy"
-          />
-          <VBtn
-            variant="outlined"
-            density="comfortable"
-            icon
-            :aria-label="t(`research.sort.${store.sortDir}`)"
-            @click="toggleSortDir"
-          >
-            <IconSortAscending v-if="store.sortDir === 'asc'" :size="18" />
-            <IconSortDescending v-else :size="18" />
-            <VTooltip activator="parent" location="top">
-              {{ t(`research.sort.${store.sortDir}`) }}
-            </VTooltip>
-          </VBtn>
+          <!-- Поле и направление — одна ручка (`.field-group`, см. /design-system/selects):
+               направление сортировки без поля, по которому сортируют, ничего не значит. -->
+          <div class="field-group filter-grid__sort">
+            <VSelect
+              :model-value="store.sortBy"
+              :items="sortOptions"
+              :label="t('research.sort.label')"
+              variant="outlined"
+              density="comfortable"
+              hide-details
+              @update:model-value="selectSortBy"
+            />
+            <VBtn
+              variant="outlined"
+              density="comfortable"
+              icon
+              class="field-group__btn"
+              :aria-label="t(`research.sort.${store.sortDir}`)"
+              @click="toggleSortDir"
+            >
+              <IconSortAscending v-if="store.sortDir === 'asc'" :size="16" />
+              <IconSortDescending v-else :size="16" />
+              <VTooltip activator="parent" location="top">
+                {{ t(`research.sort.${store.sortDir}`) }}
+              </VTooltip>
+            </VBtn>
+          </div>
 
           <!-- Раскладка стоит последней и отбита от фильтров: она не сужает список, а меняет
                то, как он нарисован. `mandatory` — снять обе кнопки нельзя, раскладка всегда есть. -->
@@ -201,18 +199,23 @@ onActivated(() => {
    источников (`.doc-filters`). Чипы дотягивают тот же отступ снизу, если они есть. */
 .filter-grid {
   display: grid;
-  grid-template-columns: 1fr auto auto auto auto;
+  grid-template-columns: 1fr auto auto auto;
   gap: 12px;
   align-items: center;
   padding: 12px;
 }
 
-/* Отбивка от кнопки направления: та относится к сортировке, а раскладка — сама по себе. */
+/* Отбивка от сортировки: направление принадлежит ей, а раскладка — сама по себе. */
 .filter-grid__view {
   margin-left: 4px;
 }
 
 .filter-grid__select {
+  width: 220px;
+}
+
+/* Ширину держит поле; кнопка направления приросла к нему справа и в неё не входит. */
+.filter-grid__sort .v-select {
   width: 220px;
 }
 

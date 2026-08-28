@@ -10,15 +10,12 @@ import { useI18n } from 'vue-i18n'
 import AppDialog from '@/components/AppDialog.vue'
 import { errorText } from '@/api/errorText'
 
+import GroupSelect from './GroupSelect.vue'
 import { deleteGroup, type GroupListRow, type ResearchesAction } from '../api'
 
 const open = defineModel<boolean>({ required: true })
 
-const props = defineProps<{
-  group: GroupListRow | null
-  /** Остальные полки — куда можно перевесить исследования. */
-  groups: GroupListRow[]
-}>()
+const props = defineProps<{ group: GroupListRow | null }>()
 const emit = defineEmits<{ deleted: [] }>()
 
 const { t } = useI18n()
@@ -29,10 +26,6 @@ const busy = ref(false)
 const error = ref<string | null>(null)
 
 const hasResearches = computed(() => (props.group?.research_count ?? 0) > 0)
-
-const targets = computed(() => props.groups
-  .filter(g => g.code !== props.group?.code)
-  .map(g => ({ title: g.title, value: g.code })))
 
 const blocked = computed(() => action.value === 'move' && !moveTo.value)
 
@@ -86,15 +79,12 @@ async function remove() {
         <VRadio :label="t('research.group.delete.action.delete')" value="delete" />
       </VRadioGroup>
 
-      <VSelect
+      <!-- Удаляемая полка из списка исключена: перевесить на неё нельзя. -->
+      <GroupSelect
         v-if="hasResearches && action === 'move'"
         v-model="moveTo"
-        :items="targets"
         :label="t('research.group.delete.move_to')"
-        :no-data-text="t('research.group.delete.no_targets')"
-        variant="outlined"
-        density="comfortable"
-        hide-details
+        :exclude="props.group?.code"
       />
 
       <p v-if="hasResearches && action === 'delete'" class="group-delete__warning">

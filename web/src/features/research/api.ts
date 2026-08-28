@@ -336,8 +336,12 @@ export async function deleteResearch(code: string, opts?: RequestOptions): Promi
 // Ручки узкие (`.../title`) и отдают свежую деталку целиком: название входит в неё, и страница
 // не собирает новое состояние из ответа и старого объекта по кусочкам.
 
-export async function renameResearch(code: string, title: string): Promise<ResearchDetail> {
-  return internalApi.put<ResearchDetail>(`${BASE}/researches/${seg(code)}/title`, { title })
+export async function renameResearch(
+  code: string,
+  title: string,
+  opts?: RequestOptions,
+): Promise<ResearchDetail> {
+  return internalApi.put<ResearchDetail>(`${BASE}/researches/${seg(code)}/title`, { title }, opts)
 }
 
 export async function renameArea(code: string, title: string): Promise<AreaDetail> {

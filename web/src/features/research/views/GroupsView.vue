@@ -124,30 +124,33 @@ function remove(group: GroupListRow) {
           :loading="store.searching"
         />
         <!-- Сортировка не сужает список, а переставляет его, поэтому стоит после поиска
-             и отбита от него. -->
-        <VSelect
-          :model-value="store.sortBy"
-          :items="sortOptions"
-          :label="t('research.sort.label')"
-          variant="outlined"
-          density="comfortable"
-          hide-details
-          class="filter-grid__sort"
-          @update:model-value="selectSortBy"
-        />
-        <VBtn
-          variant="outlined"
-          density="comfortable"
-          icon
-          :aria-label="t(`research.sort.${store.sortDir}`)"
-          @click="toggleSortDir"
-        >
-          <IconSortAscending v-if="store.sortDir === 'asc'" :size="18" />
-          <IconSortDescending v-else :size="18" />
-          <VTooltip activator="parent" location="top">
-            {{ t(`research.sort.${store.sortDir}`) }}
-          </VTooltip>
-        </VBtn>
+             и отбита от него. Поле и направление — одна ручка (`.field-group`, живой пример
+             на /design-system/selects): направление без поля ничего не значит. -->
+        <div class="field-group filter-grid__sort">
+          <VSelect
+            :model-value="store.sortBy"
+            :items="sortOptions"
+            :label="t('research.sort.label')"
+            variant="outlined"
+            density="comfortable"
+            hide-details
+            @update:model-value="selectSortBy"
+          />
+          <VBtn
+            variant="outlined"
+            density="comfortable"
+            icon
+            class="field-group__btn"
+            :aria-label="t(`research.sort.${store.sortDir}`)"
+            @click="toggleSortDir"
+          >
+            <IconSortAscending v-if="store.sortDir === 'asc'" :size="16" />
+            <IconSortDescending v-else :size="16" />
+            <VTooltip activator="parent" location="top">
+              {{ t(`research.sort.${store.sortDir}`) }}
+            </VTooltip>
+          </VBtn>
+        </div>
       </div>
     </VCard>
 
@@ -164,15 +167,18 @@ function remove(group: GroupListRow) {
     </div>
 
     <div v-else class="group-grid">
+      <!-- Цвет полки живёт на самой карточке: от него красится и плашка иконки, и обводка
+           выделения (`.v-card--link` в main.scss берёт `--gc-ink`). -->
       <VCard
         v-for="group in store.visibleItems"
         :key="group.code"
         variant="flat"
-        class="group-card"
+        class="group-card color-tones"
+        :style="groupColorVars(group.color)"
         :to="groupPath(group.code)"
       >
         <header class="group-card__header">
-          <span class="group-card__icon color-tones" :style="groupColorVars(group.color)">
+          <span class="group-card__icon">
             <component :is="groupIcon(group.icon)" :size="20" :stroke-width="1.6" />
           </span>
           <h3 class="group-card__title">{{ group.title }}</h3>
@@ -208,7 +214,7 @@ function remove(group: GroupListRow) {
               </VBtn>
             </template>
 
-            <VList density="compact" class="group-card__menu-list">
+            <VList density="compact">
               <VListItem :prepend-icon="IconPencil" @click="edit(group)">
                 <VListItemTitle>{{ t('common.action.edit') }}</VListItemTitle>
               </VListItem>
@@ -265,7 +271,6 @@ function remove(group: GroupListRow) {
     <GroupDeleteDialog
       v-model="deleteOpen"
       :group="removing"
-      :groups="store.items"
       @deleted="store.load"
     />
   </PageLayout>
@@ -282,21 +287,16 @@ function remove(group: GroupListRow) {
    висит пояснение, поэтому оно выше соседей — по центру селект и кнопка уехали бы вниз. */
 .filter-grid {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: 1fr auto;
   gap: 12px;
   align-items: start;
   padding: 12px;
 }
 
-.filter-grid__sort {
+/* Ширину держит поле; кнопка направления приросла к нему справа и в эту ширину не входит.
+   Коробка самой кнопки — в утилите `.field-group__btn` (main.scss). */
+.filter-grid__sort .v-select {
   width: 260px;
-}
-
-/* Кнопка направления — квадрат в высоту поля рядом: `density` правит только высоту, а сторону
-   иконочной кнопки Vuetify считает от неё же, и без явной ширины выходит прямоугольник. */
-.filter-grid .v-btn--icon {
-  width: 48px;
-  height: 48px;
 }
 
 .groups-empty {
@@ -390,13 +390,6 @@ function remove(group: GroupListRow) {
 
 /* Отметка «скопировано» держится полторы секунды — цвет успеха отличает её от обычного ховера. */
 .group-card__action--done { color: var(--success); }
-
-/* Vuetify отбивает иконку пункта от подписи на 32px (`--v-list-prepend-gap` по умолчанию, под
-   аватарки) — в узком выпадающем меню это читается как два несвязанных столбца. Десять — как
-   в боковом меню, которое ту же отбивку правит у себя (`main.scss`). */
-.group-card__menu-list {
-  --v-list-prepend-gap: 10px;
-}
 
 .group-card__menu-danger :deep(.v-list-item-title) { color: var(--error); }
 .group-card__menu-danger :deep(.v-list-item__prepend) { color: var(--error); }

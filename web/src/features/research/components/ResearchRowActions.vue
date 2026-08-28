@@ -2,8 +2,7 @@
 // Действия над исследованием: меню и копирование кода. Вынесено из списка, потому что обе его
 // раскладки — строка таблицы и карточка — предлагают ровно один и тот же набор.
 //
-// Компонент только спрашивает: окна держит список (одна пара на весь список, а не на строку),
-// а отвязку он же и выполняет. Сюда приходит лишь признак «эта строка сейчас отвязывается».
+// Компонент только спрашивает: окна держит список — по одному на действие, а не на строку.
 import { useI18n } from 'vue-i18n'
 import {
   IconCheck,
@@ -13,6 +12,7 @@ import {
   IconFolderPlus,
   IconFolderX,
   IconLayoutGrid,
+  IconPencil,
   IconTrash,
 } from '@tabler/icons-vue'
 
@@ -20,13 +20,9 @@ import { useClipboard } from '@/composables/useClipboard'
 
 import type { ResearchListRow } from '../api'
 
-const props = defineProps<{
-  research: ResearchListRow
-  /** Отвязка ИМЕННО этого исследования в полёте: пункт заперт от второго клика. */
-  detaching?: boolean
-}>()
+const props = defineProps<{ research: ResearchListRow }>()
 
-const emit = defineEmits<{ group: []; detach: []; remove: [] }>()
+const emit = defineEmits<{ rename: []; group: []; detach: []; remove: [] }>()
 
 const { t } = useI18n()
 const { copy, isCopied } = useClipboard()
@@ -53,7 +49,7 @@ const researchesPath = (code: string) => `/research/researches/${code}`
         </VBtn>
       </template>
 
-      <VList density="compact" class="row-actions__menu">
+      <VList density="compact">
         <VListItem :prepend-icon="IconFileText" :to="researchesPath(props.research.code)">
           <VListItemTitle>{{ t('research.research.action.open_card') }}</VListItemTitle>
         </VListItem>
@@ -67,6 +63,10 @@ const researchesPath = (code: string) => `/research/researches/${code}`
 
         <VDivider class="my-1" />
 
+        <VListItem :prepend-icon="IconPencil" @click="emit('rename')">
+          <VListItemTitle>{{ t('research.action.rename') }}</VListItemTitle>
+        </VListItem>
+
         <!-- Привязать и сменить — одно окно: у них общее поле, разный только заголовок. -->
         <VListItem :prepend-icon="IconFolderPlus" @click="emit('group')">
           <VListItemTitle>
@@ -78,7 +78,6 @@ const researchesPath = (code: string) => `/research/researches/${code}`
         <VListItem
           v-if="props.research.group_code"
           :prepend-icon="IconFolderX"
-          :disabled="props.detaching"
           @click="emit('detach')"
         >
           <VListItemTitle>{{ t('research.research.action.unset_group') }}</VListItemTitle>
@@ -137,12 +136,6 @@ const researchesPath = (code: string) => `/research/researches/${code}`
 .row-actions__btn:hover { color: var(--text); }
 
 .row-actions__btn--done { color: var(--success); }
-
-/* Vuetify отбивает иконку пункта от подписи на 32px (под аватарки) — в узком меню это читается
-   как два несвязанных столбца. */
-.row-actions__menu {
-  --v-list-prepend-gap: 10px;
-}
 
 /* Необратимый пункт назван цветом ещё до нажатия — иконка тоже, иначе подпись выглядит
    подкрашенной по ошибке. */

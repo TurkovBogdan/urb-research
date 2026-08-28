@@ -236,7 +236,7 @@ function onPageSizeChange(size: number) {
               </VBtn>
             </template>
 
-            <VList density="compact" class="doc-actions__menu">
+            <VList density="compact">
               <VListItem :prepend-icon="IconFileText" :to="sourcePath(item.code)">
                 <VListItemTitle>{{ t('research.doc.action.open_card') }}</VListItemTitle>
               </VListItem>
@@ -360,12 +360,6 @@ function onPageSizeChange(size: number) {
 .doc-actions__btn:hover { color: var(--text); }
 
 .doc-actions__btn--done { color: var(--success); }
-
-/* Vuetify отбивает иконку пункта от подписи на 32px (под аватарки) — в узком меню это читается
-   как два несвязанных столбца. */
-.doc-actions__menu {
-  --v-list-prepend-gap: 10px;
-}
 
 .doc-title {
   font-weight: 500;

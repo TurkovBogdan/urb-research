@@ -11,7 +11,7 @@ import { useI18n } from 'vue-i18n'
 import AppDialog from '@/components/AppDialog.vue'
 import { errorText } from '@/api/errorText'
 
-import { useGroupsStore } from '../stores/groups.store'
+import GroupSelect from './GroupSelect.vue'
 import { setResearchGroup, type ResearchListRow } from '../api'
 
 const open = defineModel<boolean>({ required: true })
@@ -20,7 +20,6 @@ const props = defineProps<{ research: ResearchListRow | null }>()
 const emit = defineEmits<{ saved: [] }>()
 
 const { t } = useI18n()
-const groupsStore = useGroupsStore()
 
 const groupCode = ref<string | null>(null)
 const saving = ref(false)
@@ -28,19 +27,13 @@ const error = ref<string | null>(null)
 
 const filing = computed(() => !props.research?.group_code)
 
-const targets = computed(() =>
-  groupsStore.items.map((group) => ({ title: group.title, value: group.code })),
-)
-
 /** Выбор ничего не меняет, пока это та же группа, — сохранять нечего. */
 const unchanged = computed(() => groupCode.value === (props.research?.group_code ?? null))
 
-// Группы нужны только этому окну: страница реестра их уже грузила, страница группы — нет.
 watch(open, (isOpen) => {
   if (!isOpen) return
   groupCode.value = props.research?.group_code ?? null
   error.value = null
-  if (!groupsStore.items.length) groupsStore.load()
 })
 
 async function save() {
@@ -71,15 +64,10 @@ async function save() {
     :close-disabled="saving"
   >
     <div class="research-group">
-      <VSelect
+      <!-- Полки, их вид и загрузку держит сам `GroupSelect`: окну остаётся значение. -->
+      <GroupSelect
         v-model="groupCode"
-        :items="targets"
         :label="t('research.research.group.field')"
-        :loading="groupsStore.loading"
-        :no-data-text="t('research.research.group.no_groups')"
-        variant="outlined"
-        density="comfortable"
-        hide-details
         autofocus
       />
 
