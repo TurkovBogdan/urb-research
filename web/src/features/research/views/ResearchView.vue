@@ -1,47 +1,51 @@
 <script setup lang="ts">
-import { computed, onActivated, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
-import { IconCheck, IconChevronRight, IconCopy, IconRefresh, IconSearch } from '@tabler/icons-vue'
+import { IconChevronRight, IconFolderPlus, IconFolderX } from '@tabler/icons-vue'
 
-import PageLayout from '@/layout/templates/PageLayout.vue'
-import PageHeader from '@/layout/components/PageHeader.vue'
+import DetailHead from '@/layout/components/DetailHead.vue'
+import { useDetailRail } from '@/layout/detailRail'
 import StatusBadge from '@/components/StatusBadge.vue'
 import SectionError from '@/components/SectionError.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
-import SectionNav, { type NavSection } from '@/components/SectionNav.vue'
+import { type NavSection } from '@/components/SectionNav.vue'
+import InlineEditBlock from '@/components/InlineEditBlock.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import type { HeadingAnchor } from '@/components/markdown/render'
-import { useClipboard } from '@/composables/useClipboard'
+import { errorText } from '@/api/errorText'
 import { useSettingsStore } from '@/stores/settings'
 import { fmtDateTime, fmtRelative } from '@/shared/utils/date'
 
-import ResearchBody from '../components/ResearchBody.vue'
-import DocumentsTable from '../components/DocumentsTable.vue'
+import BodySection from '../components/BodySection.vue'
+import SourcesSection from '../components/SourcesSection.vue'
 import TitleEditor from '../components/TitleEditor.vue'
-import { groupColorVars } from '../constants/groupColors'
-import { groupIcon } from '../constants/groupIcons'
+import GroupLink from '../components/GroupLink.vue'
+import ResearchGroupDialog from '../components/ResearchGroupDialog.vue'
 import { useResearchDetailStore } from '../stores/research-detail.store'
-import { useSourcesRefetch } from '../useSourcesRefetch'
-import { refetchResearchDocuments } from '../api'
+import { useDetailReload } from '../useDetailReload'
+import { UNGROUPED_CODE, setResearchGroup } from '../api'
 import { NOTE_KIND_COLOR } from '../labels'
 
 const { t } = useI18n()
-const route = useRoute()
 const router = useRouter()
 const store = useResearchDetailStore()
 const settings = useSettingsStore()
-const { copy, isCopied } = useClipboard()
 
 const go = (path: string) => router.push(path)
 
-// Куда возвращает шапка при прямом заходе (ссылка, перезагрузка): по истории идти некуда.
-const RESEARCHES_PATH = '/research/researches'
+// Выше исследования только реестр.
+const PARENT_PATH = '/research/researches'
 
 // Якоря разделов: один источник для `id` на самом разделе и для ссылки в боковой навигации —
 // разъехавшись, они дали бы ссылку в никуда.
+//
+// Первый якорь стоит на шапке, а не на карточке описания: перемотка к первому пункту оглавления
+// означает «вернуться к началу документа», и оставленное над кадром имя исследования читалось бы
+// как обрезанная страница.
 const SECTION = {
-  brief: 'research-brief',
+  top: 'research-top',
   body: 'research-body',
   areas: 'research-areas',
   notes: 'research-notes',
@@ -81,7 +85,7 @@ const documentNavShown = computed(
 
 const navSections = computed<NavSection[]>(() => [
   ...(sectionShown.value.brief
-    ? [{ id: SECTION.brief, label: t('research.research.detail.brief') }]
+    ? [{ id: SECTION.top, label: t('research.research.detail.brief') }]
     : []),
   ...(sectionShown.value.body
     ? [{ id: SECTION.body, label: t('research.research.detail.body') }]
@@ -98,9 +102,78 @@ const navSections = computed<NavSection[]>(() => [
     ? [{ id: SECTION.notes, label: t('research.research.detail.notes'), count: store.filteredNotes.length }]
     : []),
   ...(sectionShown.value.documents
-    ? [{ id: SECTION.documents, label: t('research.research.detail.documents'), count: store.filteredSources.length }]
+    ? [{ id: SECTION.documents, label: t('research.doc.section'), count: store.filteredSources.length }]
     : []),
 ])
+
+// Столько принимает бэкенд (`ResearchDescriptionBody` = ширина колонки): длиннее не отправляем.
+const DESCRIPTION_MAX = 2048
+
+// Правка описания на месте: черновик держит сам редактор, сохранение — стор. Закрывает правку
+// удавшийся ответ, а не сама отправка: на отказе текст остаётся набранным, то есть человек
+// попадает ровно туда, откуда повторит попытку.
+const editingDescription = ref(false)
+
+// Смена полки — то же окно, что и в реестре: вопрос один, и вторая форма разошлась бы с первой
+// при первой же правке. Ответ применяем перечитыванием страницы — полка стоит на ней в двух
+// местах, и оба берут её из тех же данных.
+const groupDialog = ref(false)
+
+// Отвязка обратима, но незаметна: пропадает только строка полки над названием, и промахнувшийся
+// по соседнему пункту меню узнаёт об этом не сразу. Поэтому спрашиваем — тем же окном, что и в
+// реестре. Отказ показываем в самом окне: тост увёл бы сообщение из поля зрения, а по открытому
+// окну видно, что полка осталась.
+const detachDialog = ref(false)
+const detaching = ref(false)
+const detachError = ref<string | null>(null)
+
+async function detachGroup() {
+  const research = store.research
+  if (!research || detaching.value) return
+
+  detaching.value = true
+  detachError.value = null
+  try {
+    await setResearchGroup(research.code, null, { report: false })
+    detachDialog.value = false
+    await reload()
+  } catch (e) {
+    detachError.value = errorText(e)
+  } finally {
+    detaching.value = false
+  }
+}
+
+async function saveDescription(description: string) {
+  if (await store.saveDescription(description)) editingDescription.value = false
+}
+
+// Уход со страницы и переход на другое исследование закрывают правку: открытое поле с чужим
+// текстом пережило бы смену данных под собой.
+watch(() => store.research?.code, () => { editingDescription.value = false })
+
+// Полка над названием есть всегда: не разложенное исследование лежит на полке-остатке «Без
+// группы» — это ответ, а не его отсутствие, и ведёт он туда же, куда её карточка в реестре полок.
+const shelf = computed(() => {
+  const research = store.research
+  if (!research) return null
+  if (research.group_code) {
+    return {
+      code: research.group_code,
+      name: research.group_name,
+      icon: research.group_icon,
+      color: research.group_color,
+      plain: false,
+    }
+  }
+  return {
+    code: UNGROUPED_CODE,
+    name: t('research.group.ungrouped.title'),
+    icon: '',
+    color: '',
+    plain: true,
+  }
+})
 
 // Точная дата отвечает «когда», относительная — «давно ли»; поодиночке каждая заставляет
 // додумывать вторую.
@@ -111,33 +184,47 @@ const updatedAt = computed(() => {
   return relative ? `${fmtDateTime(value)} (${relative})` : fmtDateTime(value)
 })
 
-// KeepAlive wraps all routed views (App.vue), so reload on every activation, and on an
-// in-place param change while active — otherwise a cached instance shows stale data.
-function reload() {
-  const code = route.params.code
-  if (typeof code === 'string' && code) store.load(code)
-}
-onActivated(reload)
-watch(() => route.params.code, reload)
+const { reload } = useDetailReload(store.load)
 
-// Повтор получения материала: ручка уровня исследования чинит все его источники без материала.
-// Код берём из загруженного исследования, а не из адреса, — он приходит уже нормализованным.
-const { refetchingAll, refetchingCode, refetchAllSources, refetchOneSource } = useSourcesRefetch(
-  () => refetchResearchDocuments(store.research?.code ?? ''),
-  reload,
-)
+// Колонку рисует общая рамка деталок — страница её только заполняет.
+useDetailRail(() => ({
+  parent: PARENT_PATH,
+  label: t('research.back.researches'),
+  appearance: true,
+  sections: store.research ? navSections.value : [],
+  search: store.research
+    ? {
+        label: t('research.research.detail.search'),
+        value: store.search,
+        update: (query: string) => { store.search = query },
+        summary: store.searching
+          ? t('research.research.detail.found', { n: store.matchCount })
+          : '',
+        pending: store.deepSearching ? t('research.research.detail.searching') : '',
+      }
+    : undefined,
+}))
 </script>
 
 <template>
-  <PageLayout>
-    <!-- Стандартная шапка страницы, как у всех остальных: возврат, название, действия.
-         Название себя же и правит — пока данных нет, слот не рисуется и работает плейсхолдер. -->
-    <PageHeader
-      :title="store.research?.title || t('research.research.detail.title')"
-      :loading="store.loading"
-      :back-to="RESEARCHES_PATH"
-    >
-      <template v-if="store.research" #title>
+  <div>
+    <SectionError v-if="store.error" :error="store.error" />
+
+    <template v-if="!store.error">
+      <!-- Полка и имя — не карточка, а заголовок страницы: рамка вокруг них сделала бы имя ещё
+           одним блоком содержимого наравне с описанием и телом, тогда как оно надписано НАД всем
+           этим. Шапка стоит вне TransitionGroup — имя принадлежит артефакту и не исчезает, когда
+           поиск прячет разделы. -->
+      <DetailHead
+        v-if="store.research"
+        :id="SECTION.top"
+        :code="store.research.code"
+        :loading="store.loading"
+        @refresh="reload"
+      >
+        <template #above>
+          <GroupLink v-if="shelf" v-bind="shelf" />
+        </template>
         <TitleEditor
           variant="title"
           :heading="1"
@@ -146,65 +233,58 @@ const { refetchingAll, refetchingCode, refetchAllSources, refetchOneSource } = u
           :saving="store.renaming"
           @save="store.rename"
         />
-      </template>
 
-      <template #actions>
-        <VBtn variant="text" :disabled="store.loading" @click="reload">
-          <template #prepend><IconRefresh :size="16" :class="{ 'icon-spin': store.loading }" /></template>
-          {{ t('research.action.refresh') }}
-        </VBtn>
-        <VBtn v-if="store.research" variant="text" @click="copy(store.research.code)">
-          <template #prepend>
-            <IconCheck v-if="isCopied(store.research.code)" :size="16" :stroke-width="1.6" />
-            <IconCopy v-else :size="16" :stroke-width="1.6" />
-          </template>
-          {{ isCopied(store.research.code) ? t('research.action.copied') : t('research.action.copy') }}
-        </VBtn>
-      </template>
-    </PageHeader>
+        <!-- Раскладка по полкам — единственное, что делают с исследованием помимо чтения и правки
+             текстов, и делают редко: отсюда меню, а не пара кнопок в шапке. Отвязки нет, когда
+             отвязывать не от чего. -->
+        <template #more>
+          <VListItem :prepend-icon="IconFolderPlus" @click="groupDialog = true">
+            <VListItemTitle>
+              {{ store.research.group_code
+                ? t('research.research.action.move_group')
+                : t('research.research.action.set_group') }}
+            </VListItemTitle>
+          </VListItem>
+          <VListItem
+            v-if="store.research.group_code"
+            :prepend-icon="IconFolderX"
+            @click="detachDialog = true"
+          >
+            <VListItemTitle>{{ t('research.research.action.unset_group') }}</VListItemTitle>
+          </VListItem>
+        </template>
+      </DetailHead>
 
-    <SectionError v-if="store.error" :error="store.error" />
-
-    <!-- Двенадцать колонок: три под липкую навигацию по разделам, девять под содержимое. Обе
-         колонки — дети одной сетки и начинаются с одной строки, поэтому верх плашки сам встаёт
-         вровень с первым разделом. -->
-    <div v-if="!store.error" class="detail-grid">
-      <!-- Левая колонка целиком липкая: поиск и оглавление держатся вместе, иначе первый уехал бы
-           вверх, а второе осталось — и они разъехались бы на полэкрана. -->
-      <div class="detail-grid__rail">
-        <!-- Полка над колонкой, а не в карточке поиска: она отвечает не «что искать», а «где это
-             лежит», и на полотне читается как надпись над разделом, а не как часть инструмента.
-             Без полки строки нет вовсе — её отсутствие и есть ответ. -->
-        <p v-if="store.research?.group_code" class="rail-group color-tones" :style="groupColorVars(store.research.group_color)">
-          <component :is="groupIcon(store.research.group_icon)" :size="14" :stroke-width="1.7" class="rail-group__icon" />
-          {{ store.research.group_name }}
-        </p>
-
-        <!-- Карточка ждёт данных вместе с остальным: имя и выход со страницы теперь несёт шапка,
-             и держать пустую рамку на время загрузки больше незачем. -->
-        <VCard v-if="store.research" variant="outlined" rounded="lg" class="rail-tools">
-          <VTextField
-            v-model="store.search"
-            :label="t('research.research.detail.search')"
-            :prepend-inner-icon="IconSearch"
-            variant="outlined"
-            density="comfortable"
-            hide-details
-            clearable
-          />
-          <!-- Пока догоняющая половина в пути, счётчик — промежуточный: говорим об этом, иначе
-               дорисовавшиеся фрагменты выглядели бы как самопроизвольная перестановка. -->
-          <p v-if="store.searching" class="rail-tools__summary">
-            {{ t('research.research.detail.found', { n: store.matchCount }) }}
-            <span v-if="store.deepSearching" class="rail-tools__pending">
-              <VProgressCircular indeterminate size="11" width="2" />
-              {{ t('research.research.detail.searching') }}
-            </span>
-          </p>
-        </VCard>
-
-        <SectionNav v-if="store.research" :sections="navSections" />
-      </div>
+      <!-- Правка НА МЕСТЕ описания: поля не видно, редактируемым становится сам текст — тем же
+           способом, что и имя в шапке. Открывает её ссылка ниже или двойной клик по тексту. -->
+      <VCard
+        v-if="store.research && sectionShown.brief"
+        variant="outlined"
+        rounded="lg"
+        class="brief-card"
+      >
+        <VCardText>
+          <InlineEditBlock
+            v-model:editing="editingDescription"
+            class="brief-desc"
+            :value="store.research.description"
+            :label="t('research.research.detail.description_label')"
+            :empty="t('research.research.detail.no_description')"
+            :maxlength="DESCRIPTION_MAX"
+            :saving="store.describing"
+            allow-empty
+            @save="saveDescription"
+          >
+            <!-- Дата стоит в строке действий редактора и в правке тоже: «когда это менялось»
+                 не перестаёт быть правдой оттого, что текст сейчас правят. -->
+            <template #aside>
+              <span class="meta-item">
+                {{ t('research.field.updated_at') }}: {{ updatedAt }}
+              </span>
+            </template>
+          </InlineEditBlock>
+        </VCardText>
+      </VCard>
 
       <!-- Разделы появляются и уходят по мере сужения поиска, поэтому переход, а не мгновенная
            подмена: иначе страница дёргается, и непонятно, что именно изменилось. Своё условие,
@@ -213,38 +293,15 @@ const { refetchingAll, refetchingCode, refetchAllSources, refetchOneSource } = u
         v-if="store.research"
         name="fragment"
         tag="div"
-        class="detail-grid__main"
       >
-        <section v-if="sectionShown.brief" :key="SECTION.brief" :id="SECTION.brief">
-          <SectionHeader :title="t('research.research.detail.brief')" />
-          <VCard variant="outlined" rounded="lg" class="mb-4">
-            <VCardText>
-              <p v-if="store.research.description" class="brief-desc">
-                {{ store.research.description }}
-              </p>
-              <div class="meta-row">
-                <span class="meta-item">
-                  {{ t('research.field.updated_at') }}: {{ updatedAt }}
-                </span>
-              </div>
-            </VCardText>
-          </VCard>
-        </section>
 
         <section v-if="sectionShown.body" :key="SECTION.body" :id="SECTION.body">
-          <SectionHeader :title="t('research.research.detail.body')" />
-          <VCard variant="outlined" rounded="lg" class="mb-4">
-            <VCardText>
-              <ResearchBody
-                v-if="store.research.body"
-                :text="store.research.body"
-                @headings="documentHeadings = $event"
-              />
-              <div v-else class="empty text-medium-emphasis">
-                {{ t('research.research.detail.no_body') }}
-              </div>
-            </VCardText>
-          </VCard>
+          <BodySection
+            :title="t('research.research.detail.body')"
+            :text="store.research.body"
+            :empty="t('research.research.detail.no_body')"
+            @headings="documentHeadings = $event"
+          />
         </section>
 
         <!-- Под активным поиском раздел без совпадений скрывается целиком: пустая карточка с
@@ -302,93 +359,41 @@ const { refetchingAll, refetchingCode, refetchAllSources, refetchOneSource } = u
         </section>
 
         <section v-if="sectionShown.documents" :key="SECTION.documents" :id="SECTION.documents">
-          <SectionHeader
-            :title="t('research.research.detail.documents')"
-            :count="store.filteredSources.length"
-          />
-          <DocumentsTable
+          <!-- Без ручки «перекачать всё сломанное»: на уровне исследования это сотни строк, и по
+               итогу прогона не видно, что именно чинили. Действие осталось уровнем ниже, у зоны. -->
+          <SourcesSection
             :items="store.filteredSources"
             :loading="store.loading"
-            :refetching-all="refetchingAll"
-            :refetching-code="refetchingCode"
-            @refetch-all="refetchAllSources"
-            @refetch-one="refetchOneSource"
+            @reload="reload"
           />
         </section>
       </TransitionGroup>
-    </div>
-  </PageLayout>
+    </template>
+
+    <ResearchGroupDialog v-model="groupDialog" :research="store.research" @saved="reload" />
+
+    <ConfirmDialog
+      v-model="detachDialog"
+      :title="t('research.research.detach.title')"
+      :confirm-label="t('research.research.action.unset_group')"
+      tone="primary"
+      :loading="detaching"
+      @confirm="detachGroup"
+    >
+      {{ t('research.research.detach.text', {
+        title: store.research?.title ?? '',
+        group: store.research?.group_name ?? '',
+      }) }}
+      <VAlert v-if="detachError" type="error" variant="tonal" density="compact" class="mt-3">
+        {{ detachError }}
+      </VAlert>
+    </ConfirmDialog>
+  </div>
 </template>
 
 <style scoped>
-.detail-grid {
-  display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: 0 24px;
-  align-items: start;
-}
-
-/* Три трека под колонку с поиском и оглавлением: ей нужна ширина под подпись, а не под текст.
-   Отбивка сверху повторяет ту, с которой начинается заголовок первого раздела
-   (`SectionHeader` даёт 4px) — без неё колонка ровно на столько же выше содержимого.
-   Липкость на всей колонке, а не на оглавлении: иначе поиск уехал бы вверх без него. */
-.detail-grid__rail {
-  grid-column: span 3;
-  min-width: 0;
-  margin-top: 4px;
-  position: sticky;
-  top: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-height: calc(100vh - 132px);
-}
-
-.rail-tools {
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  flex: none;
-}
-
-/* Полка над колонкой: плашка того же вида, что на карточке исследования в списке — иконка в цвете
-   группы плюс имя. Отступ снизу тот же, что у сетки колонки (12px), поэтому строка читается как
-   надпись над карточкой, а не как оторванный элемент. */
-.rail-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0;
-  min-width: 0;
-  font-size: 12px;
-  color: var(--text-muted);
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-/* Цвет несёт иконка, а не имя: тон выбран под плашку и текстом читался бы хуже подписи.
-   Без цвета — акцент, как везде, где полка нарисована. */
-.rail-group__icon {
-  color: var(--gc-ink, var(--accent));
-  flex: none;
-}
-
-.rail-tools__summary {
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-/* Догоняющая половина поиска: строкой рядом со счётчиком, а не отдельным местом — она уточняет
-   именно его число. */
-.rail-tools__pending {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin-left: 6px;
-  color: var(--text-faint);
+.brief-card {
+  margin-bottom: 16px;
 }
 
 /* Появление и уход фрагментов при сужении поиска. Уход быстрее прихода: исчезновение — это
@@ -421,34 +426,12 @@ const { refetchingAll, refetchingCode, refetchAllSources, refetchOneSource } = u
   }
 }
 
-/* min-width: 0 обязателен: без него таблица источников с длинными url раздувает свой трек,
-   и вся сетка уезжает за экран. */
-.detail-grid__main {
-  grid-column: span 9;
-  min-width: 0;
-}
-
-/* На узком экране отдельная колонка под навигацию — уже не запас, а отнятое у текста место:
-   обе встают в полную ширину друг под другом (в строку оглавление перестраивается само). */
-@media (max-width: 1099px) {
-  .detail-grid__rail,
-  .detail-grid__main {
-    grid-column: 1 / -1;
-  }
-
-  .detail-grid__rail {
-    position: static;
-    max-height: none;
-    margin-bottom: 12px;
-  }
-}
-
 /* Описание — такой же связный текст, как и основное тело, поэтому и набирается зоной чтения:
    те же семейство, кегль, интерлиньяж и предел длины строки, что у `.md-body`. Класс на самом
    `p` обязателен — правило для голого `p` из main.scss лежит вне слоёв, наследованием его не
    перебить (та же причина описана в MarkdownRenderer). */
 .brief-desc {
-  margin: 0 0 12px;
+  margin: 0;
   max-width: var(--reading-measure, 92ch);
   font-family: var(--font-reading);
   font-size: var(--reading-size, 14px);
@@ -457,14 +440,10 @@ const { refetchingAll, refetchingCode, refetchAllSources, refetchOneSource } = u
   text-wrap: pretty;
 }
 
-.meta-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 16px;
-}
-
+/* Дата в строке действий редактора: гарнитура интерфейсная, поэтому наследование от читательского
+   текста вокруг ей не годится — задаётся тем же способом, что и подписи ссылок рядом. */
 .meta-item {
+  font-family: var(--font);
   font-size: 13px;
   color: var(--text-muted);
   white-space: nowrap;

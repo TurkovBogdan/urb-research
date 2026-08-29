@@ -1,16 +1,18 @@
 <script setup lang="ts">
 import { computed, onActivated, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { IconRefresh, IconSearch, IconSortAscending, IconSortDescending } from '@tabler/icons-vue'
+import { IconRefresh, IconSortAscending, IconSortDescending } from '@tabler/icons-vue'
 
 import PageLayout from '@/layout/templates/PageLayout.vue'
 import PageHeader from '@/layout/components/PageHeader.vue'
+import SearchField from '@/components/SearchField.vue'
 import SectionError from '@/components/SectionError.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { RESEARCH_LIST_VIEWS } from '@/constants/lists'
 
 import GroupSelect from '../components/GroupSelect.vue'
 import ResearchesList from '../components/ResearchesList.vue'
+import { registryScopes, registryScopesModel } from '../search'
 import { useGroupCatalogStore } from '../stores/group-catalog.store'
 import { useResearchesStore } from '../stores/researches.store'
 import { RESEARCH_SORT_FIELDS, UNGROUPED_CODE, type ResearchSortBy } from '../api'
@@ -33,6 +35,27 @@ const groupFilterTitle = computed(() => {
   if (store.groupFilter === UNGROUPED_CODE) return t('research.group.ungrouped.title')
   return groupCatalog.items.find((group) => group.code === store.groupFilter)?.title ?? ''
 })
+
+// Три слоя стога — кнопки прямо в поле запроса; название и описание в нём всегда, поэтому
+// четвёртой кнопки нет. Состав стога называет сама подпись поля, как на странице групп:
+// отдельной строкой пояснения он повторял бы то, что и так написано в поле. Слои названы одним
+// словом каждый и без слова «поиск» — подпись стоит в общей строке с фильтрами, места в ней
+// немного, а что поле поисковое, уже сказано лупой слева.
+const searchScopes = computed(() => registryScopes((scope) => t(`research.search.scope.${scope}`)))
+const activeScopes = registryScopesModel(
+  () => ({
+    inBody: store.inBody,
+    inAreasAndNotes: store.inAreasAndNotes,
+    inSources: store.inSources,
+  }),
+  (next) => store.searchScopes(next),
+)
+const searchLabel = computed(() =>
+  [
+    t('research.research.filter.query_scope_base'),
+    ...activeScopes.value.map((scope) => t(`research.search.haystack.${scope}`)),
+  ].join(', '),
+)
 
 const SEARCH_DEBOUNCE_MS = 350
 const queryInput = ref(store.query)
@@ -111,16 +134,17 @@ onActivated(() => {
     <ResearchesList v-else>
       <template #filters>
         <div class="filter-grid">
-          <VTextField
+          <!-- Запрос занимает всё, что осталось от фильтров: у остальных ручек ширина от
+               содержимого, а поле тем шире, чем шире панель. -->
+          <SearchField
             v-model="queryInput"
-            :label="t('research.research.filter.query')"
-            :prepend-inner-icon="IconSearch"
-            variant="outlined"
-            density="comfortable"
-            hide-details
-            clearable
+            v-model:active-scopes="activeScopes"
+            :scopes="searchScopes"
+            :label="searchLabel"
+            :loading="store.loading"
             class="filter-grid__search"
           />
+
           <GroupSelect
             :model-value="store.groupFilter"
             with-all
@@ -156,8 +180,8 @@ onActivated(() => {
             </VBtn>
           </div>
 
-          <!-- Раскладка стоит последней и отбита от фильтров: она не сужает список, а меняет
-               то, как он нарисован. `mandatory` — снять обе кнопки нельзя, раскладка всегда есть. -->
+          <!-- Раскладка стоит последней: она не сужает список, а меняет то, как он нарисован.
+               `mandatory` — снять обе кнопки нельзя, раскладка всегда есть. -->
           <VBtnToggle
             v-model="settings.lists.researchView"
             mandatory
@@ -198,25 +222,34 @@ onActivated(() => {
 /* Панель живёт внутри карточки таблицы, поэтому отступ несёт она сама — как у фильтров
    источников (`.doc-filters`). Чипы дотягивают тот же отступ снизу, если они есть. */
 .filter-grid {
-  display: grid;
-  grid-template-columns: 1fr auto auto auto;
-  gap: 12px;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  gap: 12px;
   padding: 12px;
 }
 
-/* Отбивка от сортировки: направление принадлежит ей, а раскладка — сама по себе. */
-.filter-grid__view {
-  margin-left: 4px;
+/* Поле запроса — единственное, что тянется: у полки, сортировки и раскладки ширина от
+   содержимого. 320px — не ширина, а порог переноса: у́же поле начинает съедать подпись со
+   списком слоёв, и на этой ширине панель лучше сложить в две строки. */
+.filter-grid__search {
+  flex: 1 1 320px;
+  min-width: 0;
 }
 
-.filter-grid__select {
-  width: 220px;
+/* `:deep` не для красоты: класс едет на корень `VSelect` через два компонента (`GroupSelect` →
+   `VSelectSearch`), и scoped-атрибут этой вьюхи туда уже не доходит — обычное правило не
+   совпало бы, а поле растянулось бы на всю свободную ширину строки. */
+.filter-grid :deep(.filter-grid__select) {
+  /* `flex: none` обязателен: у `.v-input` собственный `flex: 1 1 auto`, и с ним ширина ниже
+     работает только как основа — свободное место строки поле всё равно забирает себе. */
+  flex: none;
+  width: 190px;
 }
 
 /* Ширину держит поле; кнопка направления приросла к нему справа и в неё не входит. */
 .filter-grid__sort .v-select {
-  width: 220px;
+  width: 190px;
 }
 
 .filter-chips {
@@ -227,21 +260,11 @@ onActivated(() => {
   padding: 0 12px 12px;
 }
 
-/* Узкий экран: каждый фильтр на свою строку во всю ширину, а кнопка направления остаётся
-   рядом с выбором поля — она читается только вместе с ним. */
+/* Узкий экран: полка во всю ширину своей строкой, а сортировка с раскладкой делят следующую —
+   кнопка направления при этом остаётся рядом с выбором поля, она читается только вместе с ним. */
 @media (max-width: 720px) {
-  .filter-grid {
-    grid-template-columns: 1fr auto;
-  }
-
-  .filter-grid__search,
-  .filter-grid__select {
-    grid-column: 1 / -1;
-    width: auto;
-  }
-
-  .filter-grid__sort {
-    grid-column: 1;
+  .filter-grid :deep(.filter-grid__select) {
+    width: 100%;
   }
 }
 </style>

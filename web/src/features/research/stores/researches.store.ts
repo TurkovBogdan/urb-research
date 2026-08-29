@@ -1,7 +1,16 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
+import { RESEARCH_PAGE_SIZES } from '@/constants/lists'
+
 import { listResearches, type ResearchListRow, type ResearchSortBy, type SortDir } from '../api'
+
+/** Слои поиска поверх основы — то, что переключают кнопки в поле запроса. */
+export interface SearchScopes {
+  inBody: boolean
+  inAreasAndNotes: boolean
+  inSources: boolean
+}
 
 // Список исследований. Фильтры — отдельные ref'ы; load() собирает params, пропуская
 // пустые. Новые сверху (sortDir=desc по created_at).
@@ -13,15 +22,17 @@ import { listResearches, type ResearchListRow, type ResearchSortBy, type SortDir
 // Одновременно они не встречаются (это разные страницы), а контекст сильнее выбора.
 export const useResearchesStore = defineStore('research-researches', () => {
   const query = ref('')
-  // Глубина поиска: включено — стог считает тело исследования, его зоны и заметки, выключено —
-  // только название и описание. Умолчание совпадает с прежним поведением.
-  const inBodies = ref(true)
+  // Слои стога поверх основы (название + описание, они в поиске всегда). Материал источников
+  // выключен: он на порядок больше всего написанного руками, и включают его осознанно.
+  const inBody = ref(true)
+  const inAreasAndNotes = ref(true)
+  const inSources = ref(false)
   const groupCode = ref<string | null>(null)
   const groupFilter = ref<string | null>(null)
   const sortBy = ref<ResearchSortBy>('created_at')
   const sortDir = ref<SortDir>('desc')
   const page = ref(1)
-  const pageSize = ref(100)
+  const pageSize = ref(RESEARCH_PAGE_SIZES[0])
 
   const items = ref<ResearchListRow[]>([])
   const total = ref(0)
@@ -39,7 +50,9 @@ export const useResearchesStore = defineStore('research-researches', () => {
     try {
       const res = await listResearches({
         query: query.value || undefined,
-        in_bodies: inBodies.value,
+        in_body: inBody.value,
+        in_areas_and_notes: inAreasAndNotes.value,
+        in_sources: inSources.value,
         group_code: groupCode.value ?? groupFilter.value ?? undefined,
         sort_by: sortBy.value,
         sort_dir: sortDir.value,
@@ -59,11 +72,13 @@ export const useResearchesStore = defineStore('research-researches', () => {
     page.value = 1
   }
 
-  // Глубина меняет стог, а не строку: с пустым запросом список и так не сужен, перезапрашивать
+  // Слои меняют стог, а не строку: с пустым запросом список и так не сужен, перезапрашивать
   // нечего. Страница сбрасывается — набор строк другой, и третья страница прежней выдачи к нему
   // отношения не имеет.
-  function searchDeeper(enabled: boolean) {
-    inBodies.value = enabled
+  function searchScopes(next: Partial<SearchScopes>) {
+    if (next.inBody !== undefined) inBody.value = next.inBody
+    if (next.inAreasAndNotes !== undefined) inAreasAndNotes.value = next.inAreasAndNotes
+    if (next.inSources !== undefined) inSources.value = next.inSources
     if (!query.value.trim()) return
     resetPage()
     return load()
@@ -76,9 +91,10 @@ export const useResearchesStore = defineStore('research-researches', () => {
   }
 
   return {
-    query, inBodies, groupCode, groupFilter, sortBy, sortDir, page, pageSize,
+    query, inBody, inAreasAndNotes, inSources, groupCode, groupFilter, sortBy, sortDir,
+    page, pageSize,
     items, total, loading, error,
     pageCount, hasActiveFilters,
-    load, resetPage, searchDeeper, clearFilters,
+    load, resetPage, searchScopes, clearFilters,
   }
 })

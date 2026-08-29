@@ -225,6 +225,42 @@ pre {
 
 a { color: var(--accent); text-decoration: none; &:hover { text-decoration: underline; } }
 
+// ── Link-style action ────────────────────────────────────────────────────────
+// A control chosen for behaviour but read as a link: an icon and its word, no plate, no border.
+// Use where the action continues the text or the navigation around it rather than commanding it
+// from a panel — «Изменить» under a paragraph, «Вернуться к реестру» at the top of a detail rail.
+// The reset is unavoidable: on a `<button>` the browser draws a grey plate with a border.
+//
+// Lives here rather than in a component because it is shared by unrelated ones; the interface
+// font is stated explicitly since some of its hosts sit inside reading-font text.
+.link-action {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.4;
+  letter-spacing: normal;
+  text-align: left;
+  color: rgb(var(--v-theme-primary));
+  cursor: pointer;
+  transition: opacity 0.14s ease;
+
+  &:hover:not(:disabled) {
+    opacity: 0.78;
+    text-decoration: underline;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
 // ── Scrollbars ───────────────────────────────────────────────────────────────
 // Chromium/WebKit get the styled 5px scrollbar below (thumb fills the gutter →
 // flush against content, no inset track gap). `scrollbar-width` is applied ONLY

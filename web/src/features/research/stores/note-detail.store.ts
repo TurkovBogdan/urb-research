@@ -1,7 +1,8 @@
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { getNote, renameNote, type NoteDetail } from '../api'
+import { editNoteDescription, getNote, renameNote, type NoteDetail } from '../api'
+import { matchesQuery, normalizeQuery } from '../search'
 
 // Деталка заметки: тип + скан + тело (markdown).
 export const useNoteDetailStore = defineStore('research-note-detail', () => {
@@ -11,9 +12,25 @@ export const useNoteDetailStore = defineStore('research-note-detail', () => {
   // по статусу ответа, а формулировку берёт из `errorText`.
   const error = ref<unknown>(null)
 
+  // ── Поиск по деталке ────────────────────────────────────────────────────────
+  // Как у зоны: всё, по чему ищут, уже на клиенте, поэтому за ответом бэкенда здесь не ходят.
+  const search = ref('')
+  const needle = computed(() => normalizeQuery(search.value))
+  const searching = computed(() => needle.value.length > 0)
+
+  const briefMatches = computed(() =>
+    matchesQuery([note.value?.title, note.value?.description], needle.value),
+  )
+  const bodyMatches = computed(() => matchesQuery([note.value?.body], needle.value))
+
+  const matchCount = computed(() => Number(briefMatches.value) + Number(bodyMatches.value))
+
   let current = ''
 
   async function load(code: string) {
+    // Запрос переживает обновление той же страницы, но не переход на другую заметку: унесённая
+    // строка искала бы в чужих данных.
+    if (code !== current) search.value = ''
     current = code
     loading.value = true
     error.value = null
@@ -48,10 +65,34 @@ export const useNoteDetailStore = defineStore('research-note-detail', () => {
     }
   }
 
+  // Правка описания живёт по тем же правилам, что и переименование: свой флаг «в полёте», отказ
+  // гасится тостом клиента. Ответ — удалось или нет: правку закрывает владелец поля, и «текст
+  // сохранён» он иначе не отличит от «текст сохранён тот же самый».
+  const describing = ref(false)
+
+  async function saveDescription(description: string): Promise<boolean> {
+    const code = note.value?.code
+    if (!code) return false
+    describing.value = true
+    try {
+      note.value = await editNoteDescription(code, description)
+      return true
+    } catch {
+      return false
+    } finally {
+      describing.value = false
+    }
+  }
+
   function reset() {
     note.value = null
+    search.value = ''
     error.value = null
   }
 
-  return { note, loading, error, renaming, load, rename, reset }
+  return {
+    note, loading, error, renaming, describing,
+    search, searching, briefMatches, bodyMatches, matchCount,
+    load, rename, saveDescription, reset,
+  }
 })

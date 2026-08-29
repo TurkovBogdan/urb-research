@@ -3,8 +3,8 @@
 // Данные и пагинация берутся из общего стора: обе страницы показывают один и тот же список,
 // отличаясь только тем, выставлен ли в сторе groupCode.
 //
-// Раскладок три — таблица, плитки и плитки по полкам, — и различаются они РОВНО отрисовкой
-// строк: содержимое, действия, фильтры, постраничность и окна у них общие. Поэтому раскладка
+// Раскладки две — таблица и плитки по полкам, — и различаются они РОВНО отрисовкой строк:
+// содержимое, действия, фильтры, постраничность и окна у них общие. Поэтому раскладка
 // выбирается внутри одной карточки, а не отдельным компонентом на каждую: второй компонент
 // означал бы два списка, расходящиеся при первом же новом действии.
 //
@@ -18,6 +18,7 @@ import { useI18n } from 'vue-i18n'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import TablePaginationBar from '@/components/TablePaginationBar.vue'
 import { errorText } from '@/api/errorText'
+import { RESEARCH_PAGE_SIZES } from '@/constants/lists'
 import { useSettingsStore } from '@/stores/settings'
 import { fmtDateTime } from '@/shared/utils/date'
 
@@ -39,9 +40,9 @@ const store = useResearchesStore()
 const settings = useSettingsStore()
 
 // Разложить по полкам можно только реестр: на странице самой полки все плитки принадлежат ей
-// одной, и раздел повторял бы заголовок страницы. Там выбранная раскладка падает в общий поток.
-const grouped = computed(() => settings.lists.researchView === 'grouped' && store.groupCode === null)
-const tiled = computed(() => settings.lists.researchView !== 'table')
+// одной, и раздел повторял бы заголовок страницы. Там те же плитки идут общим потоком.
+const tiled = computed(() => settings.lists.researchView === 'grouped')
+const sectioned = computed(() => tiled.value && store.groupCode === null)
 const emptyText = computed(() => props.emptyText ?? t('research.research.list.empty'))
 
 const DESCRIPTION_MAX = 128
@@ -67,17 +68,6 @@ function openResearch(_: unknown, row: { item: ResearchListRow }) {
 
 function openCode(code: string) {
   router.push(researchesPath(code))
-}
-
-// Плашка полки на плитке — ещё и фильтр реестра. На странице самой полки список уже сужен ею
-// (`groupCode` — контекст страницы), и плашка вела бы в саму себя, поэтому там она просто метка.
-const groupFilterable = computed(() => store.groupCode === null)
-
-function filterByGroup(code: string) {
-  if (store.groupFilter === code) return
-  store.groupFilter = code
-  store.resetPage()
-  store.load()
 }
 
 // ── Разделы полок ─────────────────────────────────────────────────────────────
@@ -218,7 +208,7 @@ function afterChange() {
 
       <!-- Разложенные по полкам: те же плитки, но каждая полка — свой раздел под заголовком.
            Плашка полки внутри плитки при этом убрана: раздел её уже назвал. -->
-      <div v-else-if="grouped" class="sections">
+      <div v-else-if="sectioned" class="sections">
         <section v-for="section in sections" :key="section.code" class="sections__item">
           <GroupHeading
             :title="section.title"
@@ -242,18 +232,18 @@ function afterChange() {
         </section>
       </div>
 
+      <!-- Страница одной полки: разделов нет, потому что полка тут одна — те же плитки общим
+           потоком. -->
       <div v-else class="cards__grid">
         <ResearchCard
           v-for="item in store.items"
           :key="item.code"
           :research="item"
-          :group-filterable="groupFilterable"
           @open="openCode(item.code)"
           @rename="openRenameDialog(item)"
           @group="openGroupDialog(item)"
           @detach="openDetachDialog(item)"
           @remove="openDeleteDialog(item)"
-          @filter-group="filterByGroup"
         />
       </div>
 
@@ -266,6 +256,7 @@ function afterChange() {
           :page-size="store.pageSize"
           :total="store.total"
           :page-count="store.pageCount"
+          :page-sizes="RESEARCH_PAGE_SIZES"
           :divider="false"
           @update:page="onPageChange"
           @update:page-size="onPageSizeChange"
@@ -330,6 +321,7 @@ function afterChange() {
         :page-size="store.pageSize"
         :total="store.total"
         :page-count="store.pageCount"
+        :page-sizes="RESEARCH_PAGE_SIZES"
         @update:page="onPageChange"
         @update:page-size="onPageSizeChange"
       />

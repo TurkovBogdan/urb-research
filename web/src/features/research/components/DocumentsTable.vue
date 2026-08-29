@@ -27,14 +27,12 @@ import { SOURCE_STATUS_COLOR } from '../labels'
 const props = defineProps<{
   items: SourceDocumentRow[]
   loading?: boolean
-  /** Идёт повтор получения по всему разделу. */
-  refetchingAll?: boolean
   /** Код строки, материал которой сейчас качается. */
   refetchingCode?: string | null
 }>()
 
-// Само действие принадлежит странице: у исследования и зоны свои ручки и свой стор источников.
-const emit = defineEmits<{ refetchAll: []; refetchOne: [code: string] }>()
+// Само действие принадлежит странице: у неё свой стор источников, который она и перечитывает.
+const emit = defineEmits<{ refetchOne: [code: string] }>()
 
 const { t } = useI18n()
 const router = useRouter()
@@ -79,10 +77,6 @@ const statusItems = computed(() =>
     value: s,
   })),
 )
-
-// Кнопка появляется, только когда чинить есть что: пустая обещала бы работу, которой нет.
-// Считаем по видимым строкам, а чинит ручка весь раздел — об этом говорит подпись кнопки.
-const hasBrokenSources = computed(() => (counts.value.error ?? 0) > 0)
 
 const relevanceItems = computed(() =>
   (Object.keys(RELEVANCE_BANDS) as RelevanceBand[]).map((band) => ({
@@ -146,21 +140,6 @@ function onPageSizeChange(size: number) {
 
 <template>
   <VCard variant="outlined" rounded="lg">
-    <!-- Действие над всем разделом стоит своей строкой, а не в ряду фильтров: в ряду оно отъедало
-         ширину у поиска, схлопывая его до иконки. -->
-    <div v-if="hasBrokenSources" class="doc-toolbar">
-      <VBtn
-        variant="tonal"
-        size="small"
-        :prepend-icon="IconRefresh"
-        :loading="props.refetchingAll"
-        :title="t('research.doc.action.refetch_all_hint')"
-        @click="emit('refetchAll')"
-      >
-        {{ t('research.doc.action.refetch_all') }}
-      </VBtn>
-    </div>
-
     <div class="doc-filters">
       <VTextField
         v-model="query"
@@ -311,14 +290,6 @@ function onPageSizeChange(size: number) {
 </template>
 
 <style scoped>
-/* Своя строка появляется только со сломанными источниками, поэтому нижний отступ несёт она, а не
-   фильтры под ней — иначе без кнопки карточка начиналась бы с пустоты. */
-.doc-toolbar {
-  display: flex;
-  justify-content: flex-end;
-  padding: 12px 12px 0;
-}
-
 .doc-filters {
   display: grid;
   grid-template-columns: 1fr 200px 200px;

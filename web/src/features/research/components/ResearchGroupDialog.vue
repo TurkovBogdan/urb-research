@@ -12,11 +12,15 @@ import AppDialog from '@/components/AppDialog.vue'
 import { errorText } from '@/api/errorText'
 
 import GroupSelect from './GroupSelect.vue'
-import { setResearchGroup, type ResearchListRow } from '../api'
+import { setResearchGroup } from '../api'
 
 const open = defineModel<boolean>({ required: true })
 
-const props = defineProps<{ research: ResearchListRow | null }>()
+// Окну нужны только имя, код и нынешняя полка: строка списка и деталка исследования — разные
+// объекты, а вопрос у окна к ним один и тот же.
+const props = defineProps<{
+  research: { code: string; title: string; group_code: string | null } | null
+}>()
 const emit = defineEmits<{ saved: [] }>()
 
 const { t } = useI18n()

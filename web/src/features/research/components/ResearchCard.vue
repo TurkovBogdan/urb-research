@@ -1,9 +1,7 @@
 <script setup lang="ts">
-// Плитка исследования: название, описание, полка и дата. Вынесена из списка, потому что раскладок
-// с плитками две — общий поток и разложенные по полкам, — и обе показывают ровно одну и ту же
-// плитку. Решения (куда вести, что перезагружать) остаются у списка: плитка только сообщает.
-import { useI18n } from 'vue-i18n'
-
+// Плитка исследования: название, описание, полка и дата. Вынесена из списка, потому что показывают
+// её два места — разделы полок в реестре и список одной полки, — и плитка в обоих ровно одна и та
+// же. Решения (куда вести, что перезагружать) остаются у списка: плитка только сообщает.
 import { fmtDateTime } from '@/shared/utils/date'
 
 import ResearchRowActions from './ResearchRowActions.vue'
@@ -17,11 +15,8 @@ const props = withDefaults(defineProps<{
   research: ResearchListRow
   /** Разложенным по полкам плашка не нужна: полку уже назвал заголовок раздела. */
   withGroup?: boolean
-  /** Плашка полки — ещё и фильтр; там, где список уже сужен полкой, она просто метка. */
-  groupFilterable?: boolean
 }>(), {
   withGroup: true,
-  groupFilterable: false,
 })
 
 const emit = defineEmits<{
@@ -30,10 +25,7 @@ const emit = defineEmits<{
   group: []
   detach: []
   remove: []
-  'filter-group': [string]
 }>()
-
-const { t } = useI18n()
 
 const truncate = (s: string, n: number) => (s.length > n ? s.slice(0, n) + '…' : s)
 </script>
@@ -68,22 +60,12 @@ const truncate = (s: string, n: number) => (s.length > n ? s.slice(0, n) + '…'
          Без полки подвал несёт только дату — пустой плашки «без группы» тут не нужно, её
          отсутствие и есть ответ. -->
     <footer class="card__foot">
-      <button
-        v-if="props.withGroup && props.research.group_code"
-        type="button"
-        class="card__group"
-        :class="{ 'card__group--filter': props.groupFilterable }"
-        :disabled="!props.groupFilterable"
-        :title="props.groupFilterable
-          ? t('research.research.action.filter_group', { title: props.research.group_name })
-          : undefined"
-        @click.stop="emit('filter-group', props.research.group_code)"
-      >
+      <span v-if="props.withGroup && props.research.group_code" class="card__group">
         <span class="card__group-icon">
           <component :is="groupIcon(props.research.group_icon)" :size="14" :stroke-width="1.7" />
         </span>
         {{ props.research.group_name }}
-      </button>
+      </span>
       <span class="card__date">{{ fmtDateTime(props.research.updated_at) }}</span>
     </footer>
   </VCard>
@@ -151,25 +133,11 @@ const truncate = (s: string, n: number) => (s.length > n ? s.slice(0, n) + '…'
   align-items: center;
   gap: 6px;
   min-width: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
   font-size: 11px;
-  text-align: left;
   color: var(--text-muted);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-}
-
-/* Плашка-фильтр отзывается на наведение — иначе её от простой метки не отличить. */
-.card__group--filter {
-  cursor: pointer;
-}
-
-.card__group--filter:hover {
-  color: var(--text);
 }
 
 .card__group-icon {

@@ -5,7 +5,14 @@
 // Прокручивается не окно, а зона содержимого (`PageLayout` → `.page-layout__content`), поэтому
 // и слушать, и мотать нужно её: `window.scrollY` тут всегда ноль, а `scrollIntoView` увёл бы
 // вместе с зоной весь макет.
-import { computed, onActivated, onBeforeUnmount, onMounted, ref } from 'vue'
+import {
+  computed,
+  onActivated,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  type ComponentPublicInstance,
+} from 'vue'
 
 export interface NavSection {
   /** `id` элемента раздела на странице. */
@@ -19,7 +26,9 @@ export interface NavSection {
 
 const props = defineProps<{ sections: NavSection[] }>()
 
-const root = ref<HTMLElement | null>(null)
+// Список — `TransitionGroup`, поэтому ссылка ведёт на компонент, а нужен его корневой узел.
+const root = ref<ComponentPublicInstance | null>(null)
+const listElement = computed(() => (root.value?.$el ?? null) as HTMLElement | null)
 const activeId = ref('')
 
 // Воздух над разделом, к которому перемотали: без него заголовок упирается в самую кромку и
@@ -35,7 +44,9 @@ const ACTIVE_LINE_OFFSET = SCROLL_OFFSET + 48
 // короче экрана и по правилу линии не активировался бы вовсе.
 const BOTTOM_EPSILON = 4
 
-const scroller = computed(() => root.value?.closest('.page-layout__content') as HTMLElement | null)
+const scroller = computed(
+  () => listElement.value?.closest('.page-layout__content') as HTMLElement | null,
+)
 
 function sectionElement(id: string): HTMLElement | null {
   return scroller.value?.querySelector(`#${CSS.escape(id)}`) ?? null
@@ -95,7 +106,10 @@ onBeforeUnmount(unlisten)
 
 <template>
   <VCard variant="outlined" rounded="lg" tag="nav" class="section-nav">
-    <div ref="root" class="section-nav__list">
+    <!-- Список пунктов меняется дважды: под поиском (разделы уходят и возвращаются) и при переходе
+         на другой артефакт — колонка живёт в общей рамке и переживает его. И там и там смена
+         показывается движением: мгновенная подмена читается как подмена страницы под рукой. -->
+    <TransitionGroup ref="root" tag="div" name="nav-item" class="section-nav__list">
       <button
         v-for="section in sections"
         :key="section.id"
@@ -110,7 +124,7 @@ onBeforeUnmount(unlisten)
         <span class="section-nav__label">{{ section.label }}</span>
         <span v-if="section.count !== undefined" class="section-nav__count">{{ section.count }}</span>
       </button>
-    </div>
+    </TransitionGroup>
   </VCard>
 </template>
 
@@ -133,6 +147,21 @@ onBeforeUnmount(unlisten)
   min-height: 0;
   flex: 1;
   overflow-y: auto;
+}
+
+/* Схлопывание пунктов опирается на `interpolate-size` (auto ↔ 0); где его нет, список меняется
+   мгновенно, как и раньше. */
+.section-nav__list {
+  interpolate-size: allow-keywords;
+}
+
+/* Движение здесь служебное: кому оно мешает, тот отключил его в системе. */
+@media (prefers-reduced-motion: reduce) {
+  .nav-item-enter-active,
+  .nav-item-leave-active,
+  .nav-item-move {
+    transition: none;
+  }
 }
 
 /* Сброс оформления кнопки: элемент выбран за поведение (не переход, а прокрутка своей же
@@ -255,6 +284,45 @@ onBeforeUnmount(unlisten)
 
   .section-nav__link::before {
     display: none;
+  }
+}
+
+/* Приход и уход пунктов. Пункт не просто гаснет, а схлопывается по высоте — иначе плашка прыгала
+   бы поверх аккуратно тающих строк. Правила стоят ПОСЛЕ `.section-nav__link`: у них одинаковый
+   вес, и собственный `transition` пункта иначе перебивал бы этот.
+   `min-height: 0` обязателен: у элемента колонки-флекса минимальная высота по умолчанию равна его
+   содержимому, и до нуля он не сжался бы — схлопывание вставало бы на строке текста. */
+.nav-item-enter-active,
+.nav-item-leave-active {
+  overflow: hidden;
+  min-height: 0;
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease,
+    height 0.18s ease,
+    padding-top 0.18s ease,
+    padding-bottom 0.18s ease;
+}
+
+.nav-item-move {
+  transition: transform 0.18s ease;
+}
+
+.nav-item-enter-from,
+.nav-item-leave-to {
+  opacity: 0;
+  height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  transform: translateY(-4px);
+}
+
+/* Движение здесь служебное: кому оно мешает, тот отключил его в системе. */
+@media (prefers-reduced-motion: reduce) {
+  .nav-item-enter-active,
+  .nav-item-leave-active,
+  .nav-item-move {
+    transition: none;
   }
 }
 </style>

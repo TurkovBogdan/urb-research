@@ -2,6 +2,7 @@ import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 
 import {
+  editResearchDescription,
   getResearch,
   listResearchDocuments,
   renameResearch,
@@ -186,6 +187,25 @@ export const useResearchDetailStore = defineStore('research-research-detail', ()
     }
   }
 
+  // Правка описания живёт по тем же правилам, что и переименование: свой флаг «в полёте», отказ
+  // гасится тостом клиента. Ответ — удалось или нет: правку закрывает владелец поля, и «текст
+  // сохранён» он иначе не отличит от «текст сохранён тот же самый».
+  const describing = ref(false)
+
+  async function saveDescription(description: string): Promise<boolean> {
+    const code = research.value?.code
+    if (!code) return false
+    describing.value = true
+    try {
+      research.value = await editResearchDescription(code, description)
+      return true
+    } catch {
+      return false
+    } finally {
+      describing.value = false
+    }
+  }
+
   function reset() {
     cancelDeep()
     forgetDeep()
@@ -196,9 +216,9 @@ export const useResearchDetailStore = defineStore('research-research-detail', ()
   }
 
   return {
-    research, areas, notes, sources, loading, error, renaming,
+    research, areas, notes, sources, loading, error, renaming, describing,
     search, searching, deepSearching, briefMatches, bodyMatches,
     filteredAreas, filteredNotes, filteredSources, matchCount,
-    load, rename, reset,
+    load, rename, saveDescription, reset,
   }
 })

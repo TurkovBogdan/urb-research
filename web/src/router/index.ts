@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import { setupGuards } from './guards'
+import { trackNavigationKind } from './scroll'
 import { setupRoutePrefetch } from './prefetch'
 import { setupChunkReload } from './reload'
 import { designSystemRoutes } from './design-system'
@@ -14,6 +15,9 @@ import { webSearchRoutes } from '../features/web_search/routes'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
+  // Не прокрутка, а её опознание: обработчик ничего не мотает (возвращает `false`) и только
+  // запоминает, возврат это по истории или новый переход — мотает зону содержимого `PageLayout`.
+  scrollBehavior: trackNavigationKind,
   routes: [
     { path: '/', redirect: '/home' },
     {

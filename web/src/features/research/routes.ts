@@ -22,34 +22,43 @@ export const researchRoutes: RouteRecordRaw[] = [
     component: () => import('./views/GroupView.vue'),
     meta: { scroll: 'y', title: 'research.group.detail.title' },
   },
+  // Деталки — дети общей рамки (`DetailShell`): колонка навигации живёт в родителе и переживает
+  // переход с артефакта на артефакт, меняется только содержимое справа. Регистрируется ПОСЛЕ
+  // полки: `researches/:code` у них одинакового веса, и побеждает ранний маршрут.
   {
-    path: '/research/researches/:code',
-    name: 'research-detail',
-    component: () => import('./views/ResearchView.vue'),
-    meta: { scroll: 'y', title: 'research.research.detail.title' },
-  },
-  {
-    path: '/research/areas/:code',
-    name: 'research-area',
-    component: () => import('./views/AreaView.vue'),
-    meta: { scroll: 'y', title: 'research.area.detail.title' },
-  },
-  {
-    path: '/research/queries/:code',
-    name: 'research-query',
-    component: () => import('./views/QueryView.vue'),
-    meta: { scroll: 'y', title: 'research.query.detail.title' },
-  },
-  {
-    path: '/research/notes/:code',
-    name: 'research-note',
-    component: () => import('./views/NoteView.vue'),
-    meta: { scroll: 'y', title: 'research.note.detail.title' },
-  },
-  {
-    path: '/research/sources/:code',
-    name: 'research-source',
-    component: () => import('./views/SourceView.vue'),
-    meta: { scroll: 'y', title: 'research.source.detail.title' },
+    path: '/research',
+    component: () => import('@/layout/templates/DetailShell.vue'),
+    children: [
+      {
+        path: 'researches/:code',
+        name: 'research-detail',
+        component: () => import('./views/ResearchView.vue'),
+        meta: { scroll: 'y', title: 'research.research.detail.title' },
+      },
+      {
+        path: 'areas/:code',
+        name: 'research-area',
+        component: () => import('./views/AreaView.vue'),
+        meta: { scroll: 'y', title: 'research.area.detail.title' },
+      },
+      {
+        path: 'queries/:code',
+        name: 'research-query',
+        component: () => import('./views/QueryView.vue'),
+        meta: { scroll: 'y', title: 'research.query.detail.title' },
+      },
+      {
+        path: 'notes/:code',
+        name: 'research-note',
+        component: () => import('./views/NoteView.vue'),
+        meta: { scroll: 'y', title: 'research.note.detail.title' },
+      },
+      {
+        path: 'sources/:code',
+        name: 'research-source',
+        component: () => import('./views/SourceView.vue'),
+        meta: { scroll: 'y', title: 'research.source.detail.title' },
+      },
+    ],
   },
 ]

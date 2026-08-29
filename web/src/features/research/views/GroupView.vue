@@ -73,13 +73,14 @@ async function load() {
 // KeepAlive держит вьюху живой между визитами — перезагружаем и на активации,
 // и на смене кода в адресе, иначе показали бы предыдущую полку.
 //
-// Пустой код грузить нельзя, и это не редкий случай: вьюха остаётся живой после ухода, а
-// `groupCode` читает ГЛОБАЛЬНЫЙ маршрут — возврат в список групп обнуляет его и будит этот
-// наблюдатель. Полки с пустым кодом не существует (у псевдо-полки «Без группы» код `GROUP@`),
-// так что пустой означает ровно одно: адрес больше не наш. Тот же гейт стоит у соседних деталок.
+// Сверка с маршрутом обязательна: вьюха остаётся живой после ухода, а `groupCode` читает
+// ГЛОБАЛЬНЫЙ маршрут — уход на исследование той же полки будит этот наблюдатель с кодом
+// `RESEARCH@…`, и полка грузилась бы по нему (404 в фоне). Тот же гейт стоит у соседних деталок.
+const OWN_ROUTE = 'research-group'
+
 onActivated(load)
 watch(groupCode, (code) => {
-  if (code) load()
+  if (code && route.name === OWN_ROUTE) load()
 })
 
 // Поиск идёт на бэк и по всему тексту исследования (тела зон и заметок до клиента не доходят),
@@ -107,12 +108,18 @@ watch(() => store.query, (value) => {
 // Здесь показаны исследования, поэтому слой ниже — их тексты (тело, зоны, заметки); выключено
 // значит «только названия и описания». Подпись поля и пояснение следуют за кнопкой.
 const searchScopes = computed(() => deeperScope(t('research.search.scope_bodies')))
-const activeScopes = deeperScopeModel(() => store.inBodies, store.searchDeeper)
+// Слоёв в сторе три, а кнопка здесь одна: «слой ниже» для полки — это всё, что написано внутри
+// исследования (тело, зоны, заметки). Материал источников на полку не спускается — его включают
+// в реестре, где для него своя кнопка.
+const activeScopes = deeperScopeModel(
+  () => store.inBody,
+  (enabled) => store.searchScopes({ inBody: enabled, inAreasAndNotes: enabled }),
+)
 const searchLabel = computed(() =>
-  t(store.inBodies ? 'research.research.filter.query_deep' : 'research.research.filter.query_labels'),
+  t(store.inBody ? 'research.research.filter.query_deep' : 'research.research.filter.query_labels'),
 )
 const searchHint = computed(() =>
-  t(store.inBodies ? 'research.research.filter.query_hint' : 'research.research.filter.query_hint_labels'),
+  t(store.inBody ? 'research.research.filter.query_hint' : 'research.research.filter.query_hint_labels'),
 )
 </script>
 

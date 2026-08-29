@@ -93,6 +93,8 @@ export interface ResearchDetail {
   updated_at: string
 }
 
+// Путь наверх приезжает с деталкой, а не достаётся из истории переходов: при заходе по прямой
+// ссылке истории нет, а вернуться в родителя страница обязана уметь всегда.
 export interface AreaDetail {
   code: string
   title: string
@@ -101,10 +103,15 @@ export interface AreaDetail {
   scope: string
   expectations: string
   body: string
+  research_code: string
+  research_title: string
   updated_at: string
 }
 
 export interface SourceQueryDetail extends SourceQueryRow {
+  research_code: string
+  research_title: string
+  area_title: string
   documents: SourceDocumentRow[]
 }
 
@@ -114,11 +121,17 @@ export interface NoteDetail {
   title: string
   description: string
   body: string
+  research_code: string
+  research_title: string
   updated_at: string
 }
 
 export interface SourceDocumentDetail extends SourceDocumentRow {
   body: string | null
+  research_code: string
+  research_title: string
+  area_code: string
+  area_title: string
 }
 
 // ── Эндпойнты ─────────────────────────────────────────────────────────────────
@@ -140,9 +153,12 @@ export type ResearchSortBy = (typeof RESEARCH_SORT_FIELDS)[number]
 
 export interface ListResearchesParams {
   query?: string
-  // Глубина поиска: `false` оставляет от исследования подписи — название и описание, всё
-  // написанное внутри (тело, зоны, заметки) из стога выпадает. Умолчание бэка — искать в телах.
-  in_bodies?: boolean
+  // Слои стога поверх основы. Основа — название и описание — в поиске всегда: ими исследование
+  // названо в списке. Каждый слой включается сам по себе; материал источников у бэка выключен по
+  // умолчанию (он на порядок больше всего написанного руками).
+  in_body?: boolean
+  in_areas_and_notes?: boolean
+  in_sources?: boolean
   // Группа: её код, либо пустая строка — только не разложенные по группам.
   group_code?: string
   sort_by?: ResearchSortBy
@@ -352,6 +368,32 @@ export async function renameNote(code: string, title: string): Promise<NoteDetai
   return internalApi.put<NoteDetail>(`${BASE}/notes/${seg(code)}/title`, { title })
 }
 
+// Описание правится тем же узким способом, что и название: своя ручка на одно поле, в ответе —
+// свежая деталка целиком. Пустая строка означает «стереть»: описание необязательно.
+export async function editResearchDescription(
+  code: string,
+  description: string,
+): Promise<ResearchDetail> {
+  return internalApi.put<ResearchDetail>(
+    `${BASE}/researches/${seg(code)}/description`,
+    { description },
+  )
+}
+
+export async function editAreaDescription(
+  code: string,
+  description: string,
+): Promise<AreaDetail> {
+  return internalApi.put<AreaDetail>(`${BASE}/areas/${seg(code)}/description`, { description })
+}
+
+export async function editNoteDescription(
+  code: string,
+  description: string,
+): Promise<NoteDetail> {
+  return internalApi.put<NoteDetail>(`${BASE}/notes/${seg(code)}/description`, { description })
+}
+
 export async function getArea(code: string): Promise<AreaDetail> {
   return internalApi.get<AreaDetail>(`${BASE}/areas/${seg(code)}`)
 }
@@ -372,24 +414,13 @@ export async function listResearchDocuments(researchCode: string): Promise<Sourc
   return internalApi.get<SourceDocumentRow[]>(`${BASE}/researches/${seg(researchCode)}/documents`)
 }
 
-// Повтор получения материала. Скоуп ручки = что именно перекачиваем: у исследования и области
-// это все источники без материала (`error`), у одиночного — он сам в любом статусе, и его разбор
-// при этом снимается (вердикт был вынесен по прежнему материалу). Отвечают затронутые строки —
-// по их новому статусу видно, чем кончилось: `pending` = материал пришёл, `error` = снова нет.
-
-export async function refetchResearchDocuments(
-  researchCode: string,
-): Promise<SourceDocumentRow[]> {
-  return internalApi.post<SourceDocumentRow[]>(
-    `${BASE}/researches/${seg(researchCode)}/documents/refetch`,
-  )
-}
-
-export async function refetchAreaDocuments(areaCode: string): Promise<SourceDocumentRow[]> {
-  return internalApi.post<SourceDocumentRow[]>(
-    `${BASE}/areas/${seg(areaCode)}/documents/refetch`,
-  )
-}
+// Повтор получения материала — по одному источнику: он сам в любом статусе, и его разбор при этом
+// снимается (вердикт был вынесен по прежнему материалу). Отвечает затронутая строка — по её новому
+// статусу видно, чем кончилось: `pending` = материал пришёл, `error` = снова нет.
+//
+// Ручки уровня исследования и области (`POST .../documents/refetch`) у бэкенда есть, но интерфейс
+// их не зовёт: «перекачать всё сломанное» — долгий прогон, по итогу которого не видно, что именно
+// чинили. Массово это делает агент своим тулом `sources_refetch`.
 
 export async function refetchSourceDocument(code: string): Promise<SourceDocumentRow> {
   return internalApi.post<SourceDocumentRow>(`${BASE}/source-documents/${seg(code)}/refetch`)
