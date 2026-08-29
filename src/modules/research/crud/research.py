@@ -14,7 +14,12 @@ from sqlalchemy.sql.selectable import Select
 
 from src.core.database import session_scope
 from src.core.utils.hashing import random_hash
-from src.modules.research.constants import DOC_FILTERED, DOC_KEPT
+from src.modules.research.constants import (
+    DOC_FILTERED,
+    DOC_KEPT,
+    RESEARCH_DESCRIPTION_MAX,
+    RESEARCH_TITLE_MAX,
+)
 from src.modules.research.models.area import ResearchArea
 from src.modules.research.models.group import ResearchGroup
 from src.modules.research.models.note import ResearchNote
@@ -123,6 +128,16 @@ async def research_count(*, codes: list[str] | None = None, group_code: str | No
         return int((await s.execute(stmt)).scalar_one())
 
 
+def _clip(value: str | None, limit: int) -> str:
+    """Усечь строку до ``limit`` символов Unicode; ``None`` → ``""`` (поле не nullable).
+
+    Та же мягкая граница, что у области и заметки: размер поля — не ошибка валидации. SQLite
+    длину VARCHAR не проверяет вовсе, поэтому без усечения граница держится только на PostgreSQL
+    (и держалась бы отказом записи).
+    """
+    return (value or "")[:limit]
+
+
 async def research_create(
     *,
     title: str,
@@ -134,8 +149,8 @@ async def research_create(
         row = Research(
             code=research_code(),
             group_code=group_code or None,
-            title=title,
-            description=description or "",
+            title=_clip(title, RESEARCH_TITLE_MAX),
+            description=_clip(description, RESEARCH_DESCRIPTION_MAX),
             body=body or "",
         )
         s.add(row)
@@ -185,9 +200,9 @@ async def research_update(
         if row is None:
             return None
         if title is not None:
-            row.title = title
+            row.title = _clip(title, RESEARCH_TITLE_MAX)
         if description is not None:
-            row.description = description
+            row.description = _clip(description, RESEARCH_DESCRIPTION_MAX)
         if body is not None:
             row.body = body
         if group_code is not None:

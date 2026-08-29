@@ -27,6 +27,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from src.core.database.runtime import Base
 from src.core.database.types import timestamp
 from src.core.utils.date import utc_now
+from src.modules.research.constants import RESEARCH_DESCRIPTION_MAX
 
 
 class Research(Base):
@@ -41,7 +42,9 @@ class Research(Base):
         nullable=True,
     )
     title: Mapped[str] = mapped_column(String(128))
-    description: Mapped[str] = mapped_column(String(512), default="", server_default=text("''"))
+    description: Mapped[str] = mapped_column(
+        String(RESEARCH_DESCRIPTION_MAX), default="", server_default=text("''")
+    )
     body: Mapped[str] = mapped_column(Text, default="", server_default=text("''"))
     created_at: Mapped[datetime] = mapped_column(timestamp(), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(

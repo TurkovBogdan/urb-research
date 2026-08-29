@@ -38,6 +38,9 @@ GROUP_RESEARCHES_ACTIONS = (
 )
 
 RESEARCH_TITLE_MAX = 128
+# Шире, чем у области и заметки (512): описание исследования пишет агент, и в базе уже лежат
+# тексты длиннее — потолок подтянут под факт с запасом (см. миграцию rem_009).
+RESEARCH_DESCRIPTION_MAX = 2048
 
 GROUP_TITLE_MAX = 128
 GROUP_DESCRIPTION_MAX = 512
@@ -91,6 +94,7 @@ __all__ = [
     "SEARCH_CODE_PREFIX",
     "PAGE_CODE_PREFIX",
     "RESEARCH_TITLE_MAX",
+    "RESEARCH_DESCRIPTION_MAX",
     "GROUP_TITLE_MAX",
     "GROUP_DESCRIPTION_MAX",
     "GROUP_ICON_MAX",
