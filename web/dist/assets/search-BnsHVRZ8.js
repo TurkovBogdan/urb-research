@@ -1,1 +1,0 @@
-import{aA as n,m as s}from"./index-Ds9idVhQ.js";function c(e){return e.trim().toLowerCase()}function a(e,r){return r?e.some(t=>t&&t.toLowerCase().includes(r)):!0}const i=2,o="deeper";function m(e){return[{key:o,icon:s,label:e}]}function p(e,r){return n({get:()=>e()?[o]:[],set:t=>r(t.includes(o))})}export{i as M,p as a,m as d,a as m,c as n};
