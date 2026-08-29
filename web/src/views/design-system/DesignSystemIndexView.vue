@@ -11,7 +11,7 @@ import {
   IconLayoutBottombarExpand, IconToggleLeft, IconPaperclip,
   IconMessages, IconMail, IconChevronDown, IconUsersGroup, IconMoodSmile,
   IconMoodSad, IconHeading, IconPalette, IconBrush, IconLayoutList, IconLayoutNavbar,
-  IconSearch, IconFileText, IconFolders,
+  IconSearch, IconFileText, IconFolders, IconLayoutSidebar,
 } from '@tabler/icons-vue'
 import type { TablerIcon } from '@/shared/nav'
 import PageLayout from '@/layout/templates/PageLayout.vue'
@@ -108,6 +108,7 @@ const groups: Group[] = [
       { slug: 'spoiler',      icon: IconChevronDown },
       { slug: 'members-cell', icon: IconUsersGroup },
       { slug: 'page-header', icon: IconLayoutNavbar },
+      { slug: 'detail-nav', icon: IconLayoutSidebar },
       { slug: 'section-header', icon: IconHeading },
     ],
   },

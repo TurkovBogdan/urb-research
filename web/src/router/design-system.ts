@@ -51,6 +51,7 @@ const PAGES: Record<string, string> = {
   spoiler:         'structure/SpoilerView',
   'members-cell':  'structure/MembersCellView',
   'page-header':   'structure/PageHeaderView',
+  'detail-nav':    'structure/DetailNavView',
   'section-header': 'structure/SectionHeaderView',
   kanban:          'interface/KanbanView',
   'edge-scroller': 'interface/EdgeScrollerView',

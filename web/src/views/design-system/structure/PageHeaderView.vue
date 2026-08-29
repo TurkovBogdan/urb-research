@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// Стандарт шапки страницы: одна анатомия на все страницы приложения. Правило проверяется
-// автоматически (tests/apps/test_web_page_header.py), поэтому здесь оно не пересказывается
-// прозой, а показывается в двух формах, которые только и встречаются.
+// Стандарт шапки страницы — рамка СПИСКОВ (у деталки рамка своя, см. `detail-nav`). Правило
+// проверяется автоматически (tests/apps/test_web_page_header.py), поэтому здесь оно не
+// пересказывается прозой, а показывается в двух формах, которые только и встречаются.
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { IconCopy, IconRefresh } from '@tabler/icons-vue'
@@ -22,13 +22,10 @@ const listSnippet = `<!-- Страница списка: имя раздела, 
   </template>
 </PageHeader>`
 
-const detailSnippet = `<!-- Страница объекта: возврат, имя самого объекта, действия над ним.
-     Описания нет — под ним уже лежит сам объект, и вторая подпись была бы шумом. -->
-<PageHeader :title="research?.title || t('…detail.title')" :loading="store.loading" back-to="/research/researches">
-  <!-- Слот заменяет заголовок целиком вместе с тегом — под правку названия на месте. -->
-  <template v-if="store.research" #title>
-    <TitleEditor variant="title" :heading="1" :title="store.research.title" @save="store.rename" />
-  </template>
+const detailSnippet = `<!-- Вложенный раздел: тот же список, но внутри чего-то — полка с её
+     исследованиями. Отсюда возврат: сюда пришли с родительской страницы, а не из меню. -->
+<PageHeader :title="title" :loading="store.loading" back-to="/research/groups">
+  <template v-if="group" #description>{{ description }}</template>
   <template #actions>…</template>
 </PageHeader>`
 </script>
@@ -72,6 +69,7 @@ const detailSnippet = `<!-- Страница объекта: возврат, и�
         <div class="ds-frame">
           <PageHeader
             :title="t('design-system.section.page-header.sample.detail_title')"
+            :description="t('design-system.section.page-header.sample.detail_desc')"
             back-to="/design-system/page-header"
           >
             <template #actions>
