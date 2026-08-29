@@ -272,6 +272,16 @@ async def test_source_get_has_body(call, use_search):
     assert list(g.keys())[-1] == "updated_at"
 
 
+async def test_source_get_hides_the_way_up(call, use_search):
+    """Область и исследование источника — поля интерфейса: он поднимает по ним человека, агент же
+    и так знает, в каком месте дерева работает."""
+    _, _, _, sources = await _seed(call, use_search, n=1)
+
+    g = await call("source_get", source_code=sources[0]["code"])
+
+    assert set(g) == _SOURCE_KEYS | {"body"}
+
+
 async def test_source_get_not_found(call):
     with pytest.raises(ToolError, match="Source .* not found"):
         await call("source_get", source_code="SOURCE@missing00000000000")

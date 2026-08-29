@@ -62,6 +62,16 @@ async def test_note_get_full_with_body(call):
     assert list(g.keys())[-1] == "updated_at"
 
 
+async def test_note_get_hides_the_way_up(call):
+    """Путь наверх — поле интерфейса: агенту исследование известно, и в наборе полей его нет."""
+    r = await _research(call)
+    n = (await call("note_create", research_code=r, kind="idea", title="N"))["code"]
+
+    g = await call("note_get", note_code=n)
+
+    assert set(g) == {"code", "kind", "title", "description", "body", "updated_at"}
+
+
 async def test_note_get_not_found(call):
     with pytest.raises(ToolError, match="Note .* not found"):
         await call("note_get", note_code="NOTE@missing0000000000000")

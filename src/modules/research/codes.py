@@ -40,7 +40,8 @@ def strip_prefix(value: str | None) -> str | None:
     return value.rpartition("@")[2] if value else value
 
 
-def _tag(prefix: str, value: str | None) -> str | None:
+def tagged(prefix: str, value: str | None) -> str | None:
+    """Storage → boundary: presentation form of a bare code (``AREA@<hash>``); ``None`` stays ``None``."""
     return value if value is None else f"{prefix}@{value}"
 
 
@@ -53,9 +54,9 @@ def prefixed(prefix: str):
     return Annotated[
         str,
         PlainSerializer(
-            lambda value: _tag(prefix, value), return_type=str, when_used="json"
+            lambda value: tagged(prefix, value), return_type=str, when_used="json"
         ),
     ]
 
 
-__all__ = ["strip_prefix", "prefixed", "code_prefix"]
+__all__ = ["strip_prefix", "prefixed", "code_prefix", "tagged"]

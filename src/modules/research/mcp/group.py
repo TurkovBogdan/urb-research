@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 from src.modules.research.codes import strip_prefix
 from src.modules.research.crud import group as group_crud
-from src.modules.research.dto import GroupCreated, GroupScan
+from src.modules.research.dto import AgentGroupCreated, AgentGroupScan
 
 if TYPE_CHECKING:  # fork fastmcp — только backend (через mcp_server(ctx))
     from fastmcp import FastMCP
@@ -25,7 +25,7 @@ def register(mcp: "FastMCP") -> None:
     async def group_create(
         title: str,
         description: str | None = None,
-    ) -> GroupCreated:
+    ) -> AgentGroupCreated:
         """Create a group — a folder that researches are filed in.
 
         A group carries no research content of its own: it only names a folder. Overlong
@@ -36,20 +36,20 @@ def register(mcp: "FastMCP") -> None:
             description: One-line "what lives here" for scanning the list (≤512).
         """
         row = await group_crud.group_create(title=title, description=description)
-        return GroupCreated.model_validate(row)
+        return AgentGroupCreated.model_validate(row)
 
     @mcp.tool()
-    async def group_list() -> list[GroupScan]:
+    async def group_list() -> list[AgentGroupScan]:
         """List all groups in the order the user arranged them."""
         # Ключ задан явно: у агента и у веб-списка разные вопросы к порядку. Веб сортируется
         # тем, что человек выбрал в панели (по умолчанию — где недавно работали), а сюда
         # приезжает та расстановка, которую он выставил руками (`sort`) и которую агент
         # видит, но не меняет.
         rows = await group_crud.group_list(sort_by="sort", sort_dir="desc")
-        return [GroupScan.model_validate(r) for r in rows]
+        return [AgentGroupScan.model_validate(r) for r in rows]
 
     @mcp.tool()
-    async def group_get(group_code: str) -> GroupScan:
+    async def group_get(group_code: str) -> AgentGroupScan:
         """Return one group. A group has no body — this is every field it has.
 
         Args:
@@ -59,14 +59,14 @@ def register(mcp: "FastMCP") -> None:
         row = await group_crud.group_get(group_code)
         if row is None:
             raise ValueError(f"Group {group_code} not found.")
-        return GroupScan.model_validate(row)
+        return AgentGroupScan.model_validate(row)
 
     @mcp.tool()
     async def group_update(
         group_code: str,
         title: str | None = None,
         description: str | None = None,
-    ) -> GroupScan:
+    ) -> AgentGroupScan:
         """Update a group's fields (omit a field to keep it).
 
         Args:
@@ -78,7 +78,7 @@ def register(mcp: "FastMCP") -> None:
         row = await group_crud.group_update(group_code, title=title, description=description)
         if row is None:
             raise ValueError(f"Group {group_code} not found.")
-        return GroupScan.model_validate(row)
+        return AgentGroupScan.model_validate(row)
 
     @mcp.tool()
     async def group_delete(group_code: str) -> bool:

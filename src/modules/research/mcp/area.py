@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from src.modules.research.codes import strip_prefix
 from src.modules.research.crud import area as area_crud
 from src.modules.research.crud import research as research_crud
-from src.modules.research.dto import AreaCreated, AreaDetail, AreaRow
+from src.modules.research.dto import AgentAreaCreated, AgentAreaDetail, AreaRow
 
 if TYPE_CHECKING:  # fork fastmcp — только backend (через mcp_server(ctx))
     from fastmcp import FastMCP
@@ -29,7 +29,7 @@ def register(mcp: "FastMCP") -> None:
         objective: str | None = None,
         scope: str | None = None,
         expectations: str | None = None,
-    ) -> AreaCreated:
+    ) -> AgentAreaCreated:
         """Add a research area (a thematic direction / report section) under a research.
 
         An area is the mid level: research → area → query. title/description are the scan
@@ -56,7 +56,7 @@ def register(mcp: "FastMCP") -> None:
             scope=scope,
             expectations=expectations,
         )
-        return AreaCreated.model_validate(row)
+        return AgentAreaCreated.model_validate(row)
 
     @mcp.tool()
     async def areas_list(research_code: str) -> list[AreaRow]:
@@ -72,7 +72,7 @@ def register(mcp: "FastMCP") -> None:
         return [AreaRow.model_validate(r) for r in rows]
 
     @mcp.tool()
-    async def area_get(area_code: str) -> AreaDetail:
+    async def area_get(area_code: str) -> AgentAreaDetail:
         """Return one area in full — scan layer (title/description) + body.
 
         Args:
@@ -82,7 +82,7 @@ def register(mcp: "FastMCP") -> None:
         row = await area_crud.area_get(area_code)
         if row is None:
             raise ValueError(f"Area {area_code} not found.")
-        return AreaDetail.model_validate(row)
+        return AgentAreaDetail.model_validate(row)
 
     @mcp.tool()
     async def area_update(
@@ -106,6 +106,7 @@ def register(mcp: "FastMCP") -> None:
             scope: New scope / boundaries (≤1024), or omit.
             expectations: New expected form of the result (≤1024), or omit.
             body: New section synthesis in markdown (unlimited), or omit.
+                Markup rules — skill_get('body-markup'); a diagram in it — skill_get('mermaid').
         """
         area_code = strip_prefix(area_code)
         row = await area_crud.area_update(

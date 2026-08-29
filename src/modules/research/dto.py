@@ -1,9 +1,18 @@
 """DTO research — Row-контракты + составные read-представления.
 
-``*Row`` — тонкие зеркала строк (``from_attributes``), общие для MCP и web-API.
-Даты сериализуются в SQL-формат ядровым ``DatetimeUTCStr`` — его ждёт фронт-парсер
-(``shared/utils/date.ts`` через Luxon ``fromSQL``, не ISO с ``T``). Конверт списка —
-ядровый ``core.api.Paged``; ``*Detail``/``ListRow`` — составные под web-вьюер.
+**Префикс ``Agent`` = поверхность агента.** Что видит агент, в этом модуле управляется жёстко,
+поэтому граница проведена именем: класс с префиксом ``Agent`` возвращается тулами MCP и больше
+никем, всё остальное — контракты web-вьюера. Поиск по ``Agent`` в ``mcp/`` даёт всю агентскую
+поверхность целиком. Где вопрос у обеих сторон один (строки списков), контракт общий и префикса
+не несёт.
+
+Интерфейсная деталь наследует агентскую и добавляет то, что нужно только человеку, — например
+путь наверх (``research_code``/``research_title``): страница обязана вернуть его в родителя и при
+прямом заходе по ссылке, когда истории переходов нет.
+
+``*Row`` — тонкие зеркала строк (``from_attributes``). Даты сериализуются в SQL-формат ядровым
+``DatetimeUTCStr`` — его ждёт фронт-парсер (``shared/utils/date.ts`` через Luxon ``fromSQL``, не
+ISO с ``T``). Конверт списка — ядровый ``core.api.Paged``.
 """
 
 from __future__ import annotations
@@ -32,7 +41,7 @@ SourceQueryCode = prefixed(SOURCE_QUERY_CODE_PREFIX)
 SourceDocumentCode = prefixed(SOURCE_DOCUMENT_CODE_PREFIX)
 
 
-class GroupCreated(BaseModel):
+class AgentGroupCreated(BaseModel):
     """Возврат создания группы — только код."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -40,7 +49,7 @@ class GroupCreated(BaseModel):
     code: GroupCode
 
 
-class GroupScan(BaseModel):
+class AgentGroupScan(BaseModel):
     """Группа для MCP: одна карточка — ни оформления, ни позиции в списке.
 
     Как группа выглядит (``icon``/``color``) и где стоит (``sort``) — выбор человека в интерфейсе;
@@ -85,7 +94,7 @@ class GroupListRow(GroupRow):
     research_updated_at: DatetimeUTCStr | None = None
 
 
-class ResearchCreated(BaseModel):
+class AgentResearchCreated(BaseModel):
     """Возврат создания исследования — только код (агент прислал остальное сам)."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -93,7 +102,7 @@ class ResearchCreated(BaseModel):
     code: ResearchCode
 
 
-class ResearchScan(BaseModel):
+class AgentResearchScan(BaseModel):
     """Скан research — код/заголовок/описание + группа (без дат/тела). Возврат research_update.
 
     ``group_code`` — ссылка (``None`` = не разложено), ``group_name`` — **вычисляемое** имя группы
@@ -110,7 +119,7 @@ class ResearchScan(BaseModel):
     group_name: str = ""
 
 
-class ResearchListItem(BaseModel):
+class AgentResearchRow(BaseModel):
     """Строка research_list — скан-поля + группа + ``updated_at`` (без ``created_at``)."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -123,7 +132,7 @@ class ResearchListItem(BaseModel):
     updated_at: DatetimeUTCStr
 
 
-class AreaScan(BaseModel):
+class AgentAreaScan(BaseModel):
     """Вложенная проекция области в research_get: код/заголовок/описание/updated_at."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -134,7 +143,7 @@ class AreaScan(BaseModel):
     updated_at: DatetimeUTCStr
 
 
-class NoteScan(BaseModel):
+class AgentNoteScan(BaseModel):
     """Вложенная проекция заметки в research_get: код/заголовок/описание/updated_at."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -145,12 +154,12 @@ class NoteScan(BaseModel):
     updated_at: DatetimeUTCStr
 
 
-class ResearchView(ResearchScan):
+class AgentResearchDetail(AgentResearchScan):
     """research_get: скан + тело + области и заметки (updated_at ↑) + даты (в конце)."""
 
     body: str = ""
-    areas: list[AreaScan] = []
-    notes: list[NoteScan] = []
+    areas: list[AgentAreaScan] = []
+    notes: list[AgentNoteScan] = []
     updated_at: DatetimeUTCStr
 
 
@@ -193,7 +202,7 @@ class ResearchSourceDocumentRow(BaseModel):
     updated_at: DatetimeUTCStr
 
 
-class ResearchSourceDocumentDetail(BaseModel):
+class AgentSourceDocumentDetail(BaseModel):
     """Источник + тело материала (``web_search_page.body`` через join); ``updated_at`` последним."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -209,14 +218,27 @@ class ResearchSourceDocumentDetail(BaseModel):
     updated_at: DatetimeUTCStr
 
 
-class SkippedCode(BaseModel):
+class ResearchSourceDocumentDetail(AgentSourceDocumentDetail):
+    """Источник для web-вьюера: агентская деталь + путь наверх — область и исследование.
+
+    Цепочка полная, потому что источник лежит глубже всех: со страницы поднимаются и в область,
+    из которой он найден, и сразу в исследование.
+    """
+
+    research_code: ResearchCode
+    research_title: str = ""
+    area_code: AreaCode
+    area_title: str = ""
+
+
+class AgentSkippedCode(BaseModel):
     """Код, по которому качать оказалось нечего, и почему именно — как его передали."""
 
     code: str
     reason: str
 
 
-class SourcesRefetched(BaseModel):
+class AgentSourcesRefetched(BaseModel):
     """Итог повтора получения по нескольким кодам: что перекачано и что пропущено.
 
     Два списка вместо одного, потому что вопросов у агента тоже два: «что теперь читать»
@@ -225,10 +247,10 @@ class SourcesRefetched(BaseModel):
     """
 
     sources: list["ResearchSourceDocumentRow"] = []
-    skipped: list[SkippedCode] = []
+    skipped: list[AgentSkippedCode] = []
 
 
-class AreaCreated(BaseModel):
+class AgentAreaCreated(BaseModel):
     """Возврат создания области — только код."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -247,7 +269,7 @@ class AreaRow(BaseModel):
     updated_at: DatetimeUTCStr
 
 
-class AreaDetail(BaseModel):
+class AgentAreaDetail(BaseModel):
     """Область целиком: скан-слой + бриф (objective/scope/expectations) + body; ``updated_at`` последним."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -262,7 +284,18 @@ class AreaDetail(BaseModel):
     updated_at: DatetimeUTCStr
 
 
-class NoteCreated(BaseModel):
+class AreaDetail(AgentAreaDetail):
+    """Область для web-вьюера: агентская деталь + путь наверх, в исследование.
+
+    Правило «``updated_at`` последним» тут уступает наследованию: добавленные наследником поля
+    встают за унаследованными, и переставить их можно только повторив весь набор целиком.
+    """
+
+    research_code: ResearchCode
+    research_title: str = ""
+
+
+class AgentNoteCreated(BaseModel):
     """Возврат создания заметки — только код."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -282,7 +315,7 @@ class NoteRow(BaseModel):
     updated_at: DatetimeUTCStr
 
 
-class NoteDetail(BaseModel):
+class AgentNoteDetail(BaseModel):
     """Заметка целиком: скан-слой + основное тело (markdown); ``updated_at`` последним."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -293,6 +326,13 @@ class NoteDetail(BaseModel):
     description: str = ""
     body: str = ""
     updated_at: DatetimeUTCStr
+
+
+class NoteDetail(AgentNoteDetail):
+    """Заметка для web-вьюера: агентская деталь + путь наверх, в исследование."""
+
+    research_code: ResearchCode
+    research_title: str = ""
 
 
 class ResearchListRow(BaseModel):
@@ -341,12 +381,19 @@ class ResearchDetail(BaseModel):
 
 
 class SourceQueryDetail(ResearchSourceQueryRow):
-    """Поиск + его источники (web-вьюер)."""
+    """Поиск + его источники (web-вьюер) + путь наверх: область и исследование.
 
+    ``area_code`` уже несёт строка запроса — тут к нему добавляется только заголовок, которым
+    область названа человеку.
+    """
+
+    research_code: ResearchCode
+    research_title: str = ""
+    area_title: str = ""
     documents: list[ResearchSourceDocumentRow] = []
 
 
-class BodyView(BaseModel):
+class AgentBodyView(BaseModel):
     """Возврат body-редактора: код (с префиксом, эхо входа) + новое тело; ``updated_at`` последним."""
 
     model_config = ConfigDict(from_attributes=True)
@@ -354,6 +401,32 @@ class BodyView(BaseModel):
     code: str
     body: str = ""
     updated_at: DatetimeUTCStr
+
+
+class AgentSkillRow(BaseModel):
+    """Строка каталога навыков — имя, условие вызова, разделы; текста тут нет по замыслу."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    name: str
+    description: str = ""
+    sections: list[str] = []
+
+
+class AgentSkill(BaseModel):
+    """Прочитанный навык: текст целиком или один раздел (``section`` пуст у целого).
+
+    ``sections`` едет и с телом раздела — иначе агент, ушедший вглубь, теряет список соседних
+    веток и не знает, куда идти дальше.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    name: str
+    section: str = ""
+    description: str = ""
+    sections: list[str] = []
+    text: str
 
 
 class DeepSearchResult(BaseModel):
@@ -416,11 +489,11 @@ def group_style_fields(group: "ResearchGroup | None") -> dict:
     )
 
 
-def research_list_item(
+def agent_research_row(
     row: "Research", group: "ResearchGroup | None"
-) -> ResearchListItem:
+) -> AgentResearchRow:
     """Строка research_list: свои поля + имя группы из join'а."""
-    return ResearchListItem(
+    return AgentResearchRow(
         code=row.code,
         title=row.title,
         description=row.description,
@@ -451,46 +524,75 @@ def source_document_row(
     return ResearchSourceDocumentRow(**_source_document_fields(doc, page))
 
 
-def source_document_detail(
+def agent_source_document_detail(
     doc: "ResearchSourceDocument", page: "WebSearchPage | None"
-) -> ResearchSourceDocumentDetail:
-    """Деталь источника: строка + тело материала (``web_search_page.body``)."""
-    return ResearchSourceDocumentDetail(
+) -> AgentSourceDocumentDetail:
+    """Деталь источника для агента: строка + тело материала (``web_search_page.body``)."""
+    return AgentSourceDocumentDetail(
         **_source_document_fields(doc, page), body=page.body if page else None
     )
 
 
+def source_document_detail(
+    doc: "ResearchSourceDocument",
+    page: "WebSearchPage | None",
+    *,
+    research_title: str = "",
+    area_title: str = "",
+) -> ResearchSourceDocumentDetail:
+    """Деталь источника для web-вьюера: агентский набор + путь наверх.
+
+    Заголовки родителей приходят разрешёнными снаружи (``crud/references``), а не достаются
+    здесь: собирать DTO в обход сессии — правило модуля.
+    """
+    return ResearchSourceDocumentDetail(
+        **_source_document_fields(doc, page),
+        body=page.body if page else None,
+        research_code=doc.research_code,
+        research_title=research_title,
+        area_code=doc.area_code,
+        area_title=area_title,
+    )
+
+
 __all__ = [
-    "GroupCreated",
+    "AgentGroupCreated",
+    "AgentGroupScan",
+    "AgentResearchCreated",
+    "AgentResearchScan",
+    "AgentResearchRow",
+    "AgentResearchDetail",
+    "AgentAreaScan",
+    "AgentNoteScan",
+    "AgentAreaCreated",
+    "AgentAreaDetail",
+    "AgentNoteCreated",
+    "AgentNoteDetail",
+    "AgentSourceDocumentDetail",
+    "AgentSkippedCode",
+    "AgentSourcesRefetched",
+    "AgentBodyView",
+    "AgentSkill",
+    "AgentSkillRow",
     "GroupRow",
     "GroupListRow",
-    "ResearchCreated",
-    "ResearchScan",
-    "ResearchListItem",
-    "AreaScan",
-    "NoteScan",
-    "ResearchView",
     "ResearchRow",
-    "AreaCreated",
     "AreaRow",
     "AreaDetail",
-    "NoteCreated",
     "NoteRow",
     "NoteDetail",
     "ResearchSourceQueryRow",
     "ResearchSourceDocumentRow",
     "ResearchSourceDocumentDetail",
-    "SkippedCode",
-    "SourcesRefetched",
     "ResearchListRow",
     "ResearchDetail",
     "SourceQueryDetail",
-    "BodyView",
     "ReferencesBody",
     "CodeLabel",
     "group_fields",
     "group_style_fields",
-    "research_list_item",
+    "agent_research_row",
     "source_document_row",
+    "agent_source_document_detail",
     "source_document_detail",
 ]

@@ -23,16 +23,16 @@ from src.modules.research.crud import research as research_crud
 from src.modules.research.crud import source_document as source_document_crud
 from src.modules.research.crud import source_query as source_query_crud
 from src.modules.research.dto import (
-    AreaScan,
-    NoteScan,
-    ResearchCreated,
-    ResearchListItem,
-    ResearchScan,
+    AgentAreaScan,
+    AgentNoteScan,
+    AgentResearchCreated,
+    AgentResearchRow,
+    AgentResearchScan,
     ResearchSourceDocumentRow,
     ResearchSourceQueryRow,
-    ResearchView,
+    AgentResearchDetail,
     group_fields,
-    research_list_item,
+    agent_research_row,
     source_document_row,
 )
 from src.modules.web_search.constants import FETCH_STATUS_ERROR
@@ -77,13 +77,14 @@ def register(mcp: "FastMCP") -> None:
         description: str | None = None,
         body: str | None = None,
         group_code: str | None = None,
-    ) -> ResearchCreated:
+    ) -> AgentResearchCreated:
         """Start a research (knowledge artifact) and register it. Returns only its code.
 
         Args:
             title: The research title / name (up to 128 chars).
             description: Optional short description / abstract (up to 512 chars).
             body: Optional main body in markdown (fill in as the research progresses).
+                Markup rules — skill_get('body-markup'); a diagram in it — skill_get('mermaid').
             group_code: Optional GROUP@ code to file this research under (see group_list).
                 Grouping is cosmetic shelving — skip it unless the user asked for it.
         """
@@ -92,10 +93,10 @@ def register(mcp: "FastMCP") -> None:
         row = await research_crud.research_create(
             title=title, description=description, body=body, group_code=group_code
         )
-        return ResearchCreated.model_validate(row)
+        return AgentResearchCreated.model_validate(row)
 
     @mcp.tool()
-    async def research_get(research_code: str) -> ResearchView:
+    async def research_get(research_code: str) -> AgentResearchDetail:
         """Return one research in full — its fields and body, plus its areas and notes.
 
         Areas and notes are the scan layer (code, title, description, updated_at),
@@ -113,19 +114,19 @@ def register(mcp: "FastMCP") -> None:
         row, group = found
         areas = await area_crud.area_list_by_research(research_code)
         notes = await note_crud.note_list_by_research(research_code)
-        return ResearchView(
+        return AgentResearchDetail(
             code=row.code,
             title=row.title,
             description=row.description,
             **group_fields(group),
             body=row.body,
-            areas=[AreaScan.model_validate(a) for a in _oldest_first(areas)],
-            notes=[NoteScan.model_validate(n) for n in _oldest_first(notes)],
+            areas=[AgentAreaScan.model_validate(a) for a in _oldest_first(areas)],
+            notes=[AgentNoteScan.model_validate(n) for n in _oldest_first(notes)],
             updated_at=row.updated_at,
         )
 
     @mcp.tool()
-    async def research_list(group_code: str | None = None) -> list[ResearchListItem]:
+    async def research_list(group_code: str | None = None) -> list[AgentResearchRow]:
         """List researches, most recently updated first.
 
         Each row: code, title, description, its group (group_code / group_name — empty when the
@@ -139,7 +140,7 @@ def register(mcp: "FastMCP") -> None:
         if group_code:
             await _resolve_group(group_code)
         return [
-            research_list_item(row, group)
+            agent_research_row(row, group)
             for row, group in await research_crud.research_list_with_group(
                 group_code=group_code
             )
@@ -152,7 +153,7 @@ def register(mcp: "FastMCP") -> None:
         description: str | None = None,
         body: str | None = None,
         group_code: str | None = None,
-    ) -> ResearchScan:
+    ) -> AgentResearchScan:
         """Update a research's title / description / body / group (omit a field to keep it).
 
         Returns the updated scan (code, title, description, group). For incremental body edits
@@ -163,6 +164,7 @@ def register(mcp: "FastMCP") -> None:
             title: New title (up to 128 chars), or omit to keep the current one.
             description: New short description (up to 512 chars), or omit to keep.
             body: New main body in markdown, or omit to keep the current one.
+                Markup rules — skill_get('body-markup'); a diagram in it — skill_get('mermaid').
             group_code: GROUP@ code to file this research in, or an empty string to take it out
                 of its group; omit to keep. Optional — grouping is for the user's convenience.
         """
@@ -180,7 +182,7 @@ def register(mcp: "FastMCP") -> None:
             raise ValueError(f"Research {research_code} not found.")
         if group is None and row.group_code:
             group = await group_crud.group_get(row.group_code)
-        return ResearchScan(
+        return AgentResearchScan(
             code=row.code,
             title=row.title,
             description=row.description,

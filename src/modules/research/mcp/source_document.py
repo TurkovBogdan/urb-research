@@ -29,11 +29,11 @@ from src.modules.research.constants import (
 from src.modules.research.crud import source_document as source_document_crud
 from src.modules.research.crud.source_document import SourceDocumentWithPage
 from src.modules.research.dto import (
-    ResearchSourceDocumentDetail,
+    AgentSourceDocumentDetail,
     ResearchSourceDocumentRow,
-    SkippedCode,
-    SourcesRefetched,
-    source_document_detail,
+    AgentSkippedCode,
+    AgentSourcesRefetched,
+    agent_source_document_detail,
     source_document_row,
 )
 from src.modules.research.services.refetch import refetch_sources
@@ -80,18 +80,18 @@ async def _sources_without_material(code: str) -> list[SourceDocumentWithPage] |
 
 async def _collect_broken(
     codes: list[str],
-) -> tuple[list[SourceDocumentWithPage], list[SkippedCode]]:
+) -> tuple[list[SourceDocumentWithPage], list[AgentSkippedCode]]:
     """Развернуть коды в источники без материала; каждый бесплодный код — строка отчёта.
 
     Источники складываются по своему коду: коды могут перекрываться (исследование и его же
     область), и без этого одну страницу качали бы дважды за вызов.
     """
     broken: dict[str, SourceDocumentWithPage] = {}
-    skipped: list[SkippedCode] = []
+    skipped: list[AgentSkippedCode] = []
     for code in dict.fromkeys(codes):
         found = await _sources_without_material(code)
         if isinstance(found, str):
-            skipped.append(SkippedCode(code=code, reason=found))
+            skipped.append(AgentSkippedCode(code=code, reason=found))
             continue
         broken.update({doc.code: (doc, page) for doc, page in found})
     return list(broken.values()), skipped
@@ -119,7 +119,7 @@ def register(mcp: "FastMCP") -> None:
         return [source_document_row(doc, page) for doc, page in rows]
 
     @mcp.tool()
-    async def sources_refetch(codes: list[str]) -> SourcesRefetched:
+    async def sources_refetch(codes: list[str]) -> AgentSourcesRefetched:
         """Download the material again for sources that have none. Takes up to 6 codes at once.
 
         Use it when sources came back `error`: fetching is terminal and never retries itself, so
@@ -149,13 +149,13 @@ def register(mcp: "FastMCP") -> None:
             rows = await refetch_sources(broken)
         except RuntimeError as exc:
             raise ValueError(f"Cannot refetch: {exc}.") from exc
-        return SourcesRefetched(
+        return AgentSourcesRefetched(
             sources=[source_document_row(doc, page) for doc, page in rows],
             skipped=skipped,
         )
 
     @mcp.tool()
-    async def source_get(source_code: str) -> ResearchSourceDocumentDetail:
+    async def source_get(source_code: str) -> AgentSourceDocumentDetail:
         """Return one source — assessment + url/title/body (joined from the page).
 
         A null `body` goes with status `error`: the page never downloaded. That state is
@@ -171,7 +171,7 @@ def register(mcp: "FastMCP") -> None:
         if result is None:
             raise ValueError(f"Source {source_code} not found.")
         doc, page = result
-        return source_document_detail(doc, page)
+        return agent_source_document_detail(doc, page)
 
     @mcp.tool()
     async def source_review(

@@ -8,8 +8,11 @@
   (меняет только привязку, не открывая правку самого исследования).
 - **Переименование** (``PUT .../title`` на исследовании / области / заметке) — за пользователем:
   название это то, как человек находит артефакт у себя в списке, и оно не обязано совпадать
-  с формулировкой агента. Ручки нарочно узкие, как ``.../group``: одно поле, остальной текст
-  (описание, бриф, тело) остаётся за MCP.
+  с формулировкой агента. Ручка нарочно узкая, как ``.../group``: одно поле.
+- **Описание** (``PUT .../description`` на исследовании / области / заметке) — по той же причине, что и
+  название: и то и другое человек читает в списке, решая, о чём этот артефакт. Ручка такая же
+  узкая и на одно поле; бриф области (цель / границы / ожидания) и тела (``body``) по-прежнему
+  пишет только MCP.
 - **Удаление** (``DELETE`` на исследовании / области / поиске / заметке) — тоже за пользователем:
   выбросить наработанное это решение человека, а не агента. Ручки зеркалят одноимённые
   MCP-тулы и тот же ручной каскад в CRUD (sqlite FK-каскад выключен). Отдельный источник
@@ -33,8 +36,10 @@ from fastapi import APIRouter, Query, Response
 from pydantic import BaseModel, Field, StringConstraints
 
 from src.core.api import ApiError, Paged
-from src.modules.research.codes import strip_prefix
+from src.modules.research.codes import strip_prefix, tagged
 from src.modules.research.constants import (
+    AREA_CODE_PREFIX,
+    AREA_DESCRIPTION_MAX,
     AREA_TITLE_MAX,
     DOC_ERROR,
     DOC_FILTERED,
@@ -47,7 +52,10 @@ from src.modules.research.constants import (
     GROUP_RESEARCHES_DETACH,
     GROUP_RESEARCHES_MOVE,
     GROUP_TITLE_MAX,
+    NOTE_DESCRIPTION_MAX,
     NOTE_TITLE_MAX,
+    RESEARCH_CODE_PREFIX,
+    RESEARCH_DESCRIPTION_MAX,
     RESEARCH_TITLE_MAX,
 )
 from src.modules.research.crud import area as area_crud
@@ -80,13 +88,17 @@ from src.modules.research.dto import (
     source_document_detail,
     source_document_row,
 )
+from src.modules.research.models.area import ResearchArea
+from src.modules.research.models.note import ResearchNote
 from src.modules.research.services.refetch import refetch_sources
 from src.modules.research.services.search import search_bodies, search_groups, search_researches
 
 router = APIRouter()
 
-_MAX_PAGE_SIZE = 200
-_DEFAULT_PAGE_SIZE = 100
+# Строка списка — название, описание и пять счётчиков, поэтому страница здесь считается сотнями:
+# весь реестр обычно помещается в одну, и листать его не приходится.
+_MAX_PAGE_SIZE = 1000
+_DEFAULT_PAGE_SIZE = 200
 # Значение ``group_code`` в списке, означающее «только не разложенные по группам».
 # Строка, а не ``None``: ``None`` в query-параметре неотличим от «параметр не передан».
 _UNGROUPED = ""
@@ -128,6 +140,33 @@ class TitleBody(BaseModel):
     ]
 
 
+class ResearchDescriptionBody(BaseModel):
+    """Тело правки описания исследования. Пустое допустимо и означает «стереть»: описание
+    необязательно — в отличие от названия, без которого артефакт неразличим в списке."""
+
+    description: Annotated[
+        str, StringConstraints(strip_whitespace=True, max_length=RESEARCH_DESCRIPTION_MAX)
+    ]
+
+
+class AreaDescriptionBody(BaseModel):
+    """То же для описания области. Своё тело, а не общее с исследованием: колонки разной ширины
+    (512 против 2048), и общий потолок либо резал бы описание исследования, либо обещал области
+    длину, которой она не примет."""
+
+    description: Annotated[
+        str, StringConstraints(strip_whitespace=True, max_length=AREA_DESCRIPTION_MAX)
+    ]
+
+
+class NoteDescriptionBody(BaseModel):
+    """То же для описания заметки — со своим потолком, по той же причине."""
+
+    description: Annotated[
+        str, StringConstraints(strip_whitespace=True, max_length=NOTE_DESCRIPTION_MAX)
+    ]
+
+
 def _offset(page: int, page_size: int) -> int:
     return (page - 1) * page_size
 
@@ -135,6 +174,16 @@ def _offset(page: int, page_size: int) -> int:
 async def _require_group(code: str) -> None:
     if await group_crud.group_get(code) is None:
         raise ApiError.not_found("Группа не найдена")
+
+
+async def _parent_titles(*codes: str) -> dict[str, str]:
+    """Заголовки родителей по их **префиксным** кодам — путь наверх для страницы-деталки.
+
+    Деталка обязана вернуть человека в родителя и при прямом заходе по ссылке, когда истории
+    переходов нет, поэтому путь наверх едет вместе с данными. Заголовки достаёт общий резолвер
+    ссылок — тот же, что подставляет имена в пилюли кодов внутри тел.
+    """
+    return await references_crud.resolve_labels(list(codes))
 
 
 @router.get("/groups")
@@ -246,12 +295,17 @@ async def list_researches(
     query: str | None = Query(
         None,
         description=(
-            "Поиск по тексту исследования: название, описание, тело, а также тела его зон "
-            "(включая бриф) и заметок — глубину задаёт in_bodies. Источники не ищутся."
+            "Поиск по тексту исследования. Название и описание в стоге всегда, остальные слои "
+            "включаются флагами in_body / in_areas_and_notes / in_sources."
         ),
     ),
-    in_bodies: bool = Query(
-        True, description="Искать и в телах исследований; false — только названия и описания"
+    in_body: bool = Query(True, description="Искать и в теле самого исследования"),
+    in_areas_and_notes: bool = Query(
+        True, description="Искать и в зонах (включая бриф) и заметках исследования"
+    ),
+    in_sources: bool = Query(
+        False,
+        description="Искать и в материале источников — самый дорогой слой, поэтому по умолчанию нет",
     ),
     group_code: str | None = Query(
         None, description="Полка: код группы, пустая строка — только не разложенные"
@@ -270,7 +324,14 @@ async def list_researches(
     # Поиск идёт по тексту, а не по колонке заголовка, поэтому отрабатывает до SQL и приезжает
     # сюда списком кодов; группу, сортировку и страницу накладывает уже запрос.
     codes = (
-        await search_researches(query, in_bodies=in_bodies) if query and query.strip() else None
+        await search_researches(
+            query,
+            in_body=in_body,
+            in_areas_and_notes=in_areas_and_notes,
+            in_sources=in_sources,
+        )
+        if query and query.strip()
+        else None
     )
     rows = await research_crud.research_list_paged(
         codes=codes,
@@ -347,6 +408,20 @@ async def rename_research(research_code: str, payload: TitleBody) -> ResearchDet
     return await get_research(research_code)
 
 
+@router.put("/researches/{research_code}/description")
+async def edit_research_description(
+    research_code: str, payload: ResearchDescriptionBody
+) -> ResearchDetail:
+    """Изменить краткое описание исследования."""
+    research_code = strip_prefix(research_code)
+    row = await research_crud.research_update(
+        research_code, description=payload.description
+    )
+    if row is None:
+        raise ApiError.not_found("Исследование не найдено")
+    return await get_research(research_code)
+
+
 @router.put("/researches/{research_code}/group")
 async def set_research_group(
     research_code: str, payload: ResearchGroupBody
@@ -374,13 +449,21 @@ async def delete_research(research_code: str) -> Response:
     return Response(status_code=204)
 
 
+async def _area_detail(area: ResearchArea) -> AreaDetail:
+    research_key = tagged(RESEARCH_CODE_PREFIX, area.research_code)
+    titles = await _parent_titles(research_key)
+    detail = AreaDetail.model_validate(area)
+    detail.research_title = titles.get(research_key, "")
+    return detail
+
+
 @router.get("/areas/{area_code}")
 async def get_area(area_code: str) -> AreaDetail:
     area_code = strip_prefix(area_code)
     area = await area_crud.area_get(area_code)
     if area is None:
         raise ApiError.not_found("Область не найдена")
-    return AreaDetail.model_validate(area)
+    return await _area_detail(area)
 
 
 @router.put("/areas/{area_code}/title")
@@ -389,7 +472,18 @@ async def rename_area(area_code: str, payload: TitleBody) -> AreaDetail:
     area = await area_crud.area_update(strip_prefix(area_code), title=payload.title)
     if area is None:
         raise ApiError.not_found("Область не найдена")
-    return AreaDetail.model_validate(area)
+    return await _area_detail(area)
+
+
+@router.put("/areas/{area_code}/description")
+async def edit_area_description(area_code: str, payload: AreaDescriptionBody) -> AreaDetail:
+    """Изменить краткое описание области."""
+    area = await area_crud.area_update(
+        strip_prefix(area_code), description=payload.description
+    )
+    if area is None:
+        raise ApiError.not_found("Область не найдена")
+    return await _area_detail(area)
 
 
 @router.delete("/areas/{area_code}", status_code=204)
@@ -475,8 +569,14 @@ async def get_source_query(query_code: str) -> SourceQueryDetail:
     if query_row is None:
         raise ApiError.not_found("Запрос не найден")
     documents = await source_document_crud.source_document_list_by_query(query_code)
+    research_key = tagged(RESEARCH_CODE_PREFIX, query_row.research_code)
+    area_key = tagged(AREA_CODE_PREFIX, query_row.area_code)
+    titles = await _parent_titles(research_key, area_key)
     return SourceQueryDetail(
         **ResearchSourceQueryRow.model_validate(query_row).model_dump(),
+        research_code=query_row.research_code,
+        research_title=titles.get(research_key, ""),
+        area_title=titles.get(area_key, ""),
         documents=[source_document_row(doc, page) for doc, page in documents],
     )
 
@@ -504,7 +604,15 @@ async def get_source_document(document_code: str) -> ResearchSourceDocumentDetai
     if result is None:
         raise ApiError.not_found("Источник не найден")
     doc, page = result
-    return source_document_detail(doc, page)
+    research_key = tagged(RESEARCH_CODE_PREFIX, doc.research_code)
+    area_key = tagged(AREA_CODE_PREFIX, doc.area_code)
+    titles = await _parent_titles(research_key, area_key)
+    return source_document_detail(
+        doc,
+        page,
+        research_title=titles.get(research_key, ""),
+        area_title=titles.get(area_key, ""),
+    )
 
 
 @router.post("/source-documents/{document_code}/refetch")
@@ -522,13 +630,21 @@ async def refetch_source_document(document_code: str) -> ResearchSourceDocumentR
     return rows[0]
 
 
+async def _note_detail(note: ResearchNote) -> NoteDetail:
+    research_key = tagged(RESEARCH_CODE_PREFIX, note.research_code)
+    titles = await _parent_titles(research_key)
+    detail = NoteDetail.model_validate(note)
+    detail.research_title = titles.get(research_key, "")
+    return detail
+
+
 @router.get("/notes/{note_code}")
 async def get_note(note_code: str) -> NoteDetail:
     note_code = strip_prefix(note_code)
     note = await note_crud.note_get(note_code)
     if note is None:
         raise ApiError.not_found("Заметка не найдена")
-    return NoteDetail.model_validate(note)
+    return await _note_detail(note)
 
 
 @router.put("/notes/{note_code}/title")
@@ -537,7 +653,18 @@ async def rename_note(note_code: str, payload: TitleBody) -> NoteDetail:
     note = await note_crud.note_update(strip_prefix(note_code), title=payload.title)
     if note is None:
         raise ApiError.not_found("Заметка не найдена")
-    return NoteDetail.model_validate(note)
+    return await _note_detail(note)
+
+
+@router.put("/notes/{note_code}/description")
+async def edit_note_description(note_code: str, payload: NoteDescriptionBody) -> NoteDetail:
+    """Изменить краткое описание заметки."""
+    note = await note_crud.note_update(
+        strip_prefix(note_code), description=payload.description
+    )
+    if note is None:
+        raise ApiError.not_found("Заметка не найдена")
+    return await _note_detail(note)
 
 
 @router.delete("/notes/{note_code}", status_code=204)

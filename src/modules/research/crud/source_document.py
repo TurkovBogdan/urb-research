@@ -171,6 +171,30 @@ async def source_material_by_research(research_code: str) -> list[tuple[str, str
         return [(code, body) for code, body in (await s.execute(stmt)).all()]
 
 
+async def source_search_texts() -> list[tuple[str, str]]:
+    """``(research_code, весь текст источника одной строкой)`` по всем источникам реестра.
+
+    Из чего источник состоит для поиска, знает его CRUD: снимок поисковика (``summary``), решение
+    рецензента (``note``) и сам материал страницы. Материал приезжает из ``web_search_page``
+    джойном, как и у остальных read'ов модуля.
+
+    Это самый дорогой слой поиска по реестру — материал на порядок больше всего написанного
+    руками, — поэтому зовут его только с явно включёнными источниками.
+    """
+    stmt = (
+        select(
+            ResearchSourceDocument.research_code,
+            ResearchSourceDocument.summary,
+            ResearchSourceDocument.note,
+            WebSearchPage.body,
+        )
+        .join(WebSearchPage, ResearchSourceDocument.page_code == WebSearchPage.code)
+    )
+    async with session_scope() as s:
+        rows = (await s.execute(stmt)).all()
+    return [(research_code, "\n".join(filter(None, texts))) for research_code, *texts in rows]
+
+
 async def source_document_status_counts_by_research_codes(
     research_codes: list[str],
 ) -> dict[str, dict[str, int]]:
@@ -226,6 +250,7 @@ __all__ = [
     "source_document_revive_by_pages",
     "source_document_reset_by_codes",
     "source_material_by_research",
+    "source_search_texts",
     "source_document_status_counts_by_research_codes",
     "source_document_review",
     "SourceDocumentWithPage",

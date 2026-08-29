@@ -345,8 +345,8 @@ async def test_research_search_narrows_inside_the_shelf(client):
     assert [row["code"] for row in body["items"]] == [f"RESEARCH@{mine.code}"]
 
 
-async def test_research_search_ignores_source_material(client):
-    """Источники не ищем — ни здесь, ни в поиске по полкам."""
+async def test_research_search_ignores_source_material_by_default(client):
+    """Материал источников — слой по запросу: без ``in_sources`` его не читают."""
     research = await research_crud.research_create(title="R")
     area = await area_crud.area_create(research_code=research.code, title="Зона")
     query = await source_query_crud.source_query_create(
@@ -366,6 +366,54 @@ async def test_research_search_ignores_source_material(client):
     assert body["total"] == 0
 
 
+async def test_research_search_reaches_source_material_when_asked(client):
+    """С включёнными источниками в стог входит и материал скачанной страницы."""
+    research = await research_crud.research_create(title="R")
+    area = await area_crud.area_create(research_code=research.code, title="Зона")
+    query = await source_query_crud.source_query_create(
+        research_code=research.code, area_code=area.code, search_code="0" * 22, query="q"
+    )
+    page = await page_crud.page_upsert("https://example.test/mat", title="Страница")
+    await page_crud.page_set_body(page.code, body="Материал про Оренбург")
+    await source_document_crud.source_document_create(
+        research_code=research.code,
+        area_code=area.code,
+        query_code=query.code,
+        page_code=page.code,
+    )
+
+    body = (
+        await client.get(f"{BASE}/researches", params={"query": "оренбург", "in_sources": "true"})
+    ).json()
+
+    assert [row["code"] for row in body["items"]] == [f"RESEARCH@{research.code}"]
+
+
+async def test_research_matched_by_material_is_listed_once(client):
+    """Источников у исследования много, а строка в выдаче одна — совпасть материалом можно
+    несколько раз, и коды не должны задвоиться."""
+    research = await research_crud.research_create(title="R")
+    area = await area_crud.area_create(research_code=research.code, title="Зона")
+    query = await source_query_crud.source_query_create(
+        research_code=research.code, area_code=area.code, search_code="0" * 22, query="q"
+    )
+    for number in (1, 2):
+        page = await page_crud.page_upsert(f"https://example.test/mat{number}", title="Страница")
+        await page_crud.page_set_body(page.code, body="Материал про Оренбург")
+        await source_document_crud.source_document_create(
+            research_code=research.code,
+            area_code=area.code,
+            query_code=query.code,
+            page_code=page.code,
+        )
+
+    body = (
+        await client.get(f"{BASE}/researches", params={"query": "оренбург", "in_sources": "true"})
+    ).json()
+
+    assert body["total"] == 1
+
+
 async def test_research_search_without_matches_is_an_empty_page(client):
     """«Искали и не нашли» — пустая страница, а не весь список: пустой набор кодов не то же,
     что отсутствие поиска."""
@@ -376,33 +424,72 @@ async def test_research_search_without_matches_is_an_empty_page(client):
     assert body["items"] == [] and body["total"] == 0
 
 
-async def test_research_search_without_bodies_matches_only_the_labels(client):
-    """На странице полки тот же переключатель: ищем по подписям, а не по написанному внутри."""
-    by_title = await research_crud.research_create(title="Оренбург в названии")
+async def test_research_search_with_every_layer_off_matches_only_the_labels(client):
+    """Название и описание — основа стога: выключить можно всё остальное, но не их."""
+    await research_crud.research_create(title="Оренбург в названии")
     by_description = await research_crud.research_create(title="R2")
     await research_crud.research_update(by_description.code, description="Про Оренбург")
     by_body = await research_crud.research_create(title="R3")
     await research_crud.research_update(by_body.code, body="Синтез про Оренбург")
 
     body = (
-        await client.get(f"{BASE}/researches", params={"query": "оренбург", "in_bodies": "false"})
+        await client.get(
+            f"{BASE}/researches",
+            params={
+                "query": "оренбург",
+                "in_body": "false",
+                "in_areas_and_notes": "false",
+                "in_sources": "false",
+            },
+        )
     ).json()
 
     assert {row["title"] for row in body["items"]} == {"Оренбург в названии", "R2"}
 
 
-async def test_research_search_without_bodies_ignores_areas_and_notes(client):
-    research = await research_crud.research_create(title="R")
-    area = await area_crud.area_create(research_code=research.code, title="Зона")
+async def test_research_search_without_the_body_layer_ignores_the_body(client):
+    """Слои независимы: выключенное тело исследования не мешает найти его по зоне."""
+    by_body = await research_crud.research_create(title="R1")
+    await research_crud.research_update(by_body.code, body="Синтез про Оренбург")
+    by_area = await research_crud.research_create(title="R2")
+    area = await area_crud.area_create(research_code=by_area.code, title="Зона")
     await area_crud.area_update(area.code, body="Тело зоны про Оренбург")
-    note = await note_crud.note_create(research_code=research.code, kind="result", title="Вывод")
+
+    body = (
+        await client.get(f"{BASE}/researches", params={"query": "оренбург", "in_body": "false"})
+    ).json()
+
+    assert [row["code"] for row in body["items"]] == [f"RESEARCH@{by_area.code}"]
+
+
+async def test_research_search_without_areas_and_notes_ignores_them(client):
+    """Обратная половина того же: тело исследования читается, написанное внутри — нет."""
+    by_body = await research_crud.research_create(title="R1")
+    await research_crud.research_update(by_body.code, body="Синтез про Оренбург")
+    by_inner = await research_crud.research_create(title="R2")
+    area = await area_crud.area_create(research_code=by_inner.code, title="Зона")
+    await area_crud.area_update(area.code, body="Тело зоны про Оренбург")
+    note = await note_crud.note_create(research_code=by_inner.code, kind="result", title="Вывод")
     await note_crud.note_update(note.code, body="Заметка про Оренбург")
 
     body = (
-        await client.get(f"{BASE}/researches", params={"query": "оренбург", "in_bodies": "false"})
+        await client.get(
+            f"{BASE}/researches", params={"query": "оренбург", "in_areas_and_notes": "false"}
+        )
     ).json()
 
-    assert body["total"] == 0
+    assert [row["code"] for row in body["items"]] == [f"RESEARCH@{by_body.code}"]
+
+
+async def test_research_search_reads_notes_with_the_areas_layer(client):
+    """Зоны и заметки — один слой: одна кнопка включает и то, и другое."""
+    research = await research_crud.research_create(title="R")
+    note = await note_crud.note_create(research_code=research.code, kind="result", title="Вывод")
+    await note_crud.note_update(note.code, body="Заметка про Оренбург")
+
+    body = (await client.get(f"{BASE}/researches", params={"query": "оренбург"})).json()
+
+    assert [row["code"] for row in body["items"]] == [f"RESEARCH@{research.code}"]
 
 
 async def test_blank_research_search_narrows_nothing(client):
@@ -1080,6 +1167,97 @@ async def test_rename_missing_research_is_404(client):
     assert r.status_code == 404
 
 
+async def test_edit_research_description_returns_the_fresh_detail(client):
+    research = await research_crud.research_create(title="R", description="Было")
+
+    r = await client.put(
+        f"/internal/research/researches/{research.code}/description",
+        json={"description": "Стало"},
+    )
+
+    assert r.status_code == 200
+    assert r.json()["description"] == "Стало"
+    assert (await research_crud.research_get(research.code)).description == "Стало"
+
+
+async def test_edit_research_description_keeps_the_rest_of_the_artifact(client):
+    """Ручка узкая: название, тело и полка правкой описания не затрагиваются."""
+    group = await group_crud.group_create(title="Полка")
+    research = await research_crud.research_create(
+        title="Имя", description="Было", body="Тело", group_code=group.code
+    )
+
+    body = (
+        await client.put(
+            f"/internal/research/researches/{research.code}/description",
+            json={"description": "Стало"},
+        )
+    ).json()
+
+    assert body["title"] == "Имя"
+    assert body["body"] == "Тело"
+    assert body["group_code"] == f"GROUP@{group.code}"
+
+
+async def test_edit_research_description_accepts_a_prefixed_code(client):
+    research = await research_crud.research_create(title="R", description="Было")
+
+    r = await client.put(
+        f"/internal/research/researches/RESEARCH@{research.code}/description",
+        json={"description": "Стало"},
+    )
+
+    assert r.status_code == 200
+
+
+async def test_edit_research_description_trims_it(client):
+    research = await research_crud.research_create(title="R")
+
+    body = (
+        await client.put(
+            f"/internal/research/researches/{research.code}/description",
+            json={"description": "  Стало  "},
+        )
+    ).json()
+
+    assert body["description"] == "Стало"
+
+
+@pytest.mark.parametrize("description", ["", "   "])
+async def test_edit_research_description_accepts_an_empty_one(client, description):
+    """Описание необязательно, поэтому пустое — это «стереть», а не отказ (в отличие от названия)."""
+    research = await research_crud.research_create(title="R", description="Было")
+
+    r = await client.put(
+        f"/internal/research/researches/{research.code}/description",
+        json={"description": description},
+    )
+
+    assert r.status_code == 200
+    assert (await research_crud.research_get(research.code)).description == ""
+
+
+async def test_edit_research_description_rejects_one_longer_than_the_column(client):
+    research = await research_crud.research_create(title="R", description="Было")
+
+    r = await client.put(
+        f"/internal/research/researches/{research.code}/description",
+        json={"description": "я" * 2049},
+    )
+
+    assert r.status_code == 422
+    assert (await research_crud.research_get(research.code)).description == "Было"
+
+
+async def test_edit_description_of_a_missing_research_is_404(client):
+    r = await client.put(
+        f"/internal/research/researches/{'0' * 22}/description",
+        json={"description": "Текст"},
+    )
+
+    assert r.status_code == 404
+
+
 async def test_rename_area(client):
     research = await research_crud.research_create(title="Исследование")
     area = await area_crud.area_create(research_code=research.code, title="Было")
@@ -1094,6 +1272,102 @@ async def test_rename_area(client):
 async def test_rename_missing_area_is_404(client):
     r = await client.put(
         f"/internal/research/areas/{'0' * 22}/title", json={"title": "Имя"}
+    )
+
+    assert r.status_code == 404
+
+
+async def test_edit_area_description_returns_the_fresh_detail(client):
+    research = await research_crud.research_create(title="Исследование")
+    area = await area_crud.area_create(
+        research_code=research.code, title="Зона", description="Было"
+    )
+
+    r = await client.put(
+        f"/internal/research/areas/{area.code}/description",
+        json={"description": "Стало"},
+    )
+
+    assert r.status_code == 200
+    assert r.json()["description"] == "Стало"
+    assert (await area_crud.area_get(area.code)).description == "Стало"
+
+
+async def test_edit_area_description_keeps_the_brief_and_the_body(client):
+    """Ручка узкая: цель, границы, ожидания и синтез правкой описания не затрагиваются."""
+    research = await research_crud.research_create(title="Исследование")
+    area = await area_crud.area_create(
+        research_code=research.code,
+        title="Зона",
+        description="Было",
+        objective="Цель",
+        scope="Границы",
+        expectations="Ожидания",
+    )
+    await area_crud.area_update(area.code, body="Синтез")
+
+    body = (
+        await client.put(
+            f"/internal/research/areas/{area.code}/description",
+            json={"description": "Стало"},
+        )
+    ).json()
+
+    assert body["title"] == "Зона"
+    assert body["objective"] == "Цель"
+    assert body["scope"] == "Границы"
+    assert body["expectations"] == "Ожидания"
+    assert body["body"] == "Синтез"
+
+
+async def test_edit_area_description_accepts_a_prefixed_code(client):
+    research = await research_crud.research_create(title="Исследование")
+    area = await area_crud.area_create(research_code=research.code, title="Зона")
+
+    r = await client.put(
+        f"/internal/research/areas/AREA@{area.code}/description",
+        json={"description": "Стало"},
+    )
+
+    assert r.status_code == 200
+
+
+@pytest.mark.parametrize("description", ["", "   "])
+async def test_edit_area_description_accepts_an_empty_one(client, description):
+    research = await research_crud.research_create(title="Исследование")
+    area = await area_crud.area_create(
+        research_code=research.code, title="Зона", description="Было"
+    )
+
+    r = await client.put(
+        f"/internal/research/areas/{area.code}/description",
+        json={"description": description},
+    )
+
+    assert r.status_code == 200
+    assert (await area_crud.area_get(area.code)).description == ""
+
+
+async def test_edit_area_description_rejects_one_longer_than_the_column(client):
+    """Потолок области свой (512), и описание длиной с исследовательское она не принимает."""
+    research = await research_crud.research_create(title="Исследование")
+    area = await area_crud.area_create(
+        research_code=research.code, title="Зона", description="Было"
+    )
+
+    r = await client.put(
+        f"/internal/research/areas/{area.code}/description",
+        json={"description": "я" * 513},
+    )
+
+    assert r.status_code == 422
+    assert (await area_crud.area_get(area.code)).description == "Было"
+
+
+async def test_edit_description_of_a_missing_area_is_404(client):
+    r = await client.put(
+        f"/internal/research/areas/{'0' * 22}/description",
+        json={"description": "Текст"},
     )
 
     assert r.status_code == 404
@@ -1129,6 +1403,95 @@ async def test_rename_note_keeps_its_kind(client):
 
 async def test_rename_missing_note_is_404(client):
     r = await client.put(f"/internal/research/notes/{'0' * 22}/title", json={"title": "Имя"})
+
+    assert r.status_code == 404
+
+
+async def test_edit_note_description_returns_the_fresh_detail(client):
+    research = await research_crud.research_create(title="Исследование")
+    note = await note_crud.note_create(
+        research_code=research.code, kind="result", title="Заметка", description="Было"
+    )
+
+    r = await client.put(
+        f"/internal/research/notes/{note.code}/description",
+        json={"description": "Стало"},
+    )
+
+    assert r.status_code == 200
+    assert r.json()["description"] == "Стало"
+    assert (await note_crud.note_get(note.code)).description == "Стало"
+
+
+async def test_edit_note_description_keeps_the_kind_and_the_body(client):
+    """Ручка узкая: вид заметки и её тело правкой описания не затрагиваются."""
+    research = await research_crud.research_create(title="Исследование")
+    note = await note_crud.note_create(
+        research_code=research.code, kind="decision", title="Заметка", description="Было"
+    )
+    await note_crud.note_update(note.code, body="Тело")
+
+    body = (
+        await client.put(
+            f"/internal/research/notes/{note.code}/description",
+            json={"description": "Стало"},
+        )
+    ).json()
+
+    assert body["kind"] == "decision"
+    assert body["body"] == "Тело"
+
+
+async def test_edit_note_description_accepts_a_prefixed_code(client):
+    research = await research_crud.research_create(title="Исследование")
+    note = await note_crud.note_create(
+        research_code=research.code, kind="result", title="Заметка"
+    )
+
+    r = await client.put(
+        f"/internal/research/notes/NOTE@{note.code}/description",
+        json={"description": "Стало"},
+    )
+
+    assert r.status_code == 200
+
+
+@pytest.mark.parametrize("description", ["", "   "])
+async def test_edit_note_description_accepts_an_empty_one(client, description):
+    research = await research_crud.research_create(title="Исследование")
+    note = await note_crud.note_create(
+        research_code=research.code, kind="result", title="Заметка", description="Было"
+    )
+
+    r = await client.put(
+        f"/internal/research/notes/{note.code}/description",
+        json={"description": description},
+    )
+
+    assert r.status_code == 200
+    assert (await note_crud.note_get(note.code)).description == ""
+
+
+async def test_edit_note_description_rejects_one_longer_than_the_column(client):
+    research = await research_crud.research_create(title="Исследование")
+    note = await note_crud.note_create(
+        research_code=research.code, kind="result", title="Заметка", description="Было"
+    )
+
+    r = await client.put(
+        f"/internal/research/notes/{note.code}/description",
+        json={"description": "я" * 513},
+    )
+
+    assert r.status_code == 422
+    assert (await note_crud.note_get(note.code)).description == "Было"
+
+
+async def test_edit_description_of_a_missing_note_is_404(client):
+    r = await client.put(
+        f"/internal/research/notes/{'0' * 22}/description",
+        json={"description": "Текст"},
+    )
 
     assert r.status_code == 404
 
@@ -1651,3 +2014,51 @@ async def test_list_group_look_is_empty_without_a_group(client):
     row = (await client.get("/internal/research/researches")).json()["items"][0]
 
     assert row["group_icon"] == "" and row["group_color"] == ""
+
+
+# ── Путь наверх на деталке ────────────────────────────────────────────────────
+#
+# При прямом заходе по ссылке истории переходов нет, и вернуть человека в родителя страница
+# может только по тому, что пришло в ответе.
+
+
+async def test_area_detail_names_its_research(client, tree):
+    body = (await client.get(f"{BASE}/areas/{tree['area']}")).json()
+
+    assert body["research_code"] == f"RESEARCH@{tree['research']}"
+    assert body["research_title"] == "Исследование"
+
+
+async def test_renamed_area_still_names_its_research(client, tree):
+    """Узкая ручка правки отдаёт ту же деталь, что и чтение, — иначе страница теряла бы выход
+    наверх ровно после переименования."""
+    r = await client.put(f"{BASE}/areas/{tree['area']}/title", json={"title": "Стало"})
+
+    assert r.json()["research_code"] == f"RESEARCH@{tree['research']}"
+    assert r.json()["research_title"] == "Исследование"
+
+
+async def test_note_detail_names_its_research(client, tree):
+    body = (await client.get(f"{BASE}/notes/{tree['note']}")).json()
+
+    assert body["research_code"] == f"RESEARCH@{tree['research']}"
+    assert body["research_title"] == "Исследование"
+
+
+async def test_source_detail_names_its_area_and_research(client, tree):
+    """У источника цепочка полная: он лежит глубже всех, и подниматься из него есть куда дважды."""
+    body = (await client.get(f"{BASE}/source-documents/{tree['document']}")).json()
+
+    assert body["area_code"] == f"AREA@{tree['area']}"
+    assert body["area_title"] == "Область"
+    assert body["research_code"] == f"RESEARCH@{tree['research']}"
+    assert body["research_title"] == "Исследование"
+
+
+async def test_source_query_detail_names_its_area_and_research(client, tree):
+    body = (await client.get(f"{BASE}/source-queries/{tree['query']}")).json()
+
+    assert body["area_code"] == f"AREA@{tree['area']}"
+    assert body["area_title"] == "Область"
+    assert body["research_code"] == f"RESEARCH@{tree['research']}"
+    assert body["research_title"] == "Исследование"

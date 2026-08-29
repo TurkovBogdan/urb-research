@@ -75,33 +75,64 @@ class GroupMatches:
     ungrouped: bool = False
 
 
-async def search_researches(query: str, *, in_bodies: bool = True) -> list[str]:
+async def search_researches(
+    query: str,
+    *,
+    in_body: bool = True,
+    in_areas_and_notes: bool = True,
+    in_sources: bool = False,
+) -> list[str]:
     """Коды исследований, у которых запрос нашёлся в их тексте.
 
-    Тот же корпус, что и у поиска по группам, только ответ на уровень ниже: само исследование,
-    его зоны (включая бриф) и заметки; источники не смотрим. Группа, сортировка и страница —
-    не наше дело: их накладывает SQL поверх этого списка кодов.
+    Стог складывается из слоёв, и каждый включается сам по себе. Название с описанием — основа:
+    они и есть то, чем исследование названо в списке, поэтому выключить их нельзя, иначе поиск
+    перестал бы находить искомое по имени. Поверх основы ложатся тело исследования
+    (``in_body``), написанное внутри него — зоны с брифом и заметки (``in_areas_and_notes``) — и
+    материал источников (``in_sources``).
 
-    ``in_bodies=False`` оставляет от корпуса подписи — название и описание исследования; всё
-    написанное внутри (его тело, зоны, заметки) из стога выпадает.
+    Источники идут последними и только по не совпавшим: материал на порядок больше всего
+    остального (в dev-базе ~29 МБ против сотен килобайт), а исследованию, которое уже совпало
+    дешёвым слоем, читать его незачем.
+
+    Группа, сортировка и страница — не наше дело: их накладывает SQL поверх этого списка кодов.
     """
     needle = query.strip().lower()
-    written = await _written_texts(in_bodies=in_bodies)
-    return [code for code, _group_code, haystack in written if needle in haystack.lower()]
+    written = await _written_texts(in_body=in_body, in_areas_and_notes=in_areas_and_notes)
+    matched = [code for code, _group_code, haystack in written if needle in haystack.lower()]
+    if not in_sources:
+        return matched
+    return matched + await _researches_matching_material(needle, skip=set(matched))
 
 
-async def _written_texts(*, in_bodies: bool) -> list[tuple[str, str | None, str]]:
-    """``(код, группа, весь текст исследования одной строкой)`` — общий корпус обоих поисков.
+async def _researches_matching_material(needle: str, *, skip: set[str]) -> list[str]:
+    """Коды исследований, у которых запрос нашёлся в материале их источников."""
+    matched: list[str] = []
+    for research_code, text in await source_document_crud.source_search_texts():
+        if research_code in skip:
+            continue
+        if needle in text.lower():
+            matched.append(research_code)
+            skip.add(research_code)
+    return matched
 
-    С выключенными телами написанное внутри исследования не читается вовсе: ни его тело
-    (колонку не выбирает CRUD), ни зоны с заметками — запросов за ними просто не будет.
+
+async def _written_texts(
+    *, in_body: bool, in_areas_and_notes: bool
+) -> list[tuple[str, str | None, str]]:
+    """``(код, группа, написанный текст исследования одной строкой)`` — корпус обоих поисков.
+
+    Слой, который выключили, не читается вовсе: тело не выбирает колонку в CRUD, а за зонами и
+    заметками запросов просто не будет.
     """
-    area_texts = _texts_by_research(await area_crud.area_search_texts()) if in_bodies else {}
-    note_texts = _texts_by_research(await note_crud.note_search_texts()) if in_bodies else {}
+    inner_texts: dict[str, list[str]] = {}
+    if in_areas_and_notes:
+        inner_texts = _texts_by_research(
+            await area_crud.area_search_texts() + await note_crud.note_search_texts()
+        )
     return [
-        (code, group_code, "\n".join([text, *area_texts.get(code, ()), *note_texts.get(code, ())]))
+        (code, group_code, "\n".join([text, *inner_texts.get(code, ())]))
         for code, group_code, text in await research_crud.research_search_texts(
-            include_body=in_bodies
+            include_body=in_body
         )
     ]
 
@@ -140,7 +171,9 @@ async def search_groups(query: str, *, in_researches: bool = True) -> GroupMatch
     if not in_researches:
         return GroupMatches(codes=sorted(matched), ungrouped=ungrouped)
 
-    for _code, group_code, haystack in await _written_texts(in_bodies=True):
+    for _code, group_code, haystack in await _written_texts(
+        in_body=True, in_areas_and_notes=True
+    ):
         if needle not in haystack.lower():
             continue
         if group_code is None:
