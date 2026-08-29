@@ -8,7 +8,15 @@ import SettingsGroup from '@/components/settings/SettingsGroup.vue'
 import SwitchPanel from '@/components/SwitchPanel.vue'
 import { useSettingsStore } from '@/stores/settings'
 import {
+  DIAGRAM_ALIGNS,
+  DIAGRAM_HEIGHTS,
+  NO_DIAGRAM_HEIGHT,
+  type DiagramAlignOption,
+} from '@/constants/diagrams'
+import {
+  DIAGRAM_FONTS,
   INTERFACE_FONTS,
+  MONO_FONTS,
   NO_MEASURE,
   READING_FONTS,
   READING_MEASURES,
@@ -75,6 +83,16 @@ def read(text: str, *, size: int = 16) -> str:
     return text.strip()
 \`\`\`
 
+Схема идёт в теле тем же блоком, что и код, и набрана своей гарнитурой — подписи внутри
+блоков живут в тесных коробках, и семья, хорошая в абзаце, там может не поместиться.
+
+\`\`\`mermaid
+graph LR
+  A[Запрос агента] --> B{Схема поддержана?}
+  B -->|да| C[Рендер SVG]
+  B -->|нет| D[Блок кода]
+\`\`\`
+
 ---
 
 Последний абзац после разделителя — самый широкий интервал в теле.
@@ -89,6 +107,15 @@ function optionProps(option: FontOption) {
 function themeProps(option: ThemeOption) {
   return { subtitle: option.note }
 }
+
+function alignProps(option: DiagramAlignOption) {
+  return { subtitle: option.note }
+}
+
+const diagramHeightOptions = DIAGRAM_HEIGHTS.map((height) => ({
+  title: height === NO_DIAGRAM_HEIGHT ? t('settings.interface.diagram.height.unlimited') : `${height} px`,
+  value: height,
+}))
 
 const sizeOptions = READING_SIZES.map((size) => ({ title: `${size} px`, value: size }))
 
@@ -205,6 +232,22 @@ const researchViewOptions = RESEARCH_LIST_VIEWS.map((view) => ({
 
         <div class="setting">
           <VSelect
+            v-model="settings.typography.monoFont"
+            :items="MONO_FONTS"
+            item-title="label"
+            item-value="code"
+            :item-props="optionProps"
+            :chips="false"
+            :label="t('settings.interface.font.mono.label')"
+            variant="outlined"
+            density="comfortable"
+            hide-details="auto"
+          />
+          <p class="setting__desc">{{ t('settings.interface.font.mono.description') }}</p>
+        </div>
+
+        <div class="setting">
+          <VSelect
             v-model="settings.typography.readingMeasure"
             :items="measureOptions"
             :chips="false"
@@ -214,6 +257,57 @@ const researchViewOptions = RESEARCH_LIST_VIEWS.map((view) => ({
             hide-details="auto"
           />
           <p class="setting__desc">{{ t('settings.interface.measure.reading.description') }}</p>
+        </div>
+
+      </SettingsGroup>
+
+      <SettingsGroup
+        :title="t('settings.interface.group.diagram.title')"
+        :description="t('settings.interface.group.diagram.description')"
+      >
+        <div class="setting">
+          <VSelect
+            v-model="settings.diagrams.font"
+            :items="DIAGRAM_FONTS"
+            item-title="label"
+            item-value="code"
+            :item-props="optionProps"
+            :chips="false"
+            :label="t('settings.interface.font.diagram.label')"
+            variant="outlined"
+            density="comfortable"
+            hide-details="auto"
+          />
+          <p class="setting__desc">{{ t('settings.interface.font.diagram.description') }}</p>
+        </div>
+
+        <div class="setting">
+          <VSelect
+            v-model="settings.diagrams.align"
+            :items="DIAGRAM_ALIGNS"
+            item-title="label"
+            item-value="code"
+            :item-props="alignProps"
+            :chips="false"
+            :label="t('settings.interface.diagram.align.label')"
+            variant="outlined"
+            density="comfortable"
+            hide-details="auto"
+          />
+          <p class="setting__desc">{{ t('settings.interface.diagram.align.description') }}</p>
+        </div>
+
+        <div class="setting">
+          <VSelect
+            v-model="settings.diagrams.maxHeight"
+            :items="diagramHeightOptions"
+            :chips="false"
+            :label="t('settings.interface.diagram.height.label')"
+            variant="outlined"
+            density="comfortable"
+            hide-details="auto"
+          />
+          <p class="setting__desc">{{ t('settings.interface.diagram.height.description') }}</p>
         </div>
       </SettingsGroup>
     </div>

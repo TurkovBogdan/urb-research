@@ -2,6 +2,7 @@
 import { computed, getCurrentInstance, h, nextTick, onBeforeUnmount, onMounted, ref, render, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import CodeBlock from './CodeBlock.vue'
+import DiagramBlock from './DiagramBlock.vue'
 import { useAfterRouteTransition } from '@/composables/useRouteTransition'
 import { renderMarkdown, type HeadingAnchor } from './markdown/render'
 
@@ -43,8 +44,9 @@ function withRefLabels(sanitized: string): string {
   doc.querySelectorAll('a.md-ref').forEach((a) => {
     const code = (a.getAttribute('href') ?? '').split('/').pop() ?? ''
     const title = labels[code]
-    if (!title) return
-    a.textContent = title.length > REF_LABEL_MAX ? title.slice(0, REF_LABEL_MAX) + '…' : title
+    const label = a.querySelector('.md-ref-label')
+    if (!title || !label) return
+    label.textContent = title.length > REF_LABEL_MAX ? title.slice(0, REF_LABEL_MAX) + '…' : title
     a.setAttribute('title', title)
     changed = true
   })
@@ -70,7 +72,9 @@ watch(() => rendered.value.headings, (items) => emit('headings', items), { immed
 // Code blocks are not part of the HTML: the parser leaves an empty slot for each one and the
 // real component is mounted into it here, so a body gets highlighting, a copy button and a
 // language badge. A one-liner takes the compact variant — a command reads as a chip, not as a
-// panel with a header.
+// panel with a header. A `mermaid` fence is a diagram instead: the same slot, another component.
+const DIAGRAM_LANGUAGE = 'mermaid'
+
 const body = ref<HTMLElement | null>(null)
 const appContext = getCurrentInstance()?.appContext ?? null
 let mountedSlots: HTMLElement[] = []
@@ -86,12 +90,11 @@ function mountCodeBlocks() {
   container.querySelectorAll<HTMLElement>('.md-code-slot').forEach((slot) => {
     const block = rendered.value.codeBlocks[Number(slot.dataset.codeIndex)]
     if (!block) return
+    const code = block.code.replace(/\n$/, '')
     const isOneLiner = !block.code.trim().includes('\n')
-    const vnode = h(CodeBlock, {
-      code: block.code.replace(/\n$/, ''),
-      lang: block.language || undefined,
-      variant: isOneLiner ? 'compact' : 'icon',
-    })
+    const vnode = block.language === DIAGRAM_LANGUAGE
+      ? h(DiagramBlock, { code })
+      : h(CodeBlock, { code, lang: block.language || undefined, variant: isOneLiner ? 'compact' : 'icon' })
     vnode.appContext = appContext
     render(vnode, slot)
     mountedSlots.push(slot)
@@ -388,19 +391,19 @@ function onClick(event: MouseEvent) {
 .md-body :deep(.md-table tbody tr:nth-child(even)) {
   background: color-mix(in srgb, var(--surface-hi) 45%, transparent);
 }
-/* A pill never breaks in prose, but a cell is sized by its content: a title-labelled reference
-   would otherwise widen the column past the page and send the whole table into horizontal
-   scroll. Inside a cell it wraps like text instead. */
+/* A pill stays one line here as it does in prose — a cell is sized by its content, so a
+   title-labelled reference would otherwise widen the column past the page and send the whole
+   table into horizontal scroll. Capping the pill and ellipsising the label keeps the column near
+   the width of the prose around it; the full title stays in the tooltip. */
 .md-body :deep(.md-table .md-ref) {
-  white-space: normal;
-  /* The cell cap alone doesn't help: the table is sized by max-content, so a pill labelled with
-     a title claims one long line and widens the column. Capping the pill itself makes the label
-     wrap inside it and keeps the column near the width of the prose around it. */
   max-width: 30ch;
-  /* A wrapped label is a paragraph, not a chip: the glyph belongs beside its first line (centring
-     it against the whole block reads as a bullet), and the lines need room to breathe. */
-  align-items: baseline;
-  line-height: 1.35;
+  overflow: hidden;
+}
+.md-body :deep(.md-table .md-ref-label) {
+  /* A flex item refuses to shrink below its text width until `min-width` says it may. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* Column alignment has to out-specify the cell rule above, so it names the cell too. */
 .md-body :deep(.md-table .md-align-left)   { text-align: left; }

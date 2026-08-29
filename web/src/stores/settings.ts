@@ -2,15 +2,23 @@ import { defineStore } from 'pinia'
 import { ref, reactive, watch, computed, type Ref } from 'vue'
 import { i18n, setLocale, type AppLocale } from '@/plugins/i18n'
 import {
+  DEFAULT_DIAGRAM_FONT,
   DEFAULT_INTERFACE_FONT,
+  DEFAULT_MONO_FONT,
   DEFAULT_READING_FONT,
   DEFAULT_READING_MEASURE,
   DEFAULT_READING_SIZE,
   INTERFACE_FONTS,
+  MONO_FONTS,
   NO_MEASURE,
   READING_FONTS,
   fontStack,
 } from '@/constants/fonts'
+import {
+  DEFAULT_DIAGRAM_ALIGN,
+  DEFAULT_DIAGRAM_HEIGHT,
+  type DiagramAlign,
+} from '@/constants/diagrams'
 import {
   DEFAULT_RESEARCH_LIST_VIEW,
   resolveResearchListView,
@@ -109,15 +117,31 @@ export const useSettingsStore = defineStore('settings', () => {
     readingFont: persisted('app.font.reading', DEFAULT_READING_FONT, strCodec),
     readingSize: persisted('app.font.reading_size', DEFAULT_READING_SIZE, intCodec),
     readingMeasure: persisted('app.font.reading_measure', DEFAULT_READING_MEASURE, intCodec),
+    monoFont: persisted('app.font.mono', DEFAULT_MONO_FONT, strCodec),
+  })
+
+  // Оформление схем — свой узел, а не часть типографики: токенами оно не раздаётся, его читает
+  // сам компонент схемы. Гарнитура тоже здесь, чтобы у настроек схем был один дом; в CSS она не
+  // уходит — рендерер подставляет имя семьи внутрь SVG и по нему же считает ширину подписей.
+  const diagrams = reactive({
+    font: persisted('app.font.diagram', DEFAULT_DIAGRAM_FONT, strCodec),
+    align: persisted('app.diagram.align', DEFAULT_DIAGRAM_ALIGN, strCodec as Codec<DiagramAlign>),
+    maxHeight: persisted('app.diagram.max_height', DEFAULT_DIAGRAM_HEIGHT, intCodec),
   })
 
   watch(
-    () => [typography.interfaceFont, typography.readingFont, typography.readingSize, typography.readingMeasure],
+    () => [
+      typography.interfaceFont,
+      typography.readingFont,
+      typography.readingSize,
+      typography.readingMeasure,
+      typography.monoFont,
+    ],
     () => applyTypographyTokens(typography),
     { immediate: true },
   )
 
-  return { locale, ui, lists, message, appearance, typography }
+  return { locale, ui, lists, message, appearance, typography, diagrams }
 })
 
 // Two consumers, one name: the attribute drives the CSS token palettes (styles/main.scss),
@@ -138,9 +162,10 @@ interface TypographyChoice {
   readingFont: string
   readingSize: number
   readingMeasure: number
+  monoFont: string
 }
 
-function applyTypographyTokens({ interfaceFont, readingFont, readingSize, readingMeasure }: TypographyChoice): void {
+function applyTypographyTokens({ interfaceFont, readingFont, readingSize, readingMeasure, monoFont }: TypographyChoice): void {
   if (typeof document === 'undefined') return
   const root = document.documentElement.style
   const ui = fontStack(INTERFACE_FONTS, interfaceFont, DEFAULT_INTERFACE_FONT)
@@ -148,6 +173,7 @@ function applyTypographyTokens({ interfaceFont, readingFont, readingSize, readin
   root.setProperty('--v-font-body', ui)
   root.setProperty('--v-font-heading', ui)
   root.setProperty('--font-reading', fontStack(READING_FONTS, readingFont, DEFAULT_READING_FONT))
+  root.setProperty('--font-mono', fontStack(MONO_FONTS, monoFont, DEFAULT_MONO_FONT))
   // A stale or hand-edited storage value would otherwise reach CSS as `NaNpx` / `NaNch` and
   // take the whole prose scale — or the column width — down with it.
   const size = Number.isFinite(readingSize) ? readingSize : DEFAULT_READING_SIZE

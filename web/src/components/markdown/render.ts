@@ -239,10 +239,13 @@ function createParser(breaks: boolean): MarkdownParser {
   // The 22-hex hash is opaque in prose — show a short prefix as the transient label, keep the
   // full code in href (navigation) + title (tooltip); a resolved title replaces it later.
   // Both parts of the code come from the regex above (fixed word + hex), so they need no escaping.
+  // The label sits in its own <span> so it can be the element that ellipsises when the pill is
+  // capped (inside a table cell) — `text-overflow` has no effect on the flex pill itself.
   md.renderer.rules.entity_ref = (tokens, idx) => {
     const { refType, hash } = tokens[idx].meta as { refType: string; hash: string }
     const code = `${refType}@${hash}`
-    return `<a class="md-ref" href="/research/${REF_ROUTE[refType]}/${code}" title="${code}">${hash.slice(0, 6)}</a>`
+    const href = `/research/${REF_ROUTE[refType]}/${code}`
+    return `<a class="md-ref" href="${href}" title="${code}"><span class="md-ref-label">${hash.slice(0, 6)}</span></a>`
   }
 
   return md
@@ -265,11 +268,11 @@ function parser(breaks: boolean): MarkdownParser {
 const ALLOWED_TAGS = [
   'h1','h2','h3','h4','h5','h6',
   'p','ul','ol','li','blockquote','pre','code','hr',
-  'strong','em','s','a','br','input',
+  'strong','em','s','a','br','input','span',
   'div','table','thead','tbody','tr','th','td',
 ]
 const ALLOWED_ATTR = ['class','href','target','rel','type','checked','disabled','title','id','data-code-index']
-const IMAGE_TAGS = ['img', 'span']
+const IMAGE_TAGS = ['img']
 const IMAGE_ATTR = ['src', 'alt']
 
 export interface RenderOptions {
