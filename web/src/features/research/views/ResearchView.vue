@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
-import { IconChevronRight, IconFolderPlus, IconFolderX } from '@tabler/icons-vue'
+import { IconChevronRight, IconFileTypePdf, IconFolderPlus, IconFolderX } from '@tabler/icons-vue'
 
 import DetailHead from '@/layout/components/DetailHead.vue'
 import { useDetailRail } from '@/layout/detailRail'
@@ -15,7 +15,9 @@ import InlineEditBlock from '@/components/InlineEditBlock.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import type { HeadingAnchor } from '@/components/markdown/render'
 import { errorText } from '@/api/errorText'
+import { pushToast } from '@/composables/useToasts'
 import { useSettingsStore } from '@/stores/settings'
+import { printPage } from '@/shared/utils/print'
 import { fmtDateTime, fmtRelative } from '@/shared/utils/date'
 
 import BodySection from '../components/BodySection.vue'
@@ -144,6 +146,29 @@ async function detachGroup() {
   }
 }
 
+// Своего PDF у исследования нет — его печатает сам браузер: кадр открывает страницу печати (тот же
+// документ без интерфейса) и отправляет её на виртуальный принтер, где «сохранить в PDF» и живёт.
+// Пока лист собирается и висит диалог печати, повторное нажатие заперто: второй кадр напечатал бы
+// то же самое ещё раз.
+const printing = ref(false)
+
+async function downloadPdf() {
+  const research = store.research
+  if (!research || printing.value) return
+
+  printing.value = true
+  try {
+    const print = router.resolve({ name: 'research-print', params: { code: research.code } })
+    await printPage(print.href)
+  } catch (e) {
+    // Отказ без текста означает, что страница печати не ответила вовсе: сказать о нём нечего,
+    // кроме того, что напечатать не вышло.
+    pushToast(e instanceof Error && e.message ? e.message : t('research.research.print.failed'))
+  } finally {
+    printing.value = false
+  }
+}
+
 async function saveDescription(description: string) {
   if (await store.saveDescription(description)) editingDescription.value = false
 }
@@ -234,10 +259,14 @@ useDetailRail(() => ({
           @save="store.rename"
         />
 
-        <!-- Раскладка по полкам — единственное, что делают с исследованием помимо чтения и правки
-             текстов, и делают редко: отсюда меню, а не пара кнопок в шапке. Отвязки нет, когда
-             отвязывать не от чего. -->
+        <!-- Раскладка по полкам и вынос документа наружу — то, что делают с исследованием помимо
+             чтения и правки текстов, и делают редко: отсюда меню, а не ряд кнопок в шапке.
+             Отвязки нет, когда отвязывать не от чего. -->
         <template #more>
+          <VListItem :prepend-icon="IconFileTypePdf" :disabled="printing" @click="downloadPdf">
+            <VListItemTitle>{{ t('research.research.action.download_pdf') }}</VListItemTitle>
+          </VListItem>
+          <VDivider class="my-1" />
           <VListItem :prepend-icon="IconFolderPlus" @click="groupDialog = true">
             <VListItemTitle>
               {{ store.research.group_code

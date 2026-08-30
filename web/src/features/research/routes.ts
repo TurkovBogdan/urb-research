@@ -22,6 +22,20 @@ export const researchRoutes: RouteRecordRaw[] = [
     component: () => import('./views/GroupView.vue'),
     meta: { scroll: 'y', title: 'research.group.detail.title' },
   },
+  // Печать стоит вне рамки деталок и вне интерфейса приложения: на этом адресе документ нарисован
+  // один на пустом листе — его открывает скрытый кадр и печатает виртуальным принтером (PDF).
+  // Собственный сегмент `print` с `researches/:code` не спорит: у того один сегмент, у этого два.
+  {
+    path: '/research/researches/:code/print',
+    name: 'research-print',
+    component: () => import('./views/ResearchPrintView.vue'),
+    meta: {
+      scroll: 'none',
+      fullscreen: true,
+      transition: 'none',
+      title: 'research.research.print.title',
+    },
+  },
   // Деталки — дети общей рамки (`DetailShell`): колонка навигации живёт в родителе и переживает
   // переход с артефакта на артефакт, меняется только содержимое справа. Регистрируется ПОСЛЕ
   // полки: `researches/:code` у них одинакового веса, и побеждает ранний маршрут.
