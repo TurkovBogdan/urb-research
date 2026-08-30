@@ -1,0 +1,6 @@
+import{aP as e}from"./index-DgoYO1jO.js";/**
+ * @license @tabler/icons-vue v3.44.0 - MIT
+ *
+ * This source code is licensed under the MIT license.
+ * See the LICENSE file in the root directory of this source tree.
+ */var o=e("outline","folder-x","FolderX",[["path",{d:"M13.5 19h-8.5a2 2 0 0 1 -2 -2v-11a2 2 0 0 1 2 -2h4l3 3h7a2 2 0 0 1 2 2v4",key:"svg-0"}],["path",{d:"M22 22l-5 -5",key:"svg-1"}],["path",{d:"M17 22l5 -5",key:"svg-2"}]]);export{o as I};
