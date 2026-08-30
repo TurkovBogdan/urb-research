@@ -1,0 +1,6 @@
+import{aP as l}from"./index-DnbHu5e1.js";/**
+ * @license @tabler/icons-vue v3.44.0 - MIT
+ *
+ * This source code is licensed under the MIT license.
+ * See the LICENSE file in the root directory of this source tree.
+ */var t=l("outline","bolt","Bolt",[["path",{d:"M13 3l0 7l6 0l-8 11l0 -7l-6 0l8 -11",key:"svg-0"}]]);export{t as I};
