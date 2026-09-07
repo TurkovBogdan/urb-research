@@ -9,9 +9,9 @@
 // адресом, у заметки — имя с видом. Он владеет строкой и её правым краем, а что стоит слева —
 // дело страницы.
 import { useI18n } from 'vue-i18n'
-import { IconCheck, IconCopy, IconDotsVertical, IconRefresh } from '@tabler/icons-vue'
+import { IconDotsVertical, IconRefresh } from '@tabler/icons-vue'
 
-import { useClipboard } from '@/composables/useClipboard'
+import CopyCodeButton from '@/components/CopyCodeButton.vue'
 
 withDefaults(defineProps<{
   /** Код объекта. Пока его нет (страница грузится), кнопки копирования нет. */
@@ -26,7 +26,6 @@ withDefaults(defineProps<{
 const emit = defineEmits<{ refresh: [] }>()
 
 const { t } = useI18n()
-const { copy, isCopied } = useClipboard()
 </script>
 
 <template>
@@ -44,21 +43,10 @@ const { copy, isCopied } = useClipboard()
     <!-- Действия страницы стоят справа от её заголовка — то же место и та же кнопка, что в
          `PageHeader` у списков (`variant="text"`, кегль по умолчанию, иконка 16): деталка и список
          различаются содержимым, а не тем, где искать «Обновить».
-         Порядок слева направо — от объекта к странице: сначала «забрать код», потом «перечитать».
-         Обе с подписью: значок копирования сам по себе не говорит, ЧТО копируется, а у кнопки
-         рядом с именем ответ должен читаться, а не угадываться. -->
+         Порядок слева направо — от объекта к странице: сначала «забрать код», потом «перечитать». -->
     <div class="detail-head__actions">
       <slot name="actions" />
-      <!-- Ответ об успехе даёт только значок: подпись говорит, что кнопка делает, и меняться от
-           нажатия ей незачем — иначе кнопка на мгновение перестаёт быть той же самой, а вместе с
-           длиной подписи дёргается и весь ряд. -->
-      <VBtn v-if="code" variant="text" @click="copy(code)">
-        <template #prepend>
-          <IconCheck v-if="isCopied(code)" :size="16" class="detail-head__copied" />
-          <IconCopy v-else :size="16" />
-        </template>
-        {{ t('common.action.copy_code') }}
-      </VBtn>
+      <CopyCodeButton v-if="code" :code="code" />
       <VBtn variant="text" :disabled="loading" @click="emit('refresh')">
         <template #prepend>
           <IconRefresh :size="16" :class="{ 'icon-spin': loading }" />
@@ -127,10 +115,5 @@ const { copy, isCopied } = useClipboard()
   justify-content: flex-end;
   align-items: center;
   gap: 8px;
-}
-
-/* Тем же цветом, что галочка копирования в меню строки реестра: удача названа цветом везде. */
-.detail-head__copied {
-  color: var(--success);
 }
 </style>

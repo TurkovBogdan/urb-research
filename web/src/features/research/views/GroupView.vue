@@ -15,6 +15,7 @@ import PageLayout from '@/layout/templates/PageLayout.vue'
 import PageHeader from '@/layout/components/PageHeader.vue'
 import SectionError from '@/components/SectionError.vue'
 import SearchField from '@/components/SearchField.vue'
+import CopyCodeButton from '@/components/CopyCodeButton.vue'
 
 import ResearchesList from '../components/ResearchesList.vue'
 import { deeperScope, deeperScopeModel } from '../search'
@@ -137,6 +138,10 @@ const searchHint = computed(() =>
         {{ description }}
       </template>
       <template #actions>
+        <!-- Та же кнопка и тот же порядок, что в шапке деталок (`DetailHead`): сначала «забрать
+             код», потом «перечитать». У псевдо-полки «Без группы» строки в БД нет — копировать
+             нечего. -->
+        <CopyCodeButton v-if="group" :code="group.code" />
         <VBtn variant="text" :disabled="store.loading" @click="load">
           <template #prepend><IconRefresh :size="16" :class="{ 'icon-spin': store.loading }" /></template>
           {{ t('research.action.refresh') }}
