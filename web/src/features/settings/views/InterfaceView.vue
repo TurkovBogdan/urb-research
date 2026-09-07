@@ -26,9 +26,9 @@ import {
 import { RESEARCH_LIST_VIEWS } from '@/constants/lists'
 import { THEME_OPTIONS, type ThemeOption } from '@/constants/theme'
 
-// Client-side appearance settings. Unlike /settings/modules these never reach the
-// backend: they live in localStorage and apply as they are picked, so the page has no
-// save button and no dirty state.
+// Оформление приложения. В отличие от `/settings/modules` кнопки сохранения здесь нет: выбор
+// применяется в тот же миг, а в базу (модуль `core_interface`) уезжает сам — пачкой, спустя
+// полсекунды после последнего движения. Отсюда и отсутствие состояния «не сохранено».
 //
 // Разложены они всё же как настройки модулей — группами с пояснением, полем и подписью под ним,
 // а тумблер стоит плашкой (`SwitchPanel`), той же, что рисует bool-поле схемы. Набор полей здесь
