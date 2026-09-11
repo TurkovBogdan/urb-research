@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from src.modules.research.codes import code_prefix, strip_prefix
+from src.modules.research.codes import bare_code, code_prefix, strip_prefix
 from src.modules.research.constants import (
     AREA_CODE_PREFIX,
     DOC_ERROR,
@@ -64,6 +64,9 @@ async def _sources_without_material(code: str) -> list[SourceDocumentWithPage] |
 
     ``SOURCE@`` разбирается отдельно от уровней: у него единственного «нет такого» отличимо
     от «чинить нечего», у уровня пустой ответ значит и то, и другое.
+
+    Код снятого формата тут не отказ, а обычный бесплодный код (``strip_prefix``, а не
+    ``bare_code``): пакет из шести кодов не должен падать целиком из-за одного (см. модуль).
     """
     prefix = code_prefix(code)
     bare = strip_prefix(code)
@@ -115,7 +118,7 @@ def register(mcp: "FastMCP") -> None:
         level = _LIST_BY_LEVEL.get(code_prefix(code))
         if level is None:
             raise ValueError("code must be a RESEARCH@ / AREA@ / QUERY@ code.")
-        rows = await level(strip_prefix(code), status=status)
+        rows = await level(bare_code(code), status=status)
         return [source_document_row(doc, page) for doc, page in rows]
 
     @mcp.tool()
@@ -166,7 +169,7 @@ def register(mcp: "FastMCP") -> None:
         Args:
             source_code: The source code (from sources_list / query_search_run).
         """
-        source_code = strip_prefix(source_code)
+        source_code = bare_code(source_code)
         result = await source_document_crud.source_document_get(source_code)
         if result is None:
             raise ValueError(f"Source {source_code} not found.")
@@ -189,7 +192,7 @@ def register(mcp: "FastMCP") -> None:
             relevance: Importance 1–10 (1 = junk, 5 = medium/duplicate, 10 = key).
             note: Reason / usefulness — mainly for a filtered source.
         """
-        source_code = strip_prefix(source_code)
+        source_code = bare_code(source_code)
         status = _DECISION_STATUS.get(decision)
         if status is None:
             raise ValueError("decision must be 'keep' or 'filter'.")

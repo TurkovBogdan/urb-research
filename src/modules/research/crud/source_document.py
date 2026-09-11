@@ -12,7 +12,7 @@ from sqlalchemy import func, select, update
 
 from src.core.database import session_scope, write_scope
 from src.core.utils.hashing import random_hash
-from src.modules.research.constants import DOC_ERROR, DOC_PENDING
+from src.modules.research.constants import CODE_LEN, DOC_ERROR, DOC_PENDING
 from src.modules.research.models.source_document import ResearchSourceDocument
 from src.modules.web_search.constants import FETCH_STATUS_DONE
 from src.modules.web_search.models.page import WebSearchPage
@@ -21,11 +21,11 @@ SourceDocumentWithPage = tuple[ResearchSourceDocument, WebSearchPage | None]
 
 
 def source_document_code() -> str:
-    """Код источника — голый 22-hex ``random_hash``.
+    """Код источника — голый ``CODE_LEN``-hex ``random_hash``.
 
     Тип-префикс (``SOURCE@``) — презентация, надевается на границе (см. ``research.codes``).
     """
-    return random_hash()
+    return random_hash(CODE_LEN)
 
 
 async def source_document_create(

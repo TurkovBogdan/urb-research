@@ -5,9 +5,11 @@ import MarkdownIt from 'markdown-it'
 import type { Env, MarkdownIt as MarkdownParser, StateCore, Token } from 'markdown-it'
 import DOMPurify from 'dompurify'
 
-// Research entity cross-references: a `TYPE@<22-hex>` code in a body (RESEARCH / AREA /
-// NOTE / QUERY / SOURCE) becomes a link to that entity's page. Codes are exactly 22 hex
-// chars (research.codes / hashing._HASH_LEN); the negative lookahead rejects a longer hex run.
+// Research entity cross-references: a `TYPE@<hash>` code in a body (RESEARCH / AREA /
+// NOTE / QUERY / SOURCE) becomes a link to that entity's page. Codes are exactly 10 hex
+// chars (research.constants CODE_LEN); the negative lookahead rejects a longer hex run — so a
+// body still quoting a retired 22-char code renders as plain text rather than a dead link.
+const CODE_LEN = 10
 const REF_ROUTE: Record<string, string> = {
   RESEARCH: 'researches',
   AREA: 'areas',
@@ -15,11 +17,18 @@ const REF_ROUTE: Record<string, string> = {
   QUERY: 'queries',
   SOURCE: 'sources',
 }
-const REF_CODE = new RegExp(`(${Object.keys(REF_ROUTE).join('|')})@([0-9a-f]{22})(?![0-9a-f])`, 'g')
+// Exported: the body view extracts the same codes to resolve their titles, and one pattern is
+// what keeps «what renders as a link» and «what gets a title» the same set.
+export const REF_CODE = new RegExp(
+  `(${Object.keys(REF_ROUTE).join('|')})@([0-9a-f]{${CODE_LEN}})(?![0-9a-f])`,
+  'g',
+)
 // A code reads as an identifier, so bodies routinely wrap it in backticks. A code span that is
 // nothing but one code is still a reference, not a literal — anything else in the span (prose,
 // a second code, a fragment) keeps it literal, and a fenced block stays code either way.
-const WHOLE_CODE_SPAN = new RegExp(`^(${Object.keys(REF_ROUTE).join('|')})@([0-9a-f]{22})$`)
+const WHOLE_CODE_SPAN = new RegExp(
+  `^(${Object.keys(REF_ROUTE).join('|')})@([0-9a-f]{${CODE_LEN}})$`,
+)
 
 // A code is recognised only inside plain text and whole code spans: a fence is a separate token
 // type, and a code sitting in a link label must stay text (an <a> cannot nest an <a>).
@@ -151,7 +160,7 @@ function headingAnchors(state: StateCore): void {
     if (token.type !== 'heading_open') return
     const inline = state.tokens[index + 1]
     // Renders children as plain text — markup drops out, and so do the reference pills, whose
-    // 22-hex code would be noise in a table of contents.
+    // hex code would be noise in a table of contents.
     const text = state.md.renderer
       .renderInlineAsText(inline?.children ?? [], state.md.options, state.env)
       .trim()
@@ -236,7 +245,7 @@ function createParser(breaks: boolean): MarkdownParser {
     return self.renderToken(tokens, idx, options)
   }
 
-  // The 22-hex hash is opaque in prose — show a short prefix as the transient label, keep the
+  // The hash is opaque in prose — show a short prefix as the transient label, keep the
   // full code in href (navigation) + title (tooltip); a resolved title replaces it later.
   // Both parts of the code come from the regex above (fixed word + hex), so they need no escaping.
   // The label sits in its own <span> so it can be the element that ellipsises when the pill is

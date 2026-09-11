@@ -12,15 +12,15 @@ from sqlalchemy import select
 
 from src.core.database import session_scope, write_scope
 from src.core.utils.hashing import random_hash
-from src.modules.research.constants import NOTE_DESCRIPTION_MAX, NOTE_TITLE_MAX
+from src.modules.research.constants import CODE_LEN, NOTE_DESCRIPTION_MAX, NOTE_TITLE_MAX
 from src.modules.research.models.note import ResearchNote
 
 def note_code() -> str:
-    """Код заметки — голый 22-hex ``random_hash``.
+    """Код заметки — голый ``CODE_LEN``-hex ``random_hash``.
 
     Тип-префикс (``NOTE@``) — презентация, надевается на границе (см. ``research.codes``).
     """
-    return random_hash()
+    return random_hash(CODE_LEN)
 
 
 def _clip(value: str | None, limit: int) -> str:

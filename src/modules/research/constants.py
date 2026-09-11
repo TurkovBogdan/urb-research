@@ -1,4 +1,4 @@
-"""Константы research — размеры полей области + статусы документа + типы заметки.
+"""Константы research — длина кода + размеры полей области + статусы документа + типы заметки.
 
 Длины областей дублируются в модели (``String(n)``) и в CRUD-усечении (``_clip``).
 Статус есть только у источника (``research_source_document``): его состояние в research-пайплайне
@@ -13,10 +13,10 @@
 from __future__ import annotations
 
 # ── presentation code prefixes (граница, НЕ хранилище — см. research.codes) ──
-# Хранимый код — голый 22-hex хеш; тип-слово надевается на выходе DTO (кодек дописывает
-# разделитель `@` → на проводе `RESEARCH@<hash>`), снимается на входе. Значение = голое слово.
-# research — единственный дом префиксов: свои сущности + web_search-коды, на которые ссылается
-# (search/page); сам web_search коды не типизирует.
+# Хранимый код — голый hex-хеш длиной CODE_LEN; тип-слово надевается на выходе DTO (кодек
+# дописывает разделитель `@` → на проводе `RESEARCH@<hash>`), снимается на входе. Значение =
+# голое слово. research — единственный дом префиксов: свои сущности + web_search-коды, на
+# которые ссылается (search/page); сам web_search коды не типизирует.
 GROUP_CODE_PREFIX = "GROUP"
 RESEARCH_CODE_PREFIX = "RESEARCH"
 AREA_CODE_PREFIX = "AREA"
@@ -25,6 +25,12 @@ SOURCE_QUERY_CODE_PREFIX = "QUERY"
 SOURCE_DOCUMENT_CODE_PREFIX = "SOURCE"
 SEARCH_CODE_PREFIX = "SEARCH"  # web_search_query (референс из research)
 PAGE_CODE_PREFIX = "PAGE"  # web_search_page (референс из research)
+
+# Длина кода сущности research в hex-символах. Код нейронка перепечатывает в каждое тело, и
+# платит за него токенами: 10 знаков вместо 22 экономят ~6.8 токена на ссылку. Короче нельзя —
+# на 8 знаках опечатка в один символ попадает в живую строку раз на 3600, на 10 — раз на 733000.
+# Коды web_search (22) этой длиной НЕ управляются: их агент не видит (см. codes.py).
+CODE_LEN = 10
 
 # Что делать с исследованиями группы при её удалении. Группа — раскладка, поэтому по умолчанию
 # исследования переживают её (``detach``); остальные два варианта человек выбирает явно.
@@ -93,6 +99,7 @@ __all__ = [
     "SOURCE_DOCUMENT_CODE_PREFIX",
     "SEARCH_CODE_PREFIX",
     "PAGE_CODE_PREFIX",
+    "CODE_LEN",
     "RESEARCH_TITLE_MAX",
     "RESEARCH_DESCRIPTION_MAX",
     "GROUP_TITLE_MAX",

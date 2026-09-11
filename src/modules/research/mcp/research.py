@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from src.modules.research.codes import code_prefix, strip_prefix
+from src.modules.research.codes import bare_code, code_prefix
 from src.modules.research.constants import (
     AREA_CODE_PREFIX,
     DOC_ERROR,
@@ -88,7 +88,7 @@ def register(mcp: "FastMCP") -> None:
             group_code: Optional GROUP@ code to file this research under (see group_list).
                 Grouping is cosmetic shelving — skip it unless the user asked for it.
         """
-        group_code = strip_prefix(group_code)
+        group_code = bare_code(group_code)
         await _resolve_group(group_code)
         row = await research_crud.research_create(
             title=title, description=description, body=body, group_code=group_code
@@ -107,7 +107,7 @@ def register(mcp: "FastMCP") -> None:
         Args:
             research_code: The research code returned by research_create.
         """
-        research_code = strip_prefix(research_code)
+        research_code = bare_code(research_code)
         found = await research_crud.research_get_with_group(research_code)
         if found is None:
             raise ValueError(f"Research {research_code} not found.")
@@ -136,7 +136,7 @@ def register(mcp: "FastMCP") -> None:
             group_code: Omit for every research; pass a GROUP@ code for that group only, or an
                 empty string for the researches that sit in no group.
         """
-        group_code = strip_prefix(group_code)
+        group_code = bare_code(group_code)
         if group_code:
             await _resolve_group(group_code)
         return [
@@ -168,8 +168,8 @@ def register(mcp: "FastMCP") -> None:
             group_code: GROUP@ code to file this research in, or an empty string to take it out
                 of its group; omit to keep. Optional — grouping is for the user's convenience.
         """
-        research_code = strip_prefix(research_code)
-        group_code = strip_prefix(group_code)
+        research_code = bare_code(research_code)
+        group_code = bare_code(group_code)
         group = await _resolve_group(group_code)
         row = await research_crud.research_update(
             research_code,
@@ -198,7 +198,7 @@ def register(mcp: "FastMCP") -> None:
         Args:
             research_code: The research to delete.
         """
-        return await research_crud.research_delete(strip_prefix(research_code))
+        return await research_crud.research_delete(bare_code(research_code))
 
     @mcp.tool()
     async def query_search_run(area_code: str, query: str) -> list[ResearchSourceDocumentRow]:
@@ -223,7 +223,7 @@ def register(mcp: "FastMCP") -> None:
             area_code: The area to search sources for (its research is taken from the area).
             query: The search query text.
         """
-        area_code = strip_prefix(area_code)
+        area_code = bare_code(area_code)
         area = await area_crud.area_get(area_code)
         if area is None:
             raise ValueError(f"Area {area_code} not found.")
@@ -255,7 +255,7 @@ def register(mcp: "FastMCP") -> None:
             code: An AREA@ code (its searches) or a RESEARCH@ code (all its searches).
         """
         prefix = code_prefix(code)
-        bare = strip_prefix(code)
+        bare = bare_code(code)
         if prefix == AREA_CODE_PREFIX:
             rows = await source_query_crud.source_query_list_by_area(bare)
         elif prefix == RESEARCH_CODE_PREFIX:
@@ -273,4 +273,4 @@ def register(mcp: "FastMCP") -> None:
         Args:
             query_code: The search (source-query) to delete.
         """
-        return await source_query_crud.source_query_delete(strip_prefix(query_code))
+        return await source_query_crud.source_query_delete(bare_code(query_code))

@@ -96,6 +96,23 @@ uv run pytest --module=core_interface
 \`\`\`
 `
 
+// Схему судят по тесноте: раскладка меряет подписи выбранной гарнитурой и по ним считает ширину
+// коробок, поэтому в примере стоит дерево решений — три ромба, ветки с подписями на стрелках
+// (в том числе длинной, в три значения) и восемь исходов. На схеме из трёх слов разницы между
+// гарнитурами не видно, а выбирается здесь именно она.
+const DIAGRAM_PREVIEW = `\`\`\`mermaid
+flowchart TD
+  Status{Order status} -->|paid, completed, needs_review| Paid([Paid])
+  Status -->|canceled| Canceled([Canceled])
+  Status -->|awaiting_payment| Due{Due date passed?}
+  Status -->|draft| Failed{Payment failed?}
+  Due -->|yes| Overdue([Overdue])
+  Due -->|no| Awaiting([AwaitingPayment])
+  Failed -->|yes| PaymentFailed([PaymentFailed])
+  Failed -->|no| NoRow([No row in history])
+\`\`\`
+`
+
 // Each option previews itself: the row is set in the family it selects, which tells more
 // than its name does, and the note says what the family is for.
 function optionProps(option: FontOption) {
@@ -422,6 +439,14 @@ const researchViewOptions = RESEARCH_LIST_VIEWS.map((view) => ({
           <p class="setting__desc">{{ t('settings.interface.diagram.height.description') }}</p>
         </div>
       </SettingsGroup>
+
+      <VCard variant="outlined" rounded="lg">
+        <VCardTitle class="text-h6">{{ t('settings.interface.preview.title') }}</VCardTitle>
+        <VDivider />
+        <VCardText>
+          <MarkdownRenderer :text="DIAGRAM_PREVIEW" />
+        </VCardText>
+      </VCard>
     </div>
   </PageLayout>
 </template>

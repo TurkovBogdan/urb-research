@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from src.modules.research.codes import strip_prefix
+from src.modules.research.codes import bare_code
 from src.modules.research.crud import area as area_crud
 from src.modules.research.crud import research as research_crud
 from src.modules.research.dto import AgentAreaCreated, AgentAreaDetail, AreaRow
@@ -45,7 +45,7 @@ def register(mcp: "FastMCP") -> None:
             scope: The boundaries — what is covered and what is explicitly excluded (≤1024).
             expectations: The expected form of the result (≤1024).
         """
-        research_code = strip_prefix(research_code)
+        research_code = bare_code(research_code)
         if await research_crud.research_get(research_code) is None:
             raise ValueError(f"Research {research_code} not found.")
         row = await area_crud.area_create(
@@ -65,7 +65,7 @@ def register(mcp: "FastMCP") -> None:
         Args:
             research_code: The research whose areas to return.
         """
-        research_code = strip_prefix(research_code)
+        research_code = bare_code(research_code)
         if await research_crud.research_get(research_code) is None:
             raise ValueError(f"Research {research_code} not found.")
         rows = await area_crud.area_list_by_research(research_code)
@@ -78,7 +78,7 @@ def register(mcp: "FastMCP") -> None:
         Args:
             area_code: The area code returned by area_create.
         """
-        area_code = strip_prefix(area_code)
+        area_code = bare_code(area_code)
         row = await area_crud.area_get(area_code)
         if row is None:
             raise ValueError(f"Area {area_code} not found.")
@@ -108,7 +108,7 @@ def register(mcp: "FastMCP") -> None:
             body: New section synthesis in markdown (unlimited), or omit.
                 Markup rules — skill_get('body-markup'); a diagram in it — skill_get('mermaid').
         """
-        area_code = strip_prefix(area_code)
+        area_code = bare_code(area_code)
         row = await area_crud.area_update(
             area_code,
             title=title,
@@ -131,4 +131,4 @@ def register(mcp: "FastMCP") -> None:
         Args:
             area_code: The area to delete.
         """
-        return await area_crud.area_delete(strip_prefix(area_code))
+        return await area_crud.area_delete(bare_code(area_code))

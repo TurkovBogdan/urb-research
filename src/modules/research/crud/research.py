@@ -15,6 +15,7 @@ from sqlalchemy.sql.selectable import Select
 from src.core.database import session_scope, write_scope
 from src.core.utils.hashing import random_hash
 from src.modules.research.constants import (
+    CODE_LEN,
     DOC_FILTERED,
     DOC_KEPT,
     RESEARCH_DESCRIPTION_MAX,
@@ -30,11 +31,11 @@ from src.modules.research.models.source_query import ResearchSourceQuery
 ResearchWithGroup = tuple[Research, ResearchGroup | None]
 
 def research_code() -> str:
-    """Код исследования — голый 22-hex ``random_hash`` (дедупа по заголовку нет, каждый свой).
+    """Код исследования — голый ``CODE_LEN``-hex ``random_hash`` (дедупа по заголовку нет).
 
     Тип-префикс (``RESEARCH@``) — презентация, надевается на границе (см. ``research.codes``).
     """
-    return random_hash()
+    return random_hash(CODE_LEN)
 
 
 def _filtered(

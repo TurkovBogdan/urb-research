@@ -16,6 +16,7 @@ from sqlalchemy import func, select, update
 from src.core.database import session_scope, write_scope
 from src.core.utils.hashing import random_hash
 from src.modules.research.constants import (
+    CODE_LEN,
     GROUP_COLOR_MAX,
     GROUP_DESCRIPTION_MAX,
     GROUP_ICON_MAX,
@@ -30,11 +31,11 @@ from src.modules.research.models.research import Research
 
 
 def group_code() -> str:
-    """Код группы — голый 22-hex ``random_hash`` (естественного ключа дедупа нет).
+    """Код группы — голый ``CODE_LEN``-hex ``random_hash`` (естественного ключа дедупа нет).
 
     Тип-префикс (``GROUP@``) — презентация, надевается на границе (см. ``research.codes``).
     """
-    return random_hash()
+    return random_hash(CODE_LEN)
 
 
 def _clip(value: str | None, limit: int) -> str:

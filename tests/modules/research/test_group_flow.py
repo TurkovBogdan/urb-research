@@ -10,11 +10,12 @@ from __future__ import annotations
 import pytest
 from fastmcp.exceptions import ToolError
 
+from src.modules.research.constants import CODE_LEN
 from src.modules.research.crud import group as group_crud
 
 pytestmark = pytest.mark.db
 
-_UNKNOWN_GROUP = "GROUP@" + "0" * 22
+_UNKNOWN_GROUP = "GROUP@" + "0" * CODE_LEN
 
 
 async def test_list_keeps_ungrouped_researches(call):

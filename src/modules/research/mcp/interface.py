@@ -17,7 +17,7 @@ import webbrowser
 from typing import TYPE_CHECKING
 
 from src.core.config import get_config
-from src.modules.research.codes import code_prefix, strip_prefix
+from src.modules.research.codes import checked_code, code_prefix, strip_prefix
 from src.modules.research.constants import (
     AREA_CODE_PREFIX,
     GROUP_CODE_PREFIX,
@@ -48,10 +48,14 @@ _WEB_SEARCH_SECTION = {
 
 
 def _page_path(code: str) -> str:
-    """Код → путь страницы приложения; неизвестный тип кода — ошибка."""
+    """Код → путь страницы приложения; неизвестный тип кода — ошибка.
+
+    Длину проверяет только research-ветка: коды web_search длиннее и такими остаются
+    (``checked_code`` — см. ``research.codes``).
+    """
     prefix = code_prefix(code)
     if prefix in _RESEARCH_SECTION:
-        return f"/research/{_RESEARCH_SECTION[prefix]}/{code}"
+        return f"/research/{_RESEARCH_SECTION[prefix]}/{checked_code(code)}"
     if prefix in _WEB_SEARCH_SECTION:
         return f"/web-search/{_WEB_SEARCH_SECTION[prefix]}/{strip_prefix(code)}"
     raise ValueError(

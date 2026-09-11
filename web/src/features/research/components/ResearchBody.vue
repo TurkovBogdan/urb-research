@@ -2,7 +2,7 @@
 import { computed, watch } from 'vue'
 
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
-import type { HeadingAnchor } from '@/components/markdown/render'
+import { REF_CODE, type HeadingAnchor } from '@/components/markdown/render'
 import { useReferencesStore } from '../stores/references.store'
 
 // Тело исследования/области/заметки: markdown + разрешение ссылок-кодов (TYPE@hash) в
@@ -16,11 +16,9 @@ const emit = defineEmits<{ headings: [items: HeadingAnchor[]] }>()
 
 const store = useReferencesStore()
 
-const REF_RE = /(?:RESEARCH|AREA|NOTE|QUERY|SOURCE)@[0-9a-f]{22}(?![0-9a-f])/g
-
 const codes = computed(() => {
   const found = new Set<string>()
-  for (const m of props.text.matchAll(REF_RE)) found.add(m[0])
+  for (const m of props.text.matchAll(REF_CODE)) found.add(m[0])
   return [...found]
 })
 

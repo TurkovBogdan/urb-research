@@ -1,1 +1,0 @@
-import{bc as n,b9 as l,bb as o,bd as s,bI as u,bi as f,bo as i}from"./index-BtmwolUh.js";const e=i(null);function r(){return e}function b(t){const a=f(!1);n(()=>{a.value=!0}),l(()=>{a.value=!0}),o(()=>{a.value=!1}),s(()=>{a.value=!1}),u(()=>{a.value&&(e.value=t())})}export{r as d,b as u};

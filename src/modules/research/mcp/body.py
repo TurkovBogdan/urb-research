@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from src.modules.research.codes import checked_code
 from src.modules.research.dto import AgentBodyView
 from src.modules.research.services import body as body_service
 
@@ -68,7 +69,7 @@ def register(mcp: "FastMCP") -> None:
         else:
             raise ValueError("action must be 'set', 'replace' or 'replace_block'.")
 
-        row = await body_service.apply(code, mutate)
+        row = await body_service.apply(checked_code(code), mutate)
         return AgentBodyView(code=code, body=row.body, updated_at=row.updated_at)
 
     @mcp.tool()
@@ -109,5 +110,5 @@ def register(mcp: "FastMCP") -> None:
         else:
             raise ValueError("position must be 'start', 'end', 'before' or 'after'.")
 
-        row = await body_service.apply(code, mutate)
+        row = await body_service.apply(checked_code(code), mutate)
         return AgentBodyView(code=code, body=row.body, updated_at=row.updated_at)

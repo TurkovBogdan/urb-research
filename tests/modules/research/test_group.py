@@ -7,6 +7,7 @@ from sqlalchemy import update
 
 from src.core.database import write_scope
 from src.modules.research.constants import (
+    CODE_LEN,
     GROUP_COLOR_MAX,
     GROUP_DESCRIPTION_MAX,
     GROUP_ICON_MAX,
@@ -39,7 +40,7 @@ async def _attach(research_code: str, group_code: str) -> None:
 async def test_create_fills_defaults(db):
     row = await group_create(title="Фронтенд")
 
-    assert len(row.code) == 22
+    assert len(row.code) == CODE_LEN
     assert row.title == "Фронтенд"
     assert row.description == "" and row.icon == "" and row.color == ""
     assert row.sort == GROUP_SORT_DEFAULT

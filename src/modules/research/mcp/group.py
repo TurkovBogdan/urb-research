@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from src.modules.research.codes import strip_prefix
+from src.modules.research.codes import bare_code
 from src.modules.research.crud import group as group_crud
 from src.modules.research.dto import AgentGroupCreated, AgentGroupScan
 
@@ -55,7 +55,7 @@ def register(mcp: "FastMCP") -> None:
         Args:
             group_code: The group code returned by group_create / group_list.
         """
-        group_code = strip_prefix(group_code)
+        group_code = bare_code(group_code)
         row = await group_crud.group_get(group_code)
         if row is None:
             raise ValueError(f"Group {group_code} not found.")
@@ -74,7 +74,7 @@ def register(mcp: "FastMCP") -> None:
             title: New title (≤128), or omit to keep.
             description: New one-line description (≤512), or omit.
         """
-        group_code = strip_prefix(group_code)
+        group_code = bare_code(group_code)
         row = await group_crud.group_update(group_code, title=title, description=description)
         if row is None:
             raise ValueError(f"Group {group_code} not found.")
@@ -89,4 +89,4 @@ def register(mcp: "FastMCP") -> None:
         Args:
             group_code: The group to delete.
         """
-        return await group_crud.group_delete(strip_prefix(group_code))
+        return await group_crud.group_delete(bare_code(group_code))

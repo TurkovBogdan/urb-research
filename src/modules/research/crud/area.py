@@ -17,17 +17,18 @@ from src.modules.research.constants import (
     AREA_BRIEF_MAX,
     AREA_DESCRIPTION_MAX,
     AREA_TITLE_MAX,
+    CODE_LEN,
 )
 from src.modules.research.models.area import ResearchArea
 from src.modules.research.models.source_document import ResearchSourceDocument
 from src.modules.research.models.source_query import ResearchSourceQuery
 
 def area_code() -> str:
-    """Код области — голый 22-hex ``random_hash`` (естественного ключа дедупа нет).
+    """Код области — голый ``CODE_LEN``-hex ``random_hash`` (естественного ключа дедупа нет).
 
     Тип-префикс (``AREA@``) — презентация, надевается на границе (см. ``research.codes``).
     """
-    return random_hash()
+    return random_hash(CODE_LEN)
 
 
 def _clip(value: str | None, limit: int) -> str:

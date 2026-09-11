@@ -5,11 +5,12 @@ from __future__ import annotations
 import pytest
 from fastmcp.exceptions import ToolError
 
+from src.modules.research.constants import CODE_LEN
 from src.modules.research.crud import group as group_crud
 
 pytestmark = pytest.mark.db
 
-_MISSING = "GROUP@" + "0" * 22
+_MISSING = "GROUP@" + "0" * CODE_LEN
 
 
 async def test_create_returns_only_tagged_code(call):
