@@ -13,6 +13,7 @@ from src.core.api import register_exception_handlers
 from src.core.config import Config
 from src.core.database import close_database, init_database
 from src.core.database.runtime import Base
+from src.modules.core_connectors import service as connectors_service
 from src.modules.web_search.api import router
 from src.modules.web_search.constants import FETCH_STATUS_DONE
 from src.modules.web_search.crud import page as page_crud
@@ -29,8 +30,11 @@ class _StubEngine(SearchEngine, FetchEngine):
     """Движок-заглушка (обе роли): без сети, пустая выдача → прогон завершается в ``done``."""
 
     code = "stub"
-    enabled_field = "tavily_gateway_enabled"
     pages_per_request = 20
+
+    async def available(self) -> bool:
+        """Записи доступа в core_connectors у заглушки нет — считаем её готовой."""
+        return True
 
     async def search(self, request: SearchRequest) -> list[dict[str, Any]]:
         return []
@@ -205,12 +209,19 @@ async def test_get_page_missing_returns_404(client):
 
 
 @pytest.mark.db
-async def test_list_engines_returns_available_and_defaults(client):
+async def test_list_engines_returns_only_engines_with_a_ready_access(client):
+    # Доступен движок, у которого есть заполненная запись доступа в core_connectors;
+    # у firecrawl записи нет вовсе, поэтому в выдачу он не попадает.
+    await connectors_service.create_access(connector="tavily", values={"api_key": "k"})
+    await connectors_service.create_access(connector="xai", values={"api_key": "k"})
+
     r = await client.get("/internal/web-search/engines")
+
     assert r.status_code == 200
     body = r.json()
     assert "tavily" in body["search"] and "tavily" in body["fetch"]
     assert "xai" in body["search"] and "xai" not in body["fetch"]  # Grok контент не тянет
+    assert "firecrawl" not in body["search"]  # нет записи доступа → движок недоступен
     assert body["search_default"] == "tavily"
     assert body["fetch_default"] == "tavily"
 

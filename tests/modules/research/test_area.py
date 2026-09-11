@@ -60,6 +60,26 @@ async def test_areas_list_research_not_found(call):
         await call("areas_list", research_code="RESEARCH@missing000000000000")
 
 
+async def test_area_get_hides_the_way_up(call):
+    """Путь наверх (``research_code``/``research_title``) — поле интерфейса: агент и так знает,
+    в каком исследовании работает, и в его наборе полей его быть не должно."""
+    r = await _research(call)
+    a = (await call("area_create", research_code=r, title="A"))["code"]
+
+    g = await call("area_get", area_code=a)
+
+    assert set(g) == {
+        "code",
+        "title",
+        "description",
+        "objective",
+        "scope",
+        "expectations",
+        "body",
+        "updated_at",
+    }
+
+
 async def test_area_get_not_found(call):
     with pytest.raises(ToolError, match="Area .* not found"):
         await call("area_get", area_code="AREA@missing0000000000000")

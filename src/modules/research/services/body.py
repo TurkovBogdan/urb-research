@@ -9,7 +9,7 @@
 
 from __future__ import annotations
 
-from src.core.database import session_scope
+from src.core.database import write_scope
 from src.modules.research.codes import strip_prefix
 from src.modules.research.constants import (
     AREA_CODE_PREFIX,
@@ -113,7 +113,7 @@ async def apply(code: str, mutate) -> Research | ResearchArea | ResearchNote:
     """
     model = _model_for(code)
     bare = strip_prefix(code)
-    async with session_scope() as s:
+    async with write_scope() as s:
         row = await s.get(model, bare)
         if row is None:
             raise ValueError(f"{code} not found.")

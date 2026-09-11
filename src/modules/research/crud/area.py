@@ -11,23 +11,24 @@ from __future__ import annotations
 
 from sqlalchemy import delete, func, select
 
-from src.core.database import session_scope
+from src.core.database import session_scope, write_scope
 from src.core.utils.hashing import random_hash
 from src.modules.research.constants import (
     AREA_BRIEF_MAX,
     AREA_DESCRIPTION_MAX,
     AREA_TITLE_MAX,
+    CODE_LEN,
 )
 from src.modules.research.models.area import ResearchArea
 from src.modules.research.models.source_document import ResearchSourceDocument
 from src.modules.research.models.source_query import ResearchSourceQuery
 
 def area_code() -> str:
-    """Код области — голый 22-hex ``random_hash`` (естественного ключа дедупа нет).
+    """Код области — голый ``CODE_LEN``-hex ``random_hash`` (естественного ключа дедупа нет).
 
     Тип-префикс (``AREA@``) — презентация, надевается на границе (см. ``research.codes``).
     """
-    return random_hash()
+    return random_hash(CODE_LEN)
 
 
 def _clip(value: str | None, limit: int) -> str:
@@ -44,7 +45,7 @@ async def area_create(
     scope: str | None = None,
     expectations: str | None = None,
 ) -> ResearchArea:
-    async with session_scope() as s:
+    async with write_scope() as s:
         row = ResearchArea(
             code=area_code(),
             research_code=research_code,
@@ -89,7 +90,7 @@ async def area_update(
     body: str | None = None,
 ) -> ResearchArea | None:
     """Обновить переданные поля области (``None`` = не трогать; ``body`` без лимита)."""
-    async with session_scope() as s:
+    async with write_scope() as s:
         row = await s.get(ResearchArea, code)
         if row is None:
             return None
@@ -113,7 +114,7 @@ async def area_update(
 async def area_delete(code: str) -> bool:
     """Удалить область. Каскад вручную: источники → запросы области → сама область.
     ``True`` — существовала и удалена."""
-    async with session_scope() as s:
+    async with write_scope() as s:
         row = await s.get(ResearchArea, code)
         if row is None:
             return False
@@ -121,6 +122,39 @@ async def area_delete(code: str) -> bool:
             await s.execute(delete(model).where(model.area_code == code))
         await s.delete(row)
     return True
+
+
+async def area_bodies_by_research(research_code: str) -> list[tuple[str, str]]:
+    """``(code, body)`` всех зон исследования — сырьё для глубокого поиска.
+
+    Только две колонки: тела зон весят мегабайтами, тащить ради поиска целые ORM-объекты незачем.
+    """
+    stmt = select(ResearchArea.code, ResearchArea.body).where(
+        ResearchArea.research_code == research_code
+    )
+    async with session_scope() as s:
+        return [(code, body) for code, body in (await s.execute(stmt)).all()]
+
+
+async def area_search_texts() -> list[tuple[str, str]]:
+    """``(research_code, весь текст зоны одной строкой)`` по всем зонам реестра.
+
+    Бриф зоны (цель / рамки / ожидания) ищется наравне с синтезом: он тоже написан словами
+    пользователя. Из чего зона состоит для поиска, знает её CRUD — служба поиска колонок
+    не перечисляет.
+    """
+    stmt = select(
+        ResearchArea.research_code,
+        ResearchArea.title,
+        ResearchArea.description,
+        ResearchArea.objective,
+        ResearchArea.scope,
+        ResearchArea.expectations,
+        ResearchArea.body,
+    )
+    async with session_scope() as s:
+        rows = (await s.execute(stmt)).all()
+    return [(research_code, "\n".join(filter(None, texts))) for research_code, *texts in rows]
 
 
 async def area_count_by_research_codes(research_codes: list[str]) -> dict[str, int]:
@@ -143,5 +177,7 @@ __all__ = [
     "area_list_by_research",
     "area_update",
     "area_delete",
+    "area_bodies_by_research",
+    "area_search_texts",
     "area_count_by_research_codes",
 ]

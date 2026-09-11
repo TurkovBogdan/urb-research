@@ -4,8 +4,9 @@
 - ``search_engine`` — движок поиска (Tavily / Firecrawl / Grok), отдаёт ссылки;
 - ``fetch_engine`` — движок получения контента страниц (Tavily / Firecrawl / daemon-web-scrapper; Grok не умеет).
 
-Токены движков тут НЕ живут — они в модуле ``core_connectors`` (коннекторы владеют кредами);
-адаптеры web_search берут ключ через ``core_connectors.settings.service_api_key``. Всё
+Токены движков тут НЕ живут — они в записях доступа модуля ``core_connectors``; адаптеры
+web_search получают готовый коннектор через ``core_connectors.service.open_connector``.
+Привязка потребителя к сервису — это код движка (``tavily``), он же код коннектора. Всё
 читается через ``get_module_store("web_search")``.
 """
 
@@ -19,6 +20,9 @@ FETCH_CONCURRENCY_DEFAULT = 5
 DEFAULT_PAGES_DEFAULT = 10
 MAX_CONCURRENT_SEARCHES_DEFAULT = 3
 
+_ENGINES = "Движки"
+_LIMITS = "Ограничения"
+
 SCHEMA = (
     ChoiceField(
         key="search_engine",
@@ -26,17 +30,19 @@ SCHEMA = (
         description="Движок, который по запросу возвращает ссылки.",
         default_=SEARCH_ENGINE_DEFAULT,
         options=(("tavily", "Tavily"), ("firecrawl", "Firecrawl"), ("xai", "Grok (xAI)")),
+        group=_ENGINES,
     ),
     ChoiceField(
         key="fetch_engine",
-        label="Сервис получения контента",
-        description="Что использовать для получения контента страниц",
+        label="Движок получения контента",
+        description="Движок, который забирает содержимое найденных страниц.",
         default_=FETCH_ENGINE_DEFAULT,
         options=(
             ("tavily", "Tavily"),
             ("firecrawl", "Firecrawl"),
-            ("web_scrapper", "daemon-web-scrapper"),
+            ("web_scrapper", "UroborosWebScrapper"),
         ),
+        group=_ENGINES,
     ),
     IntField(
         key="default_pages",
@@ -45,6 +51,7 @@ SCHEMA = (
         default_=DEFAULT_PAGES_DEFAULT,
         min=1,
         max=50,
+        group=_LIMITS,
     ),
     IntField(
         key="max_concurrent_searches",
@@ -56,6 +63,7 @@ SCHEMA = (
         default_=MAX_CONCURRENT_SEARCHES_DEFAULT,
         min=1,
         max=50,
+        group=_LIMITS,
     ),
     IntField(
         key="fetch_concurrency",
@@ -64,6 +72,7 @@ SCHEMA = (
         default_=FETCH_CONCURRENCY_DEFAULT,
         min=1,
         max=50,
+        group=_LIMITS,
     ),
 )
 

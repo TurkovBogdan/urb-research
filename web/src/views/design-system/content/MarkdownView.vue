@@ -50,14 +50,28 @@ async def list_vacancies(status: str, limit: int = 50) -> list[Vacancy]:
         return list(result.scalars())
 \`\`\`
 
+## Table
+
+| Engine | Bundle (gzip) | Raw HTML by default | Notes |
+|---|---:|:---:|---|
+| markdown-it | 52.7 KB | off | plugin rules, GFM tables |
+| marked | 12.5 KB | on | smallest, narrow extension model |
+| unified | 36.8 KB | pipeline choice | full AST, largest ecosystem |
+
 ## Quote
 
 > We are looking for a specialist ready to work in a fast-changing environment
 > and not afraid of technical challenges.
 
+## Task list
+
+- [x] Migrate the renderer to markdown-it
+- [ ] Wire syntax highlighting into body code blocks
+
 ---
 
-Small text at the end of the paragraph. Links are filtered by DOMPurify and shown as plain text.`
+Small text at the end of the paragraph with ~~a struck-out phrase~~, an [external link](https://example.com)
+that opens in a new tab, and raw HTML like <b>this</b> which the parser escapes instead of rendering.`
 
 const sampleVacancy = `Requirements:
 - 2+ years of experience as a Python Backend Developer

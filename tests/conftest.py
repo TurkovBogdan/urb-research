@@ -13,33 +13,29 @@ env-переменных происходит ДО первых импортов
 Heavy-тесты Alembic-миграций (типы колонок ``postgresql.*``) на SQLite не идут —
 они скипаются, пока не задан реальный Postgres через ``TEST_PG_DSN``
 (``postgresql://user:pass@host:port/dbname``); см. ``pytest_collection_modifyitems``.
+База из DSN — только административное подключение: каждому heavy-тесту фикстура
+``_own_postgres_database_for_heavy`` создаёт свою одноразовую базу рядом и сносит её после,
+а остальные тесты того же прогона остаются на in-memory SQLite.
 """
 
 from __future__ import annotations
 
 # ── Подмена env. Обязательно до импортов из src ─────────────────────────────
 import os
+import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlsplit
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-# ``TEST_PG_DSN`` (опционально) переводит прогон на реальный Postgres — нужен
-# только для heavy-тестов миграций. Без него всё на in-memory SQLite.
+# ``TEST_PG_DSN`` (опционально) включает heavy-тесты миграций: не «переводит прогон на
+# Postgres», а даёт административное подключение, от которого каждый heavy-тест получает
+# свою базу (см. ``_own_postgres_database_for_heavy``). Всё остальное — на in-memory SQLite.
 _PG_DSN = os.environ.get("TEST_PG_DSN")
-if _PG_DSN:
-    _u = urlsplit(_PG_DSN)
-    os.environ["DB_PROVIDER"] = "postgres"
-    os.environ["DB_HOST"] = _u.hostname or "127.0.0.1"
-    os.environ["DB_PORT"] = str(_u.port or 5432)
-    os.environ["DB_NAME"] = _u.path.lstrip("/")
-    os.environ["DB_USER"] = _u.username or ""
-    os.environ["DB_PASSWORD"] = _u.password or ""
-    os.environ["DB_SSL"] = "false"
-else:
-    os.environ["DB_PROVIDER"] = "sqlite"
-    os.environ["DB_PATH"] = ":memory:"
-    os.environ["DB_SSL"] = "false"
+os.environ["DB_PROVIDER"] = "sqlite"
+os.environ["DB_PATH"] = ":memory:"
+os.environ["DB_SSL"] = "false"
 
 os.environ["WORKER_ENABLED"] = "false"
 # Тесты поднимают HTTP API — включаем монтаж зон (дефолт false = worker-only).
@@ -180,12 +176,12 @@ def pytest_configure(config):
 
 
 def pytest_collection_modifyitems(config, items):
-    """Heavy Alembic-тесты требуют Postgres — скипаем их на in-memory SQLite.
+    """Heavy Alembic-тесты требуют Postgres — скипаем их, пока не задан ``TEST_PG_DSN``.
 
     Миграции описаны в типах ``postgresql.*`` (JSONB/TIMESTAMP) и на SQLite не
-    накатываются. Запустить их можно, задав реальную БД через ``TEST_PG_DSN``.
+    накатываются.
     """
-    if Config().db_provider == "postgres":
+    if _PG_DSN:
         return
     skip_pg = pytest.mark.skip(
         reason="heavy-тесты миграций требуют Postgres — задай TEST_PG_DSN"
@@ -193,6 +189,73 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if item.get_closest_marker("heavy") is not None:
             item.add_marker(skip_pg)
+
+
+# ── Изоляция heavy-яруса: база на тест ───────────────────────────────────────
+
+_DISPOSABLE_DATABASE_PREFIX = "urb_test_"
+
+
+def _postgres_environment(admin_dsn: str, database: str) -> dict[str, str]:
+    """``DB_*`` для ``Config``: креды и хост из административного DSN, база — своя."""
+    parts = urlsplit(admin_dsn)
+    return {
+        "DB_PROVIDER": "postgres",
+        "DB_HOST": parts.hostname or "127.0.0.1",
+        "DB_PORT": str(parts.port or 5432),
+        "DB_NAME": database,
+        "DB_USER": parts.username or "",
+        "DB_PASSWORD": parts.password or "",
+        "DB_SSL": "false",
+    }
+
+
+@asynccontextmanager
+async def _disposable_database(admin_dsn: str):
+    """Свежая база под уникальным именем — создана до блока, снесена после него.
+
+    ``WITH (FORCE)`` рвёт соединения, которые тест мог не закрыть: без этого ``DROP``
+    отказывает, и база остаётся висеть на стенде.
+    """
+    import asyncpg
+
+    database = f"{_DISPOSABLE_DATABASE_PREFIX}{uuid.uuid4().hex[:12]}"
+    admin = await asyncpg.connect(admin_dsn)
+    try:
+        await admin.execute(f'CREATE DATABASE "{database}"')
+    finally:
+        await admin.close()
+    try:
+        yield database
+    finally:
+        admin = await asyncpg.connect(admin_dsn)
+        try:
+            await admin.execute(f'DROP DATABASE IF EXISTS "{database}" WITH (FORCE)')
+        finally:
+            await admin.close()
+
+
+@pytest.fixture(autouse=True)
+async def _own_postgres_database_for_heavy(request, monkeypatch):
+    """Каждый heavy-тест идёт на своей только что созданной базе PostgreSQL.
+
+    Общая база не годится ни в одном режиме: под ``-n auto`` воркеры гоняются за
+    ``CREATE TABLE``, под ``-n0`` тест, застемпивший синтетическую ревизию из ``tmp_path``,
+    оставляет строку, которую следующий раннер уже не разрешит. База на тест закрывает оба
+    случая. Для не-heavy тестов фикстура ничего не делает.
+    """
+    is_heavy = request.node.get_closest_marker("heavy") is not None
+    if not is_heavy or not _PG_DSN:
+        yield
+        return
+    async with _disposable_database(_PG_DSN) as database:
+        for key, value in _postgres_environment(_PG_DSN, database).items():
+            monkeypatch.setenv(key, value)
+        get_config.cache_clear()
+        try:
+            yield
+        finally:
+            await close_database()
 
 
 @pytest.fixture(autouse=True)
@@ -227,7 +290,21 @@ async def _dispose_engine_between_tests(request):
     await close_database()
 
 
+@pytest.fixture(autouse=True)
+def _clear_access_store():
+    """Кеш значений доступа живёт в процессе, а база у каждого теста своя.
+
+    Идентификаторы записей повторяются от теста к тесту, поэтому без сброса второй
+    тест получил бы значения первого.
+    """
+    from src.modules.core_connectors.access.store import access_store
+
+    access_store.clear()
+    yield
+    access_store.clear()
+
+
 @pytest.fixture
 def config() -> Config:
-    """Тестовый ``Config`` (in-memory SQLite либо Postgres из ``TEST_PG_DSN``)."""
+    """Тестовый ``Config`` (in-memory SQLite; у heavy-теста — его одноразовая база PostgreSQL)."""
     return Config()

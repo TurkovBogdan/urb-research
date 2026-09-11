@@ -17,7 +17,7 @@ from sqlalchemy import select, update
 
 from src.core.config import Config
 from src.core.crud import tasks as crud_tasks
-from src.core.database import close_database, init_database, session_scope
+from src.core.database import close_database, init_database, session_scope, write_scope
 from src.core.locks import CoreLock, CoreLockRow
 from src.core.models.tasks import CoreTask, CoreTaskStatus
 from src.core.scheduler.registry import get_registry
@@ -76,7 +76,7 @@ async def test_tick_skips_not_due_entry(db):
         module="m", code="c", name="Demo", description="d",
         schedule="0 * * * *", handler=handler, ttl=60, enabled=True,
     )
-    async with session_scope() as s:
+    async with write_scope() as s:
         await s.execute(
             CoreTask.__table__.insert().values(
                 status=CoreTaskStatus.success,
@@ -130,7 +130,7 @@ async def test_tick_scope_filters_by_module(db):
 @pytest.mark.db
 async def test_tick_cleans_zombie_and_releases_its_locks(db):
     zombie_id = await crud_tasks.create_running(module="z", code="z")
-    async with session_scope() as s:
+    async with write_scope() as s:
         await s.execute(
             update(CoreTask)
             .where(CoreTask.id == zombie_id)

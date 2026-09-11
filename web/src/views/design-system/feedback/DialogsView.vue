@@ -3,6 +3,8 @@ defineOptions({ inheritAttrs: false })
 
 import PageLayout from '@/layout/templates/PageLayout.vue'
 import PageHeader from '@/layout/components/PageHeader.vue'
+import AppDialog from '@/components/AppDialog.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { IconTrash, IconAlertTriangle, IconInfoCircle } from '@tabler/icons-vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -17,7 +19,22 @@ const formName  = ref('')
 const formEmail = ref('')
 const formSaving = ref(false)
 
+const appNarrowOpen = ref(false)
+const appBaseOpen   = ref(false)
+const appScrollOpen = ref(false)
+const confirmOpen   = ref(false)
+const confirmBusy   = ref(false)
+
 const { t } = useI18n()
+
+// ConfirmDialog спрашивает, но не делает: работу ведёт родитель и сам закрывает окно —
+// поэтому при отказе окно остаётся открытым, с ошибкой там, куда человек смотрит.
+async function runConfirm() {
+  confirmBusy.value = true
+  await new Promise(r => setTimeout(r, 800))
+  confirmBusy.value = false
+  confirmOpen.value = false
+}
 
 async function fakeSubmit() {
   formSaving.value = true
@@ -80,7 +97,113 @@ async function fakeSubmit() {
       </div>
     </section>
 
+    <!-- Сборные окна проекта: анатомия задана компонентом, а не собирается на месте. -->
+    <section class="ds-section">
+      <h6 class="mb-3">{{ t('design-system.section.dialogs.app_dialog') }}</h6>
+      <div class="ds-card">
+
+        <div class="ds-row ds-row--center">
+          <span class="ds-tag">narrow</span>
+          <div class="ds-controls">
+            <VBtn variant="outlined" @click="appNarrowOpen = true">
+              {{ t('design-system.section.dialogs.open') }}
+            </VBtn>
+          </div>
+          <span class="ds-spec">size="narrow" · 440</span>
+        </div>
+
+        <div class="ds-row ds-row--center">
+          <span class="ds-tag">base</span>
+          <div class="ds-controls">
+            <VBtn variant="outlined" @click="appBaseOpen = true">
+              {{ t('design-system.section.dialogs.open') }}
+            </VBtn>
+          </div>
+          <span class="ds-spec">size="base" · 560 · description</span>
+        </div>
+
+        <div class="ds-row ds-row--center">
+          <span class="ds-tag">scrollable</span>
+          <div class="ds-controls">
+            <VBtn variant="outlined" @click="appScrollOpen = true">
+              {{ t('design-system.section.dialogs.open') }}
+            </VBtn>
+          </div>
+          <span class="ds-spec">scrollable · шапка и кнопки на месте</span>
+        </div>
+
+        <div class="ds-row ds-row--center">
+          <span class="ds-tag">confirm</span>
+          <div class="ds-controls">
+            <VBtn variant="outlined" color="error" @click="confirmOpen = true">
+              {{ t('design-system.section.dialogs.open') }}
+            </VBtn>
+          </div>
+          <span class="ds-spec">ConfirmDialog · спрашивает, но не делает</span>
+        </div>
+
+      </div>
+    </section>
+
   </div>
+
+  <AppDialog
+    v-model="appNarrowOpen"
+    size="narrow"
+    :title="t('design-system.section.dialogs.sample.narrow_title')"
+  >
+    {{ t('design-system.section.dialogs.sample.narrow_text') }}
+
+    <template #actions>
+      <VBtn variant="text" @click="appNarrowOpen = false">{{ t('common.action.cancel') }}</VBtn>
+      <VBtn color="primary" variant="flat" @click="appNarrowOpen = false">
+        {{ t('common.action.confirm') }}
+      </VBtn>
+    </template>
+  </AppDialog>
+
+  <AppDialog
+    v-model="appBaseOpen"
+    :title="t('design-system.section.dialogs.sample.base_title')"
+    :description="t('design-system.section.dialogs.sample.base_desc')"
+  >
+    <VTextField
+      v-model="formName"
+      :label="t('design-system.section.dialogs.sample.field')"
+      variant="outlined"
+      density="comfortable"
+      hide-details
+    />
+
+    <template #actions>
+      <VBtn variant="text" @click="appBaseOpen = false">{{ t('common.action.cancel') }}</VBtn>
+      <VBtn color="primary" variant="flat" @click="appBaseOpen = false">
+        {{ t('common.action.save') }}
+      </VBtn>
+    </template>
+  </AppDialog>
+
+  <AppDialog
+    v-model="appScrollOpen"
+    scrollable
+    :title="t('design-system.section.dialogs.sample.scroll_title')"
+  >
+    <p v-for="n in 20" :key="n" class="mb-3">
+      {{ n }}. {{ t('design-system.section.dialogs.sample.scroll_line') }}
+    </p>
+
+    <template #actions>
+      <VBtn variant="text" @click="appScrollOpen = false">{{ t('common.action.close') }}</VBtn>
+    </template>
+  </AppDialog>
+
+  <ConfirmDialog
+    v-model="confirmOpen"
+    :title="t('design-system.section.dialogs.sample.confirm_title')"
+    :text="t('design-system.section.dialogs.sample.confirm_text')"
+    :loading="confirmBusy"
+    @confirm="runConfirm"
+  />
 
   <!-- ── Basic ── -->
   <VDialog v-model="basicOpen" max-width="440">

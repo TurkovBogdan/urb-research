@@ -42,6 +42,7 @@ _SQLITE = VisibleWhen("DB_PROVIDER", "sqlite")
 _DB = "База данных"
 _SERVER = "Сервер"
 _WORKER = "Фоновые задачи"
+_UPDATE = "Обновление"
 
 FIELDS: tuple[SetupField, ...] = (
     SetupField(
@@ -102,6 +103,11 @@ FIELDS: tuple[SetupField, ...] = (
     SetupField(
         "WORKER_MAX_CONCURRENT_RUNS", _WORKER, "int", "Параллельных задач",
         "Максимум одновременно выполняемых задач",
+    ),
+    SetupField(
+        "UPDATE_BRANCH", _UPDATE, "str", "Ветка обновления",
+        "Ветка, до которой обновляется установка (origin/<ветка>); обновление делает "
+        "fast-forward и откажется работать, если checkout стоит на другой ветке",
     ),
 )
 

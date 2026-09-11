@@ -6,6 +6,7 @@ import { IconRefresh, IconSearch } from '@tabler/icons-vue'
 
 import PageLayout from '@/layout/templates/PageLayout.vue'
 import PageHeader from '@/layout/components/PageHeader.vue'
+import SectionError from '@/components/SectionError.vue'
 import TablePaginationBar from '@/components/TablePaginationBar.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { fmtDateTime, fmtRelative } from '@/shared/utils/date'
@@ -156,18 +157,9 @@ onActivated(() => store.load())
       </div>
     </VCard>
 
-    <VAlert
-      v-if="store.error"
-      type="error"
-      variant="tonal"
-      closable
-      class="mb-3"
-      @click:close="store.error = null"
-    >
-      {{ store.error }}
-    </VAlert>
+    <SectionError v-if="store.error" :error="store.error" />
 
-    <VCard variant="outlined" rounded="lg">
+    <VCard v-else variant="outlined" rounded="lg">
       <VDataTable
         :headers="headers"
         :items="store.items"

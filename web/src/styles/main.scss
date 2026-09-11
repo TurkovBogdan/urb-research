@@ -1,32 +1,5 @@
-// ── Fonts ────────────────────────────────────────────────────────────────────
-// Onest — Variable Font (wght 100–900)
-@font-face {
-  font-family: 'Onest';
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url('../assets/fonts/onest.woff2') format('woff2'),
-       url('../assets/fonts/onest.woff')  format('woff');
-}
-
-// JetBrains Mono — Variable Font (wght 100–800)
-@font-face {
-  font-family: 'JetBrains Mono';
-  font-style: normal;
-  font-weight: 100 800;
-  font-display: swap;
-  src: url('../assets/fonts/jetbrains-mono.woff2') format('woff2'),
-       url('../assets/fonts/jetbrains-mono.woff')  format('woff');
-}
-
-@font-face {
-  font-family: 'JetBrains Mono';
-  font-style: italic;
-  font-weight: 100 800;
-  font-display: swap;
-  src: url('../assets/fonts/jetbrains-mono-italic.woff2') format('woff2'),
-       url('../assets/fonts/jetbrains-mono-italic.woff')  format('woff');
-}
+// Font faces live in styles/fonts.scss — which family is in use is a runtime choice
+// (settings store → --font / --font-reading), so the declarations sit apart from tokens.
 
 // ── Design tokens ───────────────────────────────────────────────────────────
 :root {
@@ -41,7 +14,11 @@
   --border-sunken: #181C23;                // border paired with --surface-sunken
   --text:         #E6E9EF;
   --text-muted:   #9AA3B2;
-  --text-faint:   #6B7280;
+  // Raised from #6B7280: measured 3.45:1 against --surface, under the 4.5 an AA reader needs
+  // for text this size. It carries h6 labels, list markers and captions — tertiary, but read.
+  // The value is set against the *lightest* place it lands — table headers on --surface-hi —
+  // because that is where the ratio is worst, not against --surface where it looks safe.
+  --text-faint:   #8B94A3;
   --accent:       #3B9EFF;
   --accent-soft:  rgba(59, 158, 255, 0.14);
   --accent-mid:   #2C6FB0;
@@ -55,7 +32,11 @@
   --info-soft:    rgba(59, 158, 255, 0.14);
   --radius:       10px;
   --radius-sm:    6px;
-  --font:         'Onest', system-ui, sans-serif;
+  // Font roles. These are the defaults the app paints with before the settings store
+  // applies the user's choice onto <html> (see constants/fonts.ts) — and the values it
+  // keeps if the choice is the default one.
+  --font:         'Onest', system-ui, sans-serif;          // interface: scanned in small sizes
+  --font-reading: 'Onest', system-ui, sans-serif;          // prose: read continuously
   --font-mono:    'JetBrains Mono', monospace;
 
   --legacy-scrollbar-thumb-hover: #3A4150;
@@ -81,7 +62,100 @@
 
   --legacy-tooltip-bg:    #2A2F3A;
   --legacy-flyout-bg:     #1A1E26;
+
+  // Tells the engine which scheme the page is painted in, so native scrollbars, form
+  // controls and the canvas behind the app match instead of flashing white.
+  color-scheme: dark;
 }
+
+// ── Light palette ────────────────────────────────────────────────────────────
+// Same token names, inverted surfaces — every rule below in this file reads tokens, so the
+// scheme switches without touching a single component. The attribute is written onto <html>
+// by the settings store; absent it, the dark set above stands.
+//
+// Accents are darkened rather than reused: #3B9EFF carries a dark background but drops below
+// a readable contrast on white, and the same holds for the warn/error/success trio.
+:root[data-theme='light'] {
+  --sidebar-bg:   #FFFFFF;                 // panel
+  --bg:           #F4F6F9;                 // app bg
+  --surface:      #FFFFFF;                 // cards
+  --surface-hi:   #EDF0F5;                 // hover
+  --surface-sunken: #E7EAF1;               // recessed tray below surface
+  --input-bg:     #FFFFFF;                 // input wells
+  --border:       #D3D9E3;
+  --border-soft:  #E3E7EE;
+  --border-sunken: #DBE0E9;
+  // Each of these is set against the tint of its own colour, not against the card: a badge
+  // paints the colour on `*-soft`, and that pairing is always the tightest one on the page.
+  --text:         #171A21;
+  --text-muted:   #4F5867;
+  --text-faint:   #616A7B;
+  --accent:       #1667BE;
+  --accent-soft:  rgba(22, 103, 190, 0.10);
+  --accent-mid:   #8CBDEE;
+  --warn:         #8F5600;
+  --warn-soft:    rgba(143, 86, 0, 0.12);
+  --error:        #BC2C2F;
+  --error-soft:   rgba(188, 44, 47, 0.10);
+  --success:      #13692F;
+  --success-soft: rgba(19, 105, 47, 0.12);
+  --info:         #1667BE;
+  --info-soft:    rgba(22, 103, 190, 0.10);
+
+  --legacy-scrollbar-thumb-hover: #B4BCC9;
+
+  --legacy-error-text:    #B02428;
+  --legacy-warn-text:     #8A5300;
+  --legacy-info-text:     #14588F;
+  --legacy-accent-text:   #14588F;
+
+  --legacy-error-tint-12: rgba(188, 44, 47, 0.10);
+  --legacy-error-tint-14: rgba(188, 44, 47, 0.14);
+  --legacy-error-tint-28: rgba(188, 44, 47, 0.24);
+  --legacy-warn-tint-12:  rgba(143, 86, 0, 0.12);
+  --legacy-info-tint-12:  rgba(22, 103, 190, 0.10);
+  --legacy-accent-tint-05: rgba(22, 103, 190, 0.06);
+  --legacy-accent-tint-14: rgba(22, 103, 190, 0.14);
+  --legacy-accent-tint-28: rgba(22, 103, 190, 0.24);
+  --legacy-idle-tint-10:  rgba(79, 88, 103, 0.10);
+
+  --legacy-info-blue:     #1667BE;
+  --legacy-info-blue-10:  rgba(22, 103, 190, 0.10);
+  --legacy-info-blue-25:  rgba(22, 103, 190, 0.24);
+
+  // The tooltip stays dark in both schemes: its text colour is pinned light where it is
+  // styled, and a dark pill over light content is the readable pairing anyway.
+  --legacy-tooltip-bg:    #2A2F3A;
+  --legacy-flyout-bg:     #FFFFFF;
+
+  color-scheme: light;
+}
+
+
+// ── Colour tones ─────────────────────────────────────────────────────────────
+// Named colours a user picks from a palette (research shelves today) are not tokens: they arrive
+// per element as three lightness steps of one hue (`shared/colorTones.ts`). Only the choice
+// between them is a scheme question, so it is made here, next to the palettes, and not repeated
+// in every component that paints with a colour.
+//
+// A consumer sets the steps and reads roles: `--gc-ink` (glyph), `--gc-fill` (plate under it),
+// `--gc-swatch` (the colour's own identity — the middle step, flat, the one tone that stands for
+// the colour in either scheme). The alpha matches the `*-soft` tokens above, so a coloured plate
+// sits at the same weight as an accent one.
+//
+// The switch keys off `data-theme` like every token above, NOT off `color-scheme` via
+// `light-dark()`: Vuetify declares `color-scheme` on `.v-application` from its own theme class,
+// which would make these colours follow Vuetify's theme while the tokens follow ours.
+.color-tones {
+  --gc-ink: var(--gc-light);
+  --gc-fill: color-mix(in oklab, var(--gc-ink) 14%, transparent);
+  --gc-swatch: var(--gc-mid);
+}
+
+:root[data-theme='light'] .color-tones {
+  --gc-ink: var(--gc-deep);
+}
+
 
 // ── Reset & base ─────────────────────────────────────────────────────────────
 *, *::before, *::after { box-sizing: border-box; }
@@ -150,6 +224,42 @@ pre {
 }
 
 a { color: var(--accent); text-decoration: none; &:hover { text-decoration: underline; } }
+
+// ── Link-style action ────────────────────────────────────────────────────────
+// A control chosen for behaviour but read as a link: an icon and its word, no plate, no border.
+// Use where the action continues the text or the navigation around it rather than commanding it
+// from a panel — «Изменить» under a paragraph, «Вернуться к реестру» at the top of a detail rail.
+// The reset is unavoidable: on a `<button>` the browser draws a grey plate with a border.
+//
+// Lives here rather than in a component because it is shared by unrelated ones; the interface
+// font is stated explicitly since some of its hosts sit inside reading-font text.
+.link-action {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.4;
+  letter-spacing: normal;
+  text-align: left;
+  color: rgb(var(--v-theme-primary));
+  cursor: pointer;
+  transition: opacity 0.14s ease;
+
+  &:hover:not(:disabled) {
+    opacity: 0.78;
+    text-decoration: underline;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
 
 // ── Scrollbars ───────────────────────────────────────────────────────────────
 // Chromium/WebKit get the styled 5px scrollbar below (thumb fills the gutter →
@@ -364,13 +474,17 @@ a { color: var(--accent); text-decoration: none; &:hover { text-decoration: unde
   &::before,
   &::after { box-shadow: none !important; }
 
+  // Обводку красит цвет САМОЙ карточки, если она его несёт (`.color-tones` + шаги палитры на
+  // элементе): полка и лежащие на ней исследования выделяются своим цветом, а не общим акцентом.
+  // Без цвета переменных нет, и запасной путь оставляет прежний акцент.
+  //
   // .v-card--link:hover (0,2,0) перебивает глобальный a:hover (0,1,1) без !important
-  &:hover { border-color: var(--accent); text-decoration: none; }
+  &:hover { border-color: var(--gc-ink, var(--accent)); text-decoration: none; }
 
   &:focus-visible {
     outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px var(--accent-soft) !important;
+    border-color: var(--gc-ink, var(--accent));
+    box-shadow: 0 0 0 2px var(--gc-fill, var(--accent-soft)) !important;
   }
 }
 
@@ -417,12 +531,16 @@ a { color: var(--accent); text-decoration: none; &:hover { text-decoration: unde
 }
 
 .v-field {
-  --v-field-border-opacity: 1;
   font-family: var(--font);
   border-radius: var(--radius-sm);
   background: var(--input-bg);
 
-  .v-field__outline { color: var(--border); }
+  // Плотность обводки задаётся на самой `.v-field__outline`, а не на поле: Vuetify объявляет
+  // `--v-field-border-opacity: 0.38` именно на ней, и переменная, поставленная выше по дереву,
+  // до кусков обводки не доходит — выигрывает ближайший предок (та же ловушка, что с высотой
+  // поля). Без этого обводка поля рисуется в 38% силы токена `--border`, а граница соседней
+  // кнопки — в полную: в сросшейся паре «поле + кнопка» половины выходят разной плотности.
+  .v-field__outline { --v-field-border-opacity: 1; color: var(--border); }
   &:hover .v-field__outline            { color: var(--accent); }
   &.v-field--focused .v-field__outline { color: var(--accent); }
 
@@ -740,6 +858,11 @@ a { color: var(--accent); text-decoration: none; &:hover { text-decoration: unde
   font-family: var(--font);
   padding: 4px;
 
+  // Иконка пункта отбита от подписи на 32px по умолчанию — место под аватарку, которой в
+  // выпадающих списках не бывает: на такой ширине иконки и подписи читаются как два
+  // несвязанных столбца. 10px — та же величина, что в боковом меню.
+  --v-list-prepend-gap: 10px;
+
   // Меньше отступ слева только в сценарии с чекбоксом (множественный выбор) —
   // одиночные списки без чекбокса сохраняют стандартный отступ.
   .v-list-item:has(.v-list-item__prepend .v-checkbox-btn) { padding-inline-start: 8px; }
@@ -1003,6 +1126,11 @@ a { color: var(--accent); text-decoration: none; &:hover { text-decoration: unde
 .v-data-table-header__sort-icon svg { width: 16px; height: 16px; }
 .v-data-table__th--sorted .v-data-table-header__sort-icon { color: var(--text-muted); }
 
+// Указатель сортировки всегда ПОСЛЕ названия колонки. Vuetify разворачивает шапку колонок,
+// выровненных по правому краю (`flex-direction: row-reverse`), и в одной таблице стрелка
+// оказывалась то справа от названия, то слева — у числовых колонок.
+.v-data-table-column--align-end .v-data-table-header__content { flex-direction: row; }
+
 // Plain VTable opts in by marking a header `th.sortable` (+ `.sorted` when active)
 // and rendering a `.sort-icon` child — same opacity ladder as VDataTable above.
 .v-table:not(.v-data-table) {
@@ -1150,4 +1278,88 @@ a { color: var(--accent); text-decoration: none; &:hover { text-decoration: unde
 .icon-spin {
   animation: icon-spin 0.7s linear infinite;
   display: inline-block;
+}
+
+// ── Utility: поле с приросшей кнопкой (.field-group) ──────────────────────────
+// Пара «выпадающий список + иконочная кнопка», которая читается как одна ручка: направление
+// сортировки бессмысленно без поля, по которому сортируют, а кнопка на отступе рядом выглядит
+// самостоятельным действием. Живой пример и сниппет — /design-system/selects.
+//
+// Скругления срезаются на стыке, кнопка сдвинута на пиксель — иначе границы соседей рисуются
+// подряд и стык выходит вдвое толще. Коробка кнопки задана здесь же и следует за её density:
+// density правит только высоту, а сторону иконочной кнопки Vuetify считает от неё — без ширины
+// выходит прямоугольник.
+//
+// Склейка — про вид, а не про поведение: поле и кнопка делают разное, поэтому наведение и фокус
+// у каждой половины свои. Общий стык при этом рисует кнопка (см. её z-index ниже).
+.field-group {
+  display: flex;
+  align-items: stretch;
+
+  .v-field {
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
+  }
+
+  // Кнопка перед полем встречается только у шага «предыдущий/следующий», поэтому левый край
+  // поля срезается по её наличию, а не всегда: у пары с одной кнопкой справа он круглый.
+  &:has(> .field-group__btn--before) .v-field {
+    border-start-start-radius: 0;
+    border-end-start-radius: 0;
+  }
+}
+
+// Селектор с `.v-btn` намеренно: скругление иконочной кнопке задаёт `.v-btn.v-btn--icon` выше по
+// файлу, и правило в один класс до него не дотягивается — левые углы остались бы круглыми, а
+// стык с полем не склеился бы.
+.field-group__btn.v-btn {
+  // Стык у пары общий — границы наложены друг на друга, — и рисует его кнопка: без этого
+  // подсвеченное поле забирает столбец себе (его обводка позиционирована и лежит выше), и
+  // кнопка рядом с подсвеченным полем читается незакрытой слева.
+  position: relative;
+  z-index: 1;
+
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  margin-inline-start: -1px;
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+
+  &.v-btn--density-comfortable { width: 32px; min-width: 32px; height: 32px; }
+  &.v-btn--density-compact     { width: 28px; min-width: 28px; height: 28px; }
+}
+
+// Та же кнопка, но с другой стороны поля: круглые углы и наложение границы переезжают налево.
+.field-group__btn--before.v-btn {
+  margin-inline-start: 0;
+  margin-inline-end: -1px;
+  border-start-start-radius: var(--radius-sm);
+  border-end-start-radius: var(--radius-sm);
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+}
+
+// ── Utility: поля группы настроек в колонках (.settings-columns) ──────────────
+// Карточка настроек идёт во всю ширину страницы, а её поля стоят в три колонки: ключи одной
+// группы читаются одним взглядом, а не длинным столбцом. Один дом на оба экрана настроек —
+// схемные поля модулей (/settings/modules) и клиентские (/settings/interface) раскладываются
+// одинаково, иначе они выглядели бы настройками разного сорта.
+//
+// `align-items: start` — у полей в строке подписи разной длины; без него короткое поле
+// растянулось бы по высоте соседа. Ниже ~1200px три колонки дают поле уже читаемого, поэтому
+// ступеньками сходим к одной.
+.settings-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px 24px;
+}
+
+@media (max-width: 1200px) {
+  .settings-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 700px) {
+  .settings-columns { grid-template-columns: minmax(0, 1fr); }
 }

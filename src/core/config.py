@@ -108,6 +108,22 @@ class Config(BaseSettings):
     # Код проксируемого MCP-сервера. Пусто → единственный смонтированный модулями.
     mcp_stdio_code: str = ""
 
+    # ── UPDATE — обновление установки (`src/app.py update`) ─────────────────
+    # Ветка, до которой обновляется установка: команда делает строго fast-forward
+    # на origin/<ветка> и ОТКАЗЫВАЕТСЯ, если checkout стоит на другой ветке —
+    # обновление не переводит установку на другую линию кода. Remote в ENV
+    # намеренно не выносится: `.env` пишется без экранирования и без auth, а
+    # значение вида `--upload-pack=…` — это выполнение произвольного кода.
+    update_branch: str = "main"
+
+    # ── SECRETS — мастер-ключ шифрования значений в БД ─────────────────────
+    # Ключ установки (32 байта в base64url), которым завёрнуты ключи записей
+    # доступа в core_connectors. Пусто — не ошибка старта, а состояние
+    # «шифрование выключено»: значения пишутся и читаются открытым текстом.
+    # Живёт в окружении, а не в БД: он и есть то, чем БД открывается. У dev и
+    # stable ключи разные; страница настройки ENV его НЕ редактирует.
+    secrets_key: str = ""
+
     # ── DATABASE: provider ─────────────────────────────────────────────────
     # sqlite — по умолчанию: zero-install (без сервера, один файл). postgres —
     # опция для боевого масштаба (pgvector), требует DB_HOST/DB_NAME/DB_USER/DB_PASSWORD.
@@ -168,11 +184,6 @@ class Config(BaseSettings):
     # значение > (db_pool_size + db_max_overflow) упрётся в db_pool_timeout.
     worker_max_concurrent_runs: int = 10
 
-    # Накатывать Alembic-миграции при старте. Отключается в dev-watch
-    # (uvicorn --reload), чтобы reload не накатил недописанную миграцию;
-    # см. src/core/database/README.md.
-    db_auto_migrate: bool = True
-
     @property
     def worker_modules_set(self) -> frozenset[str] | None:
         """``worker_modules`` (CSV) → frozenset; пусто → None (все модули)."""
@@ -215,6 +226,13 @@ class Config(BaseSettings):
         (см. ``engine_kwargs``). Используется тестами вместо физического Postgres.
         """
         return self.db_provider == "sqlite" and self.db_path == ":memory:"
+
+    @property
+    def sqlite_file(self) -> Path | None:
+        """Файл БД, когда провайдер — файловый SQLite; иначе ``None`` (postgres, in-memory)."""
+        if self.db_provider != "sqlite" or self.sqlite_in_memory:
+            return None
+        return self._sqlite_path()
 
     def _sqlite_path(self) -> Path:
         """Файл SQLite-БД: ``db_path`` (если задан) или ``<runtime_root>/app.sqlite3``."""

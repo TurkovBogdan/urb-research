@@ -16,6 +16,26 @@
     uv run python src/app.py migrate check
     uv run python src/app.py migrate upgrade    — накатить ядро + модули до head
 
+Подкоманда `backup` — копия базы (`src/core/backup.py`) перед миграцией: SQLite через
+`VACUUM INTO` + `integrity_check`, PostgreSQL через `pg_dump --format=custom` с проверкой
+`pg_restore --list`. Без аргумента путь выбирается по провайдеру:
+
+    uv run python src/app.py backup            — рядом с файловой базой / runtime/<профиль>/backup
+    uv run python src/app.py backup <путь>     — явный файл (существующий не перезаписывается)
+
+Подкоманда `update` — обновление установки целиком (обёртка `./update.sh`): проверки,
+флаг обслуживания, остановка процессов, fast-forward на origin/UPDATE_BRANCH, `uv sync`,
+копия базы, миграции, рестарт с ожиданием готовности. `--dry-run` печатает шаги и план
+остановки, не трогая ничего. Коды выхода: 0 — обновлено/уже актуально, 1 — не прошли
+предусловия, 2 — флаг держит другой апдейтер, 3 — откат, 4 — упала миграция (флаг
+оставлен поднятым), 5 — не снялась копия базы (схему не трогали), 6 — не удался откат,
+7 — не удалось остановить процессы установки, 8 — backend не поднялся после обновления.
+
+Пока флаг обслуживания держит живой апдейтер (`runtime/maintenance.json`), ЗАПУСК
+процесса отклоняется с кодом 1 — иначе MCP-шим поднял бы backend на полупереписанном
+дереве. Подкоманды не гейтятся: обновление накатывает `backup` и `migrate upgrade` как
+раз под поднятым флагом.
+
 `--backend`/`--worker` (и `--no-backend`/`--no-worker`) перекрывают env-тогглы
 `SERVER_ENABLED`/`WORKER_ENABLED`. Флаги выставляются в env ДО `Config()`, поэтому
 их наследуют reload/processes-подпроцессы uvicorn.
@@ -35,10 +55,11 @@
 `WORKER_ENABLED` (так dev держит и веб, и задачи). Чистый worker (без SERVER)
 форсит тикер через `scheduler.configure_worker`.
 
-`migrate` использует тот же `AlembicRunner`, что и lifespan; `DB_AUTO_MIGRATE`
-для него не действует — это явная операция. На prod-web держат `DB_AUTO_MIGRATE=false`
-и накатывают `src/app.py migrate upgrade` отдельным шагом деплоя. Статику фронта
-раздаёт nginx (prod) / Vite (dev).
+Миграции накатывает ТОЛЬКО `migrate upgrade` (и обновление установки, которое его
+зовёт) — старт процесса не мигрирует базу, у которой уже есть схема: отставшая
+цепочка поднимает приложение в режиме заглушки (`src/core/router/degraded.py`).
+Исключение — пустая база: свежая установка накатывает цепочку сама. Статику фронта
+раздаёт тот же backend из `web/dist` (в dev — Vite).
 """
 
 import argparse
@@ -126,6 +147,25 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=("check", "upgrade"),
         default="check",
         help="check — dry-run сверка (дефолт); upgrade — накатить до head",
+    )
+
+    # ── подкоманда backup ────────────────────────────────────────────────────
+    bak = sub.add_parser("backup", help="копия базы перед миграцией (sqlite/postgres)")
+    bak.add_argument(
+        "target",
+        nargs="?",
+        default=None,
+        metavar="PATH",
+        help="куда положить копию; пусто — рядом с файловой базой либо runtime/<профиль>/backup",
+    )
+
+    # ── подкоманда update ────────────────────────────────────────────────────
+    upd = sub.add_parser("update", help="обновить установку до origin/UPDATE_BRANCH")
+    upd.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="пройти последовательность и напечатать шаги (в т.ч. план остановки процессов), "
+        "ничего не трогая: без сигналов, fetch/merge/sync, копии базы и миграций",
     )
     return p.parse_args(argv)
 
@@ -262,11 +302,50 @@ async def _run_migrate(action: str) -> int:
     return 0
 
 
+def _launches_a_process(args: argparse.Namespace) -> bool:
+    """Нет подкоманды — значит запускаем процесс (в том числе `--mcp-stdio`).
+
+    Подкоманды (`migrate`, `backup`, `update`) освобождены от гейта намеренно: сам
+    апдейтер гоняет `backup` и `migrate upgrade` при поднятом флаге, а упавшая миграция
+    флаг не опускает — гейт на подкомандах запер бы обновление изнутри и лишил бы повтора.
+    """
+    return args.command is None
+
+
+def _maintenance_refusal() -> str | None:
+    """Текст отказа, когда флаг обслуживания держит живой апдейтер; иначе None."""
+    from src.core import maintenance
+
+    held = maintenance.active()
+    if held is None:
+        return None
+    return (
+        f"идёт обновление установки ({held.describe()}) — запуск процесса запрещён.\n"
+        f"дождитесь завершения обновления; флаг: {maintenance.flag_path()}"
+    )
+
+
 def main(argv: list[str] | None = None) -> int | None:
     args = _parse_args(argv)
 
     if args.command == "migrate":
         return asyncio.run(_run_migrate(args.action))
+
+    if args.command == "backup":
+        from src.core.backup import backup_command
+
+        return backup_command(args.target)
+
+    if args.command == "update":
+        from src.core.update import update_command
+
+        return update_command(dry_run=args.dry_run)
+
+    if _launches_a_process(args):
+        refusal = _maintenance_refusal()
+        if refusal is not None:
+            print(refusal, file=sys.stderr)
+            return 1
 
     if args.mcp_stdio:
         # Шим сам поднимает backend отдельным процессом — role-env этого процесса
@@ -280,11 +359,24 @@ def main(argv: list[str] | None = None) -> int | None:
     _apply_env_overrides(args)
 
     from src.core.config import Config
-    from src.modules.core_setup.env_file import env_path, seed_defaults_if_absent
+    from src.modules.core_setup.env_file import (
+        ensure_generated,
+        ensure_keys_present,
+        env_path,
+        seed_defaults_if_absent,
+    )
 
     config = Config()
     if seed_defaults_if_absent(config):
         print(f"первый запуск: создан {env_path()} со значениями по умолчанию")
+    # Ключи, появившиеся позже самого файла, иначе не доезжают до живой установки:
+    # ни в `.env`, ни на странице настроек их не видно, и поправить значение негде.
+    for key in ensure_keys_present(config):
+        print(f"добавлен со значением по умолчанию: {key} → {env_path()}")
+    # Секреты установки досыпаются и в уже существующий .env: ключ шифрования появился
+    # позже самого файла, и без этого шага он не завёлся бы ни на одной живой установке.
+    for key in ensure_generated(config):
+        print(f"сгенерирован {key} → {env_path()}")
     if not config.server_enabled and not config.worker_enabled:
         # Ни одной поверхности — не ошибка, а валидный no-op (например, процесс,
         # который запускали только под `migrate`). Чистый выход (код 0).

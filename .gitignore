@@ -1,10 +1,16 @@
-# agents — AGENTS/ is committed directly; only the root symlinks AGENTS.md/CLAUDE.md are ignored
+# agents — the whole working-records tree (instructions, memory, tasks, docs, plans) is local-only,
+# never published; AGENTS.md/CLAUDE.md are root symlinks into it
 .claude/
+/AGENTS/
 /AGENTS.md
 /CLAUDE.md
-# local-only symlinks into private stores (second-brain / other projects) — never publish
-/AGENTS/obsidian
-/AGENTS/semaphore-core
+
+# local postgres for migration rehearsals — compose files, volumes, dumps and a copy of the live
+# database stay on the machine. Both names are ignored: the stand was renamed docker/ →
+# tests-migration/ on 2026-09-11 and that alone would have exposed credentials and a 38 MB database
+# copy to the next "commit everything".
+/docker/
+/tests-migration/
 
 # env / secrets — real .env never committed; example templates are tracked
 .env

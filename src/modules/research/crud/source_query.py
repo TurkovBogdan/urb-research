@@ -2,30 +2,31 @@
 
 Каждая функция владеет сессией. Создаётся при запуске поиска (``query_search_run``): связывает
 research + area с прогоном web_search. Поиск — **только ссылки**, тела/синтеза у запроса нет.
-Код — голый 22-hex ``random_hash()`` (тип-префикс ``QUERY@`` — на границе, см. ``research.codes``).
+Код — голый hex ``random_hash()`` (тип-префикс ``QUERY@`` — на границе, см. ``research.codes``).
 """
 
 from __future__ import annotations
 
 from sqlalchemy import delete, func, select
 
-from src.core.database import session_scope
+from src.core.database import session_scope, write_scope
 from src.core.utils.hashing import random_hash
+from src.modules.research.constants import CODE_LEN
 from src.modules.research.models.source_document import ResearchSourceDocument
 from src.modules.research.models.source_query import ResearchSourceQuery
 
 def source_query_code() -> str:
-    """Код источникового запроса — голый 22-hex ``random_hash`` (естественного ключа нет).
+    """Код источникового запроса — голый ``CODE_LEN``-hex ``random_hash`` (ключа дедупа нет).
 
     Тип-префикс (``QUERY@``) — презентация, надевается на границе (см. ``research.codes``).
     """
-    return random_hash()
+    return random_hash(CODE_LEN)
 
 
 async def source_query_create(
     *, research_code: str, area_code: str, search_code: str, query: str
 ) -> ResearchSourceQuery:
-    async with session_scope() as s:
+    async with write_scope() as s:
         row = ResearchSourceQuery(
             code=source_query_code(),
             research_code=research_code,
@@ -67,7 +68,7 @@ async def source_query_list_by_area(area_code: str) -> list[ResearchSourceQuery]
 async def source_query_delete(code: str) -> bool:
     """Удалить прогон поиска. Каскад вручную: источники прогона → сам запрос.
     ``True`` — существовал и удалён."""
-    async with session_scope() as s:
+    async with write_scope() as s:
         row = await s.get(ResearchSourceQuery, code)
         if row is None:
             return False

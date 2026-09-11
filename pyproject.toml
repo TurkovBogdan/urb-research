@@ -1,5 +1,5 @@
 [project]
-name = "semaphore_core"
+name = "urb_research"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
@@ -12,14 +12,13 @@ dependencies = [
     "pydantic-settings>=2.0",
     "sqlalchemy[asyncio]>=2.0",
     "alembic>=1.13",
+    "cryptography>=44.0",
     "croniter>=2.0",
     "python-ulid>=3.1.0",
     "beautifulsoup4>=4.14.3",
     "markdownify>=1.2.2",
     "mcp>=1.24",
     "fastmcp>=3.4,<4",
-    "anthropic>=0.40",
-    "openai>=1.50",
     "mistune>=3.0",
     "python-intercom>=4.0",
     "nh3>=0.3.5",

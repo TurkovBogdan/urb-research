@@ -11,6 +11,7 @@ from collections.abc import Sequence
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from src.core import scheduler
 from src.core.settings.bootstrap import (
@@ -24,11 +25,67 @@ from src.core.database import close_database, create_all, init_database
 from src.core.database.migrations import AlembicRunner
 from src.core.loggers import get_logger
 from src.core.module import Module
+from src.core.router.degraded import (
+    degraded_pending,
+    mark_degraded,
+    mount_degraded_gate,
+)
+from src.core.router.internal import HEALTH_PATH
 from src.core.router.mounting import mount_router_zones
 from src.core.scheduler.registry import get_registry
 from src.core.tasks import register as register_core_tasks
 
 _LOG = get_logger()
+
+
+async def _apply_chain_or_degrade(
+    app: FastAPI, engine: AsyncEngine, modules: Sequence[Module]
+) -> None:
+    """Старт НЕ мигрирует базу, у которой уже есть схема, — он деградирует.
+
+    Исключение — пустая база: у свежей установки нечего терять и нечего защищать, поэтому
+    цепочка накатывается молча. Признак исчезает с первым же upgrade'ом, так что второй раз
+    сюда не попасть. Всё остальное отставание → стаб вместо данных (см. router/degraded.py).
+    """
+    runner = AlembicRunner(modules=modules)
+    status = await runner.status(engine)
+    pending = [revision.revision for revision in status.pending]
+    no_revision_recorded = not status.current_heads
+    if no_revision_recorded:
+        await _bootstrap_or_degrade(app, runner, engine, pending)
+        return
+    if status.up_to_date:
+        return
+    mark_degraded(app, pending)
+    _LOG.error(
+        "lifespan: схема БД отстала от кода — отдаём заглушку вместо данных; "
+        "не применены: %s (накатить обновлением установки, не стартом приложения)",
+        ", ".join(pending),
+    )
+
+
+async def _bootstrap_or_degrade(
+    app: FastAPI, runner: AlembicRunner, engine: AsyncEngine, pending: list[str]
+) -> None:
+    """Без записи в ``alembic_version`` база считается пустой — но может ею не быть.
+
+    База, собранная когда-то через ``create_all``, таблицы уже несёт, и первая же ревизия падает
+    на ``table already exists``. Исключение здесь уронило бы lifespan целиком — ровно тот слепой
+    отказ, ради которого существует режим заглушки, — поэтому такая база деградирует, а причина
+    уходит в лог.
+    """
+    try:
+        await runner.upgrade_head(engine)
+    except Exception:  # noqa: BLE001
+        mark_degraded(app, pending)
+        _LOG.exception(
+            "lifespan: в базе нет alembic_version, но цепочка на неё не легла — отдаём заглушку; "
+            "не применены: %s (схема есть, а истории миграций нет — базу надо привести к "
+            "ревизии вручную)",
+            ", ".join(pending),
+        )
+        return
+    _LOG.info("lifespan: пустая база — накатили всю цепочку (%d ревизий)", len(pending))
 
 
 def create_app(modules: Sequence[Module], config: Config) -> FastAPI:
@@ -49,25 +106,32 @@ def create_app(modules: Sequence[Module], config: Config) -> FastAPI:
             # БД (dev-sqlite и postgres) всегда идут через Alembic.
             await create_all(engine)
             _LOG.info("lifespan: in-memory sqlite — schema built from models (create_all)")
-        elif config.db_auto_migrate:
-            await AlembicRunner(modules=modules).upgrade_head(engine)
         else:
-            _LOG.warning(
-                "lifespan: auto_migrate disabled (DB_AUTO_MIGRATE=false) — "
-                "skipping Alembic upgrade; apply migrations manually (app.py migrate upgrade)"
-            )
-        await load_initial_stores(modules)
-        for m in modules:
-            try:
-                await m.on_startup(app)
-            except Exception as exc:  # noqa: BLE001
-                _LOG.exception("lifespan: %s.on_startup raised %s", m.name, exc)
+            await _apply_chain_or_degrade(app, engine, modules)
+
+        # Деградировавший старт не ходит в БД вовсе: и load_initial_stores, и on_startup
+        # читают/пишут по отставшей схеме, а исключение оттуда уронило бы весь lifespan —
+        # ровно тот отказ, ради которого режим заглушки и существует.
+        serves_data = degraded_pending(app) is None
+        if serves_data:
+            await load_initial_stores(modules)
+            for m in modules:
+                try:
+                    await m.on_startup(app)
+                except Exception as exc:  # noqa: BLE001
+                    _LOG.exception("lifespan: %s.on_startup raised %s", m.name, exc)
         # Поднять session-manager'ы MCP-серверов (форк инициализирует их в lifespan
         # своего http_app); закрываются автоматически на выходе из стека.
         async with AsyncExitStack() as mcp_stack:
             for cm in mcp_lifespans:
                 await mcp_stack.enter_async_context(cm)
-            await scheduler.start(config)
+            if serves_data:
+                await scheduler.start(config)
+            else:
+                _LOG.error(
+                    "lifespan: планировщик не поднят — схема БД отстала от кода; у чистого "
+                    "worker'а нет HTTP-поверхности, отказывать ему больше негде"
+                )
             try:
                 yield
             finally:
@@ -85,13 +149,15 @@ def create_app(modules: Sequence[Module], config: Config) -> FastAPI:
     # Swagger/OpenAPI ОТКЛЮЧЕНЫ: API внутренний, схему наружу не публикуем (FastAPI
     # по умолчанию включил бы /docs + /openapi.json). Гейт SERVER_ENABLED — ниже.
     app = FastAPI(
-        title="Semaphore.Core",
+        title="Uroboros.Research",
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
         lifespan=lifespan,
     )
     app.state.config = config
+    # Заполняется в lifespan, когда цепочка миграций отстала (см. _apply_chain_or_degrade).
+    app.state.degraded = None
     app.state.module_configs = {
         m.name: m.config_cls() for m in modules if m.config_cls is not None
     }
@@ -112,6 +178,10 @@ def create_app(modules: Sequence[Module], config: Config) -> FastAPI:
     # монтируются — в mount_router_zones (src/core/router/mounting.py).
     if config.server_enabled:
         mcp_lifespans = mount_router_zones(app, modules, config)
+        # Строго ПОСЛЕ монтажа зон: add_middleware вставляет в позицию 0, поэтому
+        # добавленный последним — самый внешний, и только так гейт перехватывает
+        # запрос раньше SPA-middleware (его вешает mount_spa внутри вызова выше).
+        mount_degraded_gate(app, health_path=HEALTH_PATH)
     else:
         _LOG.info(
             "create_app: SERVER_ENABLED=false — API-поверхность ядра не "

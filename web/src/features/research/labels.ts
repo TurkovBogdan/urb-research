@@ -7,7 +7,7 @@ export const SOURCE_STATUS_COLOR: Record<SourceStatus, BadgeColor> = {
   pending: 'warn',
   kept: 'success',
   filtered: 'muted',
-  fetch_error: 'error',
+  error: 'error',
 }
 
 // Тип заметки → цвет StatusBadge. Текст — i18n (research.note.kind.*).

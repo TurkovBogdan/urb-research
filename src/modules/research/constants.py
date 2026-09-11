@@ -1,4 +1,4 @@
-"""Константы research — размеры полей области + статусы документа + типы заметки.
+"""Константы research — длина кода + размеры полей области + статусы документа + типы заметки.
 
 Длины областей дублируются в модели (``String(n)``) и в CRUD-усечении (``_clip``).
 Статус есть только у источника (``research_source_document``): его состояние в research-пайплайне
@@ -13,10 +13,11 @@
 from __future__ import annotations
 
 # ── presentation code prefixes (граница, НЕ хранилище — см. research.codes) ──
-# Хранимый код — голый 22-hex хеш; тип-слово надевается на выходе DTO (кодек дописывает
-# разделитель `@` → на проводе `RESEARCH@<hash>`), снимается на входе. Значение = голое слово.
-# research — единственный дом префиксов: свои сущности + web_search-коды, на которые ссылается
-# (search/page); сам web_search коды не типизирует.
+# Хранимый код — голый hex-хеш длиной CODE_LEN; тип-слово надевается на выходе DTO (кодек
+# дописывает разделитель `@` → на проводе `RESEARCH@<hash>`), снимается на входе. Значение =
+# голое слово. research — единственный дом префиксов: свои сущности + web_search-коды, на
+# которые ссылается (search/page); сам web_search коды не типизирует.
+GROUP_CODE_PREFIX = "GROUP"
 RESEARCH_CODE_PREFIX = "RESEARCH"
 AREA_CODE_PREFIX = "AREA"
 NOTE_CODE_PREFIX = "NOTE"
@@ -25,15 +26,45 @@ SOURCE_DOCUMENT_CODE_PREFIX = "SOURCE"
 SEARCH_CODE_PREFIX = "SEARCH"  # web_search_query (референс из research)
 PAGE_CODE_PREFIX = "PAGE"  # web_search_page (референс из research)
 
+# Длина кода сущности research в hex-символах. Код нейронка перепечатывает в каждое тело, и
+# платит за него токенами: 10 знаков вместо 22 экономят ~6.8 токена на ссылку. Короче нельзя —
+# на 8 знаках опечатка в один символ попадает в живую строку раз на 3600, на 10 — раз на 733000.
+# Коды web_search (22) этой длиной НЕ управляются: их агент не видит (см. codes.py).
+CODE_LEN = 10
+
+# Что делать с исследованиями группы при её удалении. Группа — раскладка, поэтому по умолчанию
+# исследования переживают её (``detach``); остальные два варианта человек выбирает явно.
+GROUP_RESEARCHES_DETACH = "detach"
+GROUP_RESEARCHES_MOVE = "move"
+GROUP_RESEARCHES_DELETE = "delete"
+GROUP_RESEARCHES_ACTIONS = (
+    GROUP_RESEARCHES_DETACH,
+    GROUP_RESEARCHES_MOVE,
+    GROUP_RESEARCHES_DELETE,
+)
+
+RESEARCH_TITLE_MAX = 128
+# Шире, чем у области и заметки (512): описание исследования пишет агент, и в базе уже лежат
+# тексты длиннее — потолок подтянут под факт с запасом (см. миграцию rem_009).
+RESEARCH_DESCRIPTION_MAX = 2048
+
+GROUP_TITLE_MAX = 128
+GROUP_DESCRIPTION_MAX = 512
+GROUP_ICON_MAX = 64
+GROUP_COLOR_MAX = 32
+# Стартовая позиция группы. Ненулевая, чтобы новую группу можно было подвинуть и вверх,
+# и вниз, не перенумеровывая соседей: больший sort = выше в списке.
+GROUP_SORT_DEFAULT = 500
+
 AREA_TITLE_MAX = 128
 AREA_DESCRIPTION_MAX = 512
 AREA_BRIEF_MAX = 1024  # objective / scope / expectations
 
-DOC_FETCH_ERROR = "fetch_error"
+DOC_ERROR = "error"
 DOC_PENDING = "pending"
 DOC_KEPT = "kept"
 DOC_FILTERED = "filtered"
-DOC_STATUSES = (DOC_FETCH_ERROR, DOC_PENDING, DOC_KEPT, DOC_FILTERED)
+DOC_STATUSES = (DOC_ERROR, DOC_PENDING, DOC_KEPT, DOC_FILTERED)
 
 NOTE_TITLE_MAX = 128
 NOTE_DESCRIPTION_MAX = 512
@@ -60,6 +91,7 @@ def sql_in(values: tuple[str, ...]) -> str:
 
 
 __all__ = [
+    "GROUP_CODE_PREFIX",
     "RESEARCH_CODE_PREFIX",
     "AREA_CODE_PREFIX",
     "NOTE_CODE_PREFIX",
@@ -67,10 +99,18 @@ __all__ = [
     "SOURCE_DOCUMENT_CODE_PREFIX",
     "SEARCH_CODE_PREFIX",
     "PAGE_CODE_PREFIX",
+    "CODE_LEN",
+    "RESEARCH_TITLE_MAX",
+    "RESEARCH_DESCRIPTION_MAX",
+    "GROUP_TITLE_MAX",
+    "GROUP_DESCRIPTION_MAX",
+    "GROUP_ICON_MAX",
+    "GROUP_COLOR_MAX",
+    "GROUP_SORT_DEFAULT",
     "AREA_TITLE_MAX",
     "AREA_DESCRIPTION_MAX",
     "AREA_BRIEF_MAX",
-    "DOC_FETCH_ERROR",
+    "DOC_ERROR",
     "DOC_PENDING",
     "DOC_KEPT",
     "DOC_FILTERED",

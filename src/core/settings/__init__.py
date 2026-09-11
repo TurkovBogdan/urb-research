@@ -19,6 +19,7 @@ from src.core.settings.fields import (
     ListField,
     MultiChoiceField,
     StrField,
+    VisibleWhen,
 )
 from src.core.settings.registry import get_registry
 from src.core.settings.schema import ModuleSchema
@@ -41,5 +42,6 @@ __all__ = [
     "ModuleSchema",
     "MultiChoiceField",
     "StrField",
+    "VisibleWhen",
     "get_module_store",
 ]

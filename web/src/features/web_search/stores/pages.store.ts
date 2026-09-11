@@ -1,6 +1,8 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
+import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
+
 import { listPages, type WebSearchPageRow, type PageStatus, type SortDir } from '../api'
 
 // Список страниц (web_search_page). Текстовый фильтр — по url. Сортировка серверная
@@ -12,12 +14,14 @@ export const usePagesStore = defineStore('web_search-pages', () => {
   const sortBy = ref('created_at')
   const sortDir = ref<SortDir>('desc')
   const page = ref(1)
-  const pageSize = ref(50)
+  const pageSize = ref(DEFAULT_PAGE_SIZE)
 
   const items = ref<WebSearchPageRow[]>([])
   const total = ref(0)
   const loading = ref(false)
-  const error = ref<string | null>(null)
+  // Держим сам отказ, а не его текст: показ (`SectionError`) отличает «сущности нет» от сбоя
+  // по статусу ответа, а формулировку берёт из `errorText`.
+  const error = ref<unknown>(null)
 
   const pageCount = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
   const hasActiveFilters = computed(
@@ -40,7 +44,7 @@ export const usePagesStore = defineStore('web_search-pages', () => {
       items.value = res.items
       total.value = res.total
     } catch (e) {
-      error.value = e instanceof Error ? e.message : String(e)
+      error.value = e
     } finally {
       loading.value = false
     }

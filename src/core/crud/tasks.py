@@ -14,7 +14,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.database import session_scope
+from src.core.database import session_scope, write_scope
 from src.core.models.tasks import CoreTask, CoreTaskStatus
 from src.core.utils.date import utc_now
 
@@ -37,7 +37,7 @@ async def create_running(*, module: str, code: str) -> int | None:
 
     Возвращает id новой записи или None, если уже есть running для (module, code).
     """
-    async with session_scope() as s:
+    async with write_scope() as s:
         insert = _insert_for(s)
         now = utc_now()
         stmt = (
@@ -60,21 +60,21 @@ async def create_running(*, module: str, code: str) -> int | None:
 
 
 async def update_heartbeat(task_id: int) -> None:
-    async with session_scope() as s:
+    async with write_scope() as s:
         await s.execute(
             update(CoreTask).where(CoreTask.id == task_id).values(heartbeat_at=utc_now())
         )
 
 
 async def update_payload(task_id: int, payload: dict) -> None:
-    async with session_scope() as s:
+    async with write_scope() as s:
         await s.execute(
             update(CoreTask).where(CoreTask.id == task_id).values(payload=payload)
         )
 
 
 async def finalize_success(task_id: int) -> None:
-    async with session_scope() as s:
+    async with write_scope() as s:
         await s.execute(
             update(CoreTask)
             .where(CoreTask.id == task_id)
@@ -83,7 +83,7 @@ async def finalize_success(task_id: int) -> None:
 
 
 async def finalize_error(task_id: int, *, text: str) -> None:
-    async with session_scope() as s:
+    async with write_scope() as s:
         await s.execute(
             update(CoreTask)
             .where(CoreTask.id == task_id)
@@ -97,7 +97,7 @@ async def finalize_error(task_id: int, *, text: str) -> None:
 
 async def cleanup_zombies(threshold_seconds: int) -> list[int]:
     """Финализировать зависшие running-записи. Возвращает их id для cleanup локов."""
-    async with session_scope() as s:
+    async with write_scope() as s:
         cutoff = utc_now() - timedelta(seconds=threshold_seconds)
         stmt = (
             update(CoreTask)

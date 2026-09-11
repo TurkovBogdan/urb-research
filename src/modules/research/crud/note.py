@@ -10,17 +10,17 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from src.core.database import session_scope
+from src.core.database import session_scope, write_scope
 from src.core.utils.hashing import random_hash
-from src.modules.research.constants import NOTE_DESCRIPTION_MAX, NOTE_TITLE_MAX
+from src.modules.research.constants import CODE_LEN, NOTE_DESCRIPTION_MAX, NOTE_TITLE_MAX
 from src.modules.research.models.note import ResearchNote
 
 def note_code() -> str:
-    """Код заметки — голый 22-hex ``random_hash``.
+    """Код заметки — голый ``CODE_LEN``-hex ``random_hash``.
 
     Тип-префикс (``NOTE@``) — презентация, надевается на границе (см. ``research.codes``).
     """
-    return random_hash()
+    return random_hash(CODE_LEN)
 
 
 def _clip(value: str | None, limit: int) -> str:
@@ -36,7 +36,7 @@ async def note_create(
     description: str | None = None,
     body: str | None = None,
 ) -> ResearchNote:
-    async with session_scope() as s:
+    async with write_scope() as s:
         row = ResearchNote(
             code=note_code(),
             research_code=research_code,
@@ -76,7 +76,7 @@ async def note_update(
     body: str | None = None,
 ) -> ResearchNote | None:
     """Обновить переданные поля заметки (``None`` = не трогать; ``body`` без лимита)."""
-    async with session_scope() as s:
+    async with write_scope() as s:
         row = await s.get(ResearchNote, code)
         if row is None:
             return None
@@ -95,7 +95,7 @@ async def note_update(
 
 async def note_delete(code: str) -> bool:
     """Удалить заметку. ``True`` — существовала и удалена."""
-    async with session_scope() as s:
+    async with write_scope() as s:
         row = await s.get(ResearchNote, code)
         if row is None:
             return False
@@ -103,10 +103,39 @@ async def note_delete(code: str) -> bool:
     return True
 
 
+async def note_bodies_by_research(research_code: str) -> list[tuple[str, str]]:
+    """``(code, body)`` всех заметок исследования — сырьё для глубокого поиска (только две
+    колонки: ради поиска целые ORM-объекты не нужны)."""
+    stmt = select(ResearchNote.code, ResearchNote.body).where(
+        ResearchNote.research_code == research_code
+    )
+    async with session_scope() as s:
+        return [(code, body) for code, body in (await s.execute(stmt)).all()]
+
+
+async def note_search_texts() -> list[tuple[str, str]]:
+    """``(research_code, весь текст заметки одной строкой)`` по всем заметкам реестра.
+
+    Из чего заметка состоит для поиска, знает её CRUD — служба поиска складывает регистр и ищет
+    подстроку, но не перечисляет колонки: добавленное сюда поле начинает искаться само.
+    """
+    stmt = select(
+        ResearchNote.research_code,
+        ResearchNote.title,
+        ResearchNote.description,
+        ResearchNote.body,
+    )
+    async with session_scope() as s:
+        rows = (await s.execute(stmt)).all()
+    return [(research_code, "\n".join(filter(None, texts))) for research_code, *texts in rows]
+
+
 __all__ = [
     "note_code",
     "note_create",
     "note_get",
+    "note_bodies_by_research",
+    "note_search_texts",
     "note_list_by_research",
     "note_update",
     "note_delete",

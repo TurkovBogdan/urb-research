@@ -34,6 +34,29 @@ def validate_schema(module: str, fields: ModuleSchema) -> None:
                 f"{module}.{f.key}: default fails own validation: {exc}"
             ) from exc
 
+    _validate_visibility(module, fields)
+
+
+def _validate_visibility(module: str, fields: ModuleSchema) -> None:
+    """Условие видимости обязано ссылаться на существующее поле того же модуля.
+
+    Опечатка в ключе иначе прошла бы молча и увела поле с экрана навсегда: значение при
+    этом продолжало бы применяться, а править его стало бы нечем.
+    """
+    keys = {f.key for f in fields}
+    for f in fields:
+        if f.visible_when is None:
+            continue
+        if f.visible_when.key not in keys:
+            raise ValueError(
+                f"{module}.{f.key}: visible_when points at unknown key "
+                f"{f.visible_when.key!r}"
+            )
+        if f.visible_when.key == f.key:
+            raise ValueError(
+                f"{module}.{f.key}: visible_when points at the field itself"
+            )
+
 
 def field_by_key(fields: ModuleSchema, key: str) -> Field:
     for f in fields:

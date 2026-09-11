@@ -8,9 +8,10 @@ research-оценка: ``status`` (состояние в пайплайне), ``
 причина отсева). ``unique(query_code, page_code)`` — один источник на пару «запрос×страница»
 (один и тот же URL в разных исследованиях = разные строки, оценка изолирована).
 
-Статусы (``DOC_STATUSES``): ``fetch_error`` (страница не загрузилась — держим ради
-целостности) / ``pending`` (есть, не оценён) / ``kept`` (оставлен) / ``filtered`` (отсеян,
-причина в ``note``). kept↔filtered — явное решение агента, relevance — отдельный балл.
+Статусы (``DOC_STATUSES``): ``error`` (материал не дошёл — код причины отдаётся из
+``web_search_page.error``, строку держим ради целостности) / ``pending`` (есть, не оценён) /
+``kept`` (оставлен) / ``filtered`` (отсеян, причина в ``note``). kept↔filtered — явное
+решение агента, relevance — отдельный балл.
 """
 
 from __future__ import annotations
@@ -47,6 +48,8 @@ class ResearchSourceDocument(Base):
         CheckConstraint(
             "relevance BETWEEN 1 AND 10", name="ck_research_source_document_relevance"
         ),
+        Index("ix_research_source_document_research_code", "research_code"),
+        Index("ix_research_source_document_area_code", "area_code"),
         Index("ix_research_source_document_query_code", "query_code"),
     )
 

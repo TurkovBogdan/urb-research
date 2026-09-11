@@ -2,6 +2,8 @@
 import { computed } from 'vue'
 import { useDisplay } from 'vuetify'
 
+import { PAGE_SIZES } from '@/constants/pagination'
+
 // Standardized table footer: "{range} of {total}" + per-page selector + pager.
 // Replaces the hand-copied `.pagination-bar` block duplicated across list views.
 // Responsive: below sm the row wraps — the range goes full-width (centered) and
@@ -16,7 +18,7 @@ const props = withDefaults(defineProps<{
   pageSizes?: number[]
   divider?: boolean
 }>(), {
-  pageSizes: () => [25, 50, 100, 200],
+  pageSizes: () => PAGE_SIZES,
   divider: true,
 })
 

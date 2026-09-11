@@ -9,6 +9,7 @@ from src.core.database.runtime import (
     get_engine,
     init_database,
     session_scope,
+    write_scope,
 )
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "get_engine",
     "init_database",
     "session_scope",
+    "write_scope",
 ]

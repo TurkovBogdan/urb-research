@@ -3,7 +3,20 @@ import PageLayout from '@/layout/templates/PageLayout.vue'
 import PageHeader from '@/layout/components/PageHeader.vue'
 import CodeBlock from '@/components/CodeBlock.vue'
 import VSelectSearch from '@/components/VSelectSearch.vue'
-import { IconSearch, IconMapPin, IconUser } from '@tabler/icons-vue'
+import VSelectStepper from '@/components/VSelectStepper.vue'
+import {
+  IconSearch,
+  IconMapPin,
+  IconUser,
+  IconSortAscending,
+  IconSortDescending,
+  IconTable,
+  IconLayoutGrid,
+  IconFolders,
+  IconServer,
+  IconCoin,
+  IconMessage,
+} from '@tabler/icons-vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -49,6 +62,87 @@ const value = ref<string | null>(null)
     :items="cities"
     label="City"
     variant="outlined"
+  />
+</template>`
+
+// Иконки в пунктах. Штатный путь — `props.prependIcon` у самого пункта; своя разметка (плашка
+// в цвете, две строки, счётчик) — слоты `#item` / `#selection`.
+const viewOptions = [
+  { title: 'Таблица', value: 'table', props: { prependIcon: IconTable } },
+  { title: 'Плитки', value: 'cards', props: { prependIcon: IconLayoutGrid } },
+  { title: 'Плитки по группам', value: 'grouped', props: { prependIcon: IconFolders } },
+]
+const viewValue = ref('table')
+
+const shelfOptions = [
+  { title: 'DevOps: настройка сервера', value: 'devops', icon: IconServer, tone: '#0994BA' },
+  { title: 'Финансы, налоги и право', value: 'finance', icon: IconCoin, tone: '#928A07' },
+  { title: 'Командные коммуникации', value: 'chat', icon: IconMessage, tone: '#A35DE4' },
+]
+const shelfValue = ref('devops')
+
+const iconsSnippet = `<template>
+  <!-- Штатный путь: иконка задаётся самим пунктом -->
+  <VSelect :items="[{ title: 'Таблица', value: 'table', props: { prependIcon: IconTable } }]" />
+
+  <!-- Своя разметка пункта и выбранного значения.
+       :chips="false" обязателен: с чипами (глобальный дефолт) Vuetify рисует #chip,
+       а #selection молча игнорирует. В слот приезжает ИСХОДНЫЙ объект пункта — не item.raw. -->
+  <VSelect :items="shelves" :chips="false">
+    <template #item="{ props: itemProps, item }">
+      <VListItem v-bind="itemProps">
+        <template #prepend><ShelfSwatch :icon="item.icon" :tone="item.tone" /></template>
+      </VListItem>
+    </template>
+    <template #selection="{ item }">
+      <ShelfSwatch :icon="item.icon" :tone="item.tone" /> {{ item.title }}
+    </template>
+  </VSelect>
+</template>`
+
+// Селект с приросшей кнопкой — на примере сортировки: поле выбирает, по чему сортировать,
+// кнопка переключает направление, и порознь они не читаются.
+const sortFields = ['Дата создания', 'Дата обновления', 'Название']
+const sortBy = ref(sortFields[0])
+const sortDir = ref<'asc' | 'desc'>('desc')
+const sortBy2 = ref(sortFields[0])
+const sortDir2 = ref<'asc' | 'desc'>('desc')
+
+// Классы глобальные (main.scss) — своего CSS месту применения не нужно.
+const groupSnippet = `<template>
+  <div class="field-group">
+    <VSelect v-model="sortBy" :items="fields" label="Сортировка"
+      variant="outlined" density="comfortable" hide-details />
+    <VBtn variant="outlined" density="comfortable" icon class="field-group__btn"
+      :aria-label="label" @click="toggleDir">
+      <IconSortAscending v-if="dir === 'asc'" :size="16" />
+      <IconSortDescending v-else :size="16" />
+    </VBtn>
+  </div>
+</template>`
+
+// Селект с шагом — на примере кегля: варианты стоят лестницей, и соседний перебирают подряд,
+// сравнивая результат на глаз.
+const sizeOptions = [14, 15, 16, 17, 18, 20].map((size) => ({ title: `${size} px`, value: size }))
+const stepSize = ref(16)
+const stepShelf = ref('devops')
+
+const stepperSnippet = `<script setup lang="ts">
+import VSelectStepper from '@/components/VSelectStepper.vue'
+import { ref } from 'vue'
+
+const sizes = [14, 15, 16, 17, 18, 20].map(s => ({ title: \`\${s} px\`, value: s }))
+const size = ref(16)
+<\/script>
+
+<template>
+  <VSelectStepper
+    v-model="size"
+    :items="sizes"
+    label="Размер текста"
+    variant="outlined"
+    density="comfortable"
+    hide-details
   />
 </template>`
 
@@ -232,6 +326,218 @@ const { t } = useI18n()
       <CodeBlock :code="searchSnippet" lang="vue" variant="icon" class="mt-3" />
     </section>
 
+    <!-- Icons inside items -->
+    <section class="ds-section">
+      <h6 class="mb-3">{{ t('design-system.section.selects.itemIcons') }}</h6>
+      <div class="ds-card">
+
+        <div class="ds-row ds-row--center">
+          <span class="ds-tag">prependIcon</span>
+          <div class="ds-controls">
+            <VSelect
+              v-model="viewValue"
+              :items="viewOptions"
+              label="Список исследований"
+              variant="outlined"
+              density="comfortable"
+              hide-details
+            />
+          </div>
+          <span class="ds-spec">props.prependIcon у пункта</span>
+        </div>
+
+        <div class="ds-row ds-row--center">
+          <span class="ds-tag">#item · #selection</span>
+          <div class="ds-controls">
+            <VSelect
+              v-model="shelfValue"
+              :items="shelfOptions"
+              :chips="false"
+              label="Полка"
+              variant="outlined"
+              density="comfortable"
+              hide-details
+            >
+              <template #item="{ props: itemProps, item }">
+                <VListItem v-bind="itemProps">
+                  <template #prepend>
+                    <span class="swatch" :style="{ '--tone': item.tone }">
+                      <component :is="item.icon" :size="14" :stroke-width="1.7" />
+                    </span>
+                  </template>
+                </VListItem>
+              </template>
+
+              <template #selection="{ item }">
+                <span class="swatch-line">
+                  <span class="swatch" :style="{ '--tone': item.tone }">
+                    <component :is="item.icon" :size="14" :stroke-width="1.7" />
+                  </span>
+                  {{ item.title }}
+                </span>
+              </template>
+            </VSelect>
+          </div>
+          <span class="ds-spec">своя плашка · :chips="false"</span>
+        </div>
+
+      </div>
+
+      <p class="ds-note">
+        Отбивка иконки от подписи нормализована глобально: Vuetify держит
+        <code>--v-list-prepend-gap</code> в 32px — место под аватарку, которой в выпадающих
+        списках не бывает, — и на этой ширине иконки с подписями читаются как два несвязанных
+        столбца. В <code>main.scss</code> для списков внутри меню и селектов зазор задан в 10px,
+        поэтому месту применения ничего править не нужно.
+      </p>
+
+      <p class="ds-note">
+        Своя разметка пункта — слот <code>#item</code>, своя разметка выбранного значения —
+        <code>#selection</code>. Две ловушки: в слот приезжает <strong>исходный</strong> объект
+        пункта (<code>item.tone</code>, а не <code>item.raw.tone</code>), а
+        <code>#selection</code> работает только при <code>:chips="false"</code> — с чипами
+        (глобальный дефолт) Vuetify рисует <code>#chip</code> и молча игнорирует его.
+      </p>
+
+      <CodeBlock :code="iconsSnippet" lang="vue" variant="icon" class="mt-3" />
+    </section>
+
+    <!-- Select + attached button -->
+    <section class="ds-section">
+      <h6 class="mb-3">{{ t('design-system.section.selects.withButton') }}</h6>
+      <div class="ds-card">
+
+        <div class="ds-row ds-row--center">
+          <span class="ds-tag">comfortable</span>
+          <div class="ds-controls">
+            <div class="field-group">
+              <VSelect
+                v-model="sortBy"
+                :items="sortFields"
+                label="Сортировка"
+                variant="outlined"
+                density="comfortable"
+                hide-details
+              />
+              <VBtn
+                variant="outlined"
+                density="comfortable"
+                icon
+                class="field-group__btn"
+                :aria-label="sortDir === 'asc' ? 'По возрастанию' : 'По убыванию'"
+                @click="sortDir = sortDir === 'asc' ? 'desc' : 'asc'"
+              >
+                <IconSortAscending v-if="sortDir === 'asc'" :size="16" />
+                <IconSortDescending v-else :size="16" />
+              </VBtn>
+            </div>
+          </div>
+          <span class="ds-spec">32px · фильтры страниц</span>
+        </div>
+
+        <div class="ds-row ds-row--center">
+          <span class="ds-tag">default</span>
+          <div class="ds-controls">
+            <div class="field-group">
+              <VSelect
+                v-model="sortBy2"
+                :items="sortFields"
+                label="Сортировка"
+                variant="outlined"
+                hide-details
+              />
+              <VBtn
+                variant="outlined"
+                icon
+                class="field-group__btn"
+                :aria-label="sortDir2 === 'asc' ? 'По возрастанию' : 'По убыванию'"
+                @click="sortDir2 = sortDir2 === 'asc' ? 'desc' : 'asc'"
+              >
+                <IconSortAscending v-if="sortDir2 === 'asc'" :size="18" />
+                <IconSortDescending v-else :size="18" />
+              </VBtn>
+            </div>
+          </div>
+          <span class="ds-spec">36px · формы</span>
+        </div>
+
+      </div>
+
+      <p class="ds-note">
+        Поле и кнопка, которые читаются как одна ручка: направление сортировки бессмысленно
+        без поля, по которому сортируют, а отдельная кнопка рядом выглядит как самостоятельное
+        действие. Срастание делает вёрстка, а не компонент: пара классов
+        <code>.field-group</code> / <code>.field-group__btn</code> лежит глобально в
+        <code>main.scss</code> — у поля срезано правое скругление, у кнопки левое, и кнопка
+        сдвинута на пиксель, чтобы граница на стыке не удвоилась. Коробка кнопки следует за её
+        <code>density</code>: та правит только высоту, а сторону иконочной кнопки Vuetify
+        считает от неё же и без ширины даёт прямоугольник. Так собраны фильтры сортировки в
+        реестре исследований и в списке групп.
+      </p>
+
+      <CodeBlock :code="groupSnippet" lang="vue" variant="icon" class="mt-3" />
+    </section>
+
+    <!-- Select + prev/next steppers -->
+    <section class="ds-section">
+      <h6 class="mb-3">{{ t('design-system.section.selects.withSteppers') }}</h6>
+      <div class="ds-card">
+
+        <div class="ds-row ds-row--center">
+          <span class="ds-tag">default</span>
+          <div class="ds-controls">
+            <VSelectStepper
+              class="ds-stepper"
+              v-model="stepSize"
+              :items="sizeOptions"
+              label="Размер текста"
+              variant="outlined"
+              hide-details
+            />
+          </div>
+          <span class="ds-spec">36px · лестница значений</span>
+        </div>
+
+        <div class="ds-row ds-row--center">
+          <span class="ds-tag">comfortable</span>
+          <div class="ds-controls">
+            <VSelectStepper
+              class="ds-stepper"
+              v-model="stepShelf"
+              :items="shelfOptions"
+              label="Полка"
+              variant="outlined"
+              density="comfortable"
+              hide-details
+            />
+          </div>
+          <span class="ds-spec">32px · объекты</span>
+        </div>
+
+      </div>
+
+      <p class="ds-note">
+        Шаг по соседнему варианту, когда порядок пунктов осмыслен: кегль, вес, высота, размер
+        страницы. Открывать список ради шага на один пункт — три движения вместо одного, но и
+        список остаётся: прыжок к далёкому варианту кнопками был бы долгим. Края
+        <strong>не заворачиваются</strong> — на первом пункте гаснет левая кнопка, на последнем
+        правая: иначе жмущий на шаг проскакивает границу набора и не замечает этого.
+        Ничего не выбрано — шаг вперёд берёт первый пункт, назад последний.
+      </p>
+
+      <p class="ds-note">
+        Срастание — та же пара классов <code>.field-group</code> /
+        <code>.field-group__btn</code>, что у кнопки справа, плюс модификатор
+        <code>--before</code> для кнопки слева. Логика шага живёт в компоненте
+        <code>VSelectStepper</code> (обёртка над VSelect: <code>$attrs</code> и слоты проходят
+        насквозь), а не в месте применения — считать индекс и гасить кнопки на краях в каждом
+        экране заново незачем. <code>density</code> у него отдельным пропом: её держат и поле,
+        и обе кнопки.
+      </p>
+
+      <CodeBlock :code="stepperSnippet" lang="vue" variant="icon" class="mt-3" />
+    </section>
+
     <!-- Sizes (density axis) -->
     <section class="ds-section">
       <h6 class="mb-3">{{ t('design-system.section.selects.sizes') }}</h6>
@@ -334,6 +640,35 @@ const { t } = useI18n()
 .v-select, .v-autocomplete {
   min-width: 220px;
   max-width: 280px;
+}
+
+/* У селекта с шагом ширину держит вся тройка: поле внутри компонента до правила выше не
+   достаёт (чужая область видимости), а кнопки по краям должны стоять на её границах. */
+.ds-stepper {
+  width: 280px;
+}
+
+/* Плашка пункта: иконка в цвете сущности — так полка узнаётся в реестре исследований. */
+.swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  flex: none;
+  color: var(--tone);
+  background: color-mix(in srgb, var(--tone) 14%, transparent);
+}
+
+.swatch-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .ds-note {

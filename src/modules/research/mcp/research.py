@@ -9,29 +9,49 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from src.modules.research.codes import code_prefix, strip_prefix
-from src.modules.research.constants import AREA_CODE_PREFIX, RESEARCH_CODE_PREFIX
+from src.modules.research.codes import bare_code, code_prefix
+from src.modules.research.constants import (
+    AREA_CODE_PREFIX,
+    DOC_ERROR,
+    DOC_PENDING,
+    RESEARCH_CODE_PREFIX,
+)
 from src.modules.research.crud import area as area_crud
+from src.modules.research.crud import group as group_crud
 from src.modules.research.crud import note as note_crud
 from src.modules.research.crud import research as research_crud
 from src.modules.research.crud import source_document as source_document_crud
 from src.modules.research.crud import source_query as source_query_crud
 from src.modules.research.dto import (
-    AreaScan,
-    NoteScan,
-    ResearchCreated,
-    ResearchListItem,
-    ResearchScan,
+    AgentAreaScan,
+    AgentNoteScan,
+    AgentResearchCreated,
+    AgentResearchRow,
+    AgentResearchScan,
     ResearchSourceDocumentRow,
     ResearchSourceQueryRow,
-    ResearchView,
+    AgentResearchDetail,
+    group_fields,
+    agent_research_row,
     source_document_row,
 )
+from src.modules.web_search.constants import FETCH_STATUS_ERROR
 from src.modules.web_search.crud import query_result as query_result_crud
+from src.modules.web_search.models.page import WebSearchPage
 from src.modules.web_search.services.searcher import Searcher
 
 if TYPE_CHECKING:  # fork fastmcp — только backend (через mcp_server(ctx))
     from fastmcp import FastMCP
+
+
+def _initial_source_status(page: WebSearchPage) -> str:
+    """Стартовый статус источника: материал не дошёл → ``error``, иначе ждёт разбора.
+
+    Мостик между машинами статусов двух модулей: провал получения (``web_search_page.status``)
+    держит источник вне очереди на разбор — иначе он попадёт к агенту как обычный ``pending``
+    с пустым телом.
+    """
+    return DOC_ERROR if page.status == FETCH_STATUS_ERROR else DOC_PENDING
 
 
 def _oldest_first(rows: list) -> list:
@@ -39,55 +59,92 @@ def _oldest_first(rows: list) -> list:
     return sorted(rows, key=lambda row: row.updated_at)
 
 
+async def _resolve_group(group_code: str | None):
+    """Голый код группы → её строка; ``""``/``None`` — группа не задана. Промах кода — ошибка."""
+    if not group_code:
+        return None
+    group = await group_crud.group_get(group_code)
+    if group is None:
+        raise ValueError(f"Group {group_code} not found.")
+    return group
+
+
 def register(mcp: "FastMCP") -> None:
 
     @mcp.tool()
     async def research_create(
-        title: str, description: str | None = None, body: str | None = None
-    ) -> ResearchCreated:
+        title: str,
+        description: str | None = None,
+        body: str | None = None,
+        group_code: str | None = None,
+    ) -> AgentResearchCreated:
         """Start a research (knowledge artifact) and register it. Returns only its code.
 
         Args:
             title: The research title / name (up to 128 chars).
             description: Optional short description / abstract (up to 512 chars).
             body: Optional main body in markdown (fill in as the research progresses).
+                Markup rules — skill_get('body-markup'); a diagram in it — skill_get('mermaid').
+            group_code: Optional GROUP@ code to file this research under (see group_list).
+                Grouping is cosmetic shelving — skip it unless the user asked for it.
         """
+        group_code = bare_code(group_code)
+        await _resolve_group(group_code)
         row = await research_crud.research_create(
-            title=title, description=description, body=body
+            title=title, description=description, body=body, group_code=group_code
         )
-        return ResearchCreated.model_validate(row)
+        return AgentResearchCreated.model_validate(row)
 
     @mcp.tool()
-    async def research_get(research_code: str) -> ResearchView:
+    async def research_get(research_code: str) -> AgentResearchDetail:
         """Return one research in full — its fields and body, plus its areas and notes.
 
         Areas and notes are the scan layer (code, title, description, updated_at),
-        ordered by update time oldest first.
+        ordered by update time oldest first. group_code / group_name say which group the
+        research is filed in (empty when it is not filed anywhere); group_name is derived
+        from the group, so rename a group with group_update, never here.
 
         Args:
             research_code: The research code returned by research_create.
         """
-        research_code = strip_prefix(research_code)
-        row = await research_crud.research_get(research_code)
-        if row is None:
+        research_code = bare_code(research_code)
+        found = await research_crud.research_get_with_group(research_code)
+        if found is None:
             raise ValueError(f"Research {research_code} not found.")
+        row, group = found
         areas = await area_crud.area_list_by_research(research_code)
         notes = await note_crud.note_list_by_research(research_code)
-        return ResearchView(
+        return AgentResearchDetail(
             code=row.code,
             title=row.title,
             description=row.description,
+            **group_fields(group),
             body=row.body,
-            areas=[AreaScan.model_validate(a) for a in _oldest_first(areas)],
-            notes=[NoteScan.model_validate(n) for n in _oldest_first(notes)],
+            areas=[AgentAreaScan.model_validate(a) for a in _oldest_first(areas)],
+            notes=[AgentNoteScan.model_validate(n) for n in _oldest_first(notes)],
             updated_at=row.updated_at,
         )
 
     @mcp.tool()
-    async def research_list() -> list[ResearchListItem]:
-        """List all researches, most recently updated first (code, title, description, updated_at)."""
-        rows = await research_crud.research_list()
-        return [ResearchListItem.model_validate(r) for r in rows]
+    async def research_list(group_code: str | None = None) -> list[AgentResearchRow]:
+        """List researches, most recently updated first.
+
+        Each row: code, title, description, its group (group_code / group_name — empty when the
+        research is not filed in a group) and updated_at.
+
+        Args:
+            group_code: Omit for every research; pass a GROUP@ code for that group only, or an
+                empty string for the researches that sit in no group.
+        """
+        group_code = bare_code(group_code)
+        if group_code:
+            await _resolve_group(group_code)
+        return [
+            agent_research_row(row, group)
+            for row, group in await research_crud.research_list_with_group(
+                group_code=group_code
+            )
+        ]
 
     @mcp.tool()
     async def research_update(
@@ -95,24 +152,42 @@ def register(mcp: "FastMCP") -> None:
         title: str | None = None,
         description: str | None = None,
         body: str | None = None,
-    ) -> ResearchScan:
-        """Update a research's title / description / body (omit a field to keep it).
+        group_code: str | None = None,
+    ) -> AgentResearchScan:
+        """Update a research's title / description / body / group (omit a field to keep it).
 
-        Returns the updated scan (code, title, description). For incremental body edits use body_edit.
+        Returns the updated scan (code, title, description, group). For incremental body edits
+        use body_edit.
 
         Args:
             research_code: The research to update.
             title: New title (up to 128 chars), or omit to keep the current one.
             description: New short description (up to 512 chars), or omit to keep.
             body: New main body in markdown, or omit to keep the current one.
+                Markup rules — skill_get('body-markup'); a diagram in it — skill_get('mermaid').
+            group_code: GROUP@ code to file this research in, or an empty string to take it out
+                of its group; omit to keep. Optional — grouping is for the user's convenience.
         """
-        research_code = strip_prefix(research_code)
+        research_code = bare_code(research_code)
+        group_code = bare_code(group_code)
+        group = await _resolve_group(group_code)
         row = await research_crud.research_update(
-            research_code, title=title, description=description, body=body
+            research_code,
+            title=title,
+            description=description,
+            body=body,
+            group_code=group_code,
         )
         if row is None:
             raise ValueError(f"Research {research_code} not found.")
-        return ResearchScan.model_validate(row)
+        if group is None and row.group_code:
+            group = await group_crud.group_get(row.group_code)
+        return AgentResearchScan(
+            code=row.code,
+            title=row.title,
+            description=row.description,
+            **group_fields(group),
+        )
 
     @mcp.tool()
     async def research_delete(research_code: str) -> bool:
@@ -123,26 +198,32 @@ def register(mcp: "FastMCP") -> None:
         Args:
             research_code: The research to delete.
         """
-        return await research_crud.research_delete(strip_prefix(research_code))
+        return await research_crud.research_delete(bare_code(research_code))
 
     @mcp.tool()
     async def query_search_run(area_code: str, query: str) -> list[ResearchSourceDocumentRow]:
         """Run a web search for an area and return the sources it found (blocking).
 
         Runs web_search to completion, records the run as a source-query under the area's
-        research, registers each found page as a `pending` source, and returns the source
-        list (no body — read one with source_get). Prefer delegating an area's searches to a
-        dedicated sub-agent: the call blocks and every returned source must then be reviewed.
+        research, registers each found page as a source, and returns the source list (no body —
+        read one with source_get). Prefer delegating an area's searches to a dedicated
+        sub-agent: the call blocks and every returned source must then be reviewed.
 
         NEXT STEP IS MANDATORY: every source comes back `pending`. Read each with source_get
         and judge it with source_review (keep/filter + relevance) before writing any synthesis —
         a source left `pending` is unfinished work.
 
+        FETCHING IS SEPARATE FROM SEARCHING and can fail on its own: a source whose page did
+        not download comes back `error` instead of `pending`, and has no body to read. Nothing
+        is loading in the background — the run is already finished, so never wait or poll for a
+        body to appear. Do NOT review an `error` source and do NOT judge it from its `summary`:
+        that text is the search engine's snippet, not the material.
+
         Args:
             area_code: The area to search sources for (its research is taken from the area).
             query: The search query text.
         """
-        area_code = strip_prefix(area_code)
+        area_code = bare_code(area_code)
         area = await area_crud.area_get(area_code)
         if area is None:
             raise ValueError(f"Area {area_code} not found.")
@@ -161,6 +242,7 @@ def register(mcp: "FastMCP") -> None:
                 query_code=sq.code,
                 page_code=page.code,
                 summary=result.summary,
+                status=_initial_source_status(page),
             )
             sources.append(source_document_row(doc, page))
         return sources
@@ -173,7 +255,7 @@ def register(mcp: "FastMCP") -> None:
             code: An AREA@ code (its searches) or a RESEARCH@ code (all its searches).
         """
         prefix = code_prefix(code)
-        bare = strip_prefix(code)
+        bare = bare_code(code)
         if prefix == AREA_CODE_PREFIX:
             rows = await source_query_crud.source_query_list_by_area(bare)
         elif prefix == RESEARCH_CODE_PREFIX:
@@ -191,4 +273,4 @@ def register(mcp: "FastMCP") -> None:
         Args:
             query_code: The search (source-query) to delete.
         """
-        return await source_query_crud.source_query_delete(strip_prefix(query_code))
+        return await source_query_crud.source_query_delete(bare_code(query_code))

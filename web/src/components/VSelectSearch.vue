@@ -76,7 +76,7 @@ const forwardedSlots = computed(() =>
           @keydown.stop
         />
       </div>
-      <VDivider />
+      <VDivider class="vss-divider" />
     </template>
 
     <template #no-data>
@@ -93,6 +93,12 @@ const forwardedSlots = computed(() =>
 /* Search row + empty state live in the teleported menu — scope id still reaches them. */
 .vss-search {
   padding: 4px 10px 6px;
+}
+
+/* Отбивка под линейкой: подсветка первого пункта на наведении встаёт вплотную к ней, и линейка
+   читается как край пункта, а не как граница строки поиска. */
+.vss-divider {
+  margin-bottom: 4px;
 }
 
 .vss-empty {

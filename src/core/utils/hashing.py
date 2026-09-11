@@ -28,15 +28,18 @@ def dict_hash(params: dict[str, str]) -> str:
     return _hex(canonical.encode())
 
 
-def random_hash() -> str:
-    """22-char random hex token (88 bits of entropy), same length/alphabet as the
+def random_hash(length: int = _HASH_LEN) -> str:
+    """Random hex token of ``length`` chars (4 bits each), same alphabet as the
     deterministic hashes above.
 
     Use for surrogate identifiers that have no natural dedup value — every call yields
     a fresh value (cryptographically-strong RNG). Stored bare as an entity code; a consumer
     may add a type prefix as presentation at its own boundary (see ``research.codes``).
+    The caller picks the length: a code an agent retypes is shorter than a fingerprint
+    nobody reads (``research.constants.CODE_LEN``), and collisions there fail an insert
+    rather than merge two rows.
     """
-    return secrets.token_hex(_HASH_LEN // 2)
+    return secrets.token_hex((length + 1) // 2)[:length]
 
 
 def text_hash(text: str | None) -> str:

@@ -18,7 +18,7 @@ from src.core.module import Module
 # Ядро о принципале ничего не знает (duck-typed request.state.user); модель — у
 # core_users. Тестам ядра достаточно объекта нужной формы.
 _STUB_USER = SimpleNamespace(
-    id=1, email="admin@semaphore.local", name="admin", group="admin", is_active=True
+    id=1, email="admin@example.local", name="admin", group="admin", is_active=True
 )
 
 

@@ -13,7 +13,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.database import session_scope
+from src.core.database import session_scope, write_scope
 from src.core.models.module_state import CoreModuleState
 from src.core.utils.date import utc_now
 
@@ -54,7 +54,7 @@ async def get_value(module: str, code: str) -> Any | None:
 
 async def upsert(module: str, code: str, value: Any) -> None:
     """INSERT … ON CONFLICT DO UPDATE: обновляет value+updated_at, created_at — только при первом INSERT."""
-    async with session_scope() as s:
+    async with write_scope() as s:
         insert = _insert_for(s)
         now = utc_now()
         stmt = insert(CoreModuleState).values(
@@ -73,7 +73,7 @@ async def upsert(module: str, code: str, value: Any) -> None:
 
 async def seed_if_absent(module: str, code: str, value: Any) -> bool:
     """INSERT … ON CONFLICT DO NOTHING. Возвращает True, если строка создана."""
-    async with session_scope() as s:
+    async with write_scope() as s:
         insert = _insert_for(s)
         now = utc_now()
         stmt = (
@@ -93,7 +93,7 @@ async def seed_if_absent(module: str, code: str, value: Any) -> bool:
 
 
 async def delete(module: str, code: str) -> None:
-    async with session_scope() as s:
+    async with write_scope() as s:
         await s.execute(
             sa_delete(CoreModuleState).where(
                 CoreModuleState.module == module,
@@ -103,7 +103,7 @@ async def delete(module: str, code: str) -> None:
 
 
 async def delete_for_module(module: str) -> None:
-    async with session_scope() as s:
+    async with write_scope() as s:
         await s.execute(
             sa_delete(CoreModuleState).where(CoreModuleState.module == module)
         )

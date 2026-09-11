@@ -11,11 +11,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from src.modules.research.codes import strip_prefix
+from src.modules.research.codes import bare_code
 from src.modules.research.constants import NOTE_KINDS, sql_in
 from src.modules.research.crud import note as note_crud
 from src.modules.research.crud import research as research_crud
-from src.modules.research.dto import NoteCreated, NoteDetail, NoteRow
+from src.modules.research.dto import AgentNoteCreated, AgentNoteDetail, NoteRow
 
 if TYPE_CHECKING:  # fork fastmcp — только backend (через mcp_server(ctx))
     from fastmcp import FastMCP
@@ -35,7 +35,7 @@ def register(mcp: "FastMCP") -> None:
         title: str,
         description: str | None = None,
         body: str | None = None,
-    ) -> NoteCreated:
+    ) -> AgentNoteCreated:
         """Add a typed working-memory note to a research (a self-contained mini-artifact).
 
         A note captures what does not belong to a single document or area — a finding, a
@@ -56,9 +56,10 @@ def register(mcp: "FastMCP") -> None:
             title: Short note name (≤128 chars).
             description: One-line "what this is" for scanning the list (≤512).
             body: The note itself in markdown (unlimited), or omit.
+                Markup rules — skill_get('body-markup'); a diagram in it — skill_get('mermaid').
         """
         _require_kind(kind)
-        research_code = strip_prefix(research_code)
+        research_code = bare_code(research_code)
         if await research_crud.research_get(research_code) is None:
             raise ValueError(f"Research {research_code} not found.")
         row = await note_crud.note_create(
@@ -68,7 +69,7 @@ def register(mcp: "FastMCP") -> None:
             description=description,
             body=body,
         )
-        return NoteCreated.model_validate(row)
+        return AgentNoteCreated.model_validate(row)
 
     @mcp.tool()
     async def notes_list(research_code: str, kind: str | None = None) -> list[NoteRow]:
@@ -78,7 +79,7 @@ def register(mcp: "FastMCP") -> None:
             research_code: The research whose notes to return.
             kind: Optional filter — result / idea / question / memory / decision / clarification.
         """
-        research_code = strip_prefix(research_code)
+        research_code = bare_code(research_code)
         if kind is not None:
             _require_kind(kind)
         if await research_crud.research_get(research_code) is None:
@@ -87,17 +88,17 @@ def register(mcp: "FastMCP") -> None:
         return [NoteRow.model_validate(r) for r in rows]
 
     @mcp.tool()
-    async def note_get(note_code: str) -> NoteDetail:
+    async def note_get(note_code: str) -> AgentNoteDetail:
         """Return one note in full — scan layer + body.
 
         Args:
             note_code: The note code returned by note_create.
         """
-        note_code = strip_prefix(note_code)
+        note_code = bare_code(note_code)
         row = await note_crud.note_get(note_code)
         if row is None:
             raise ValueError(f"Note {note_code} not found.")
-        return NoteDetail.model_validate(row)
+        return AgentNoteDetail.model_validate(row)
 
     @mcp.tool()
     async def note_update(
@@ -117,8 +118,9 @@ def register(mcp: "FastMCP") -> None:
             title: New title (≤128), or omit.
             description: New one-line description (≤512), or omit.
             body: New body in markdown (unlimited), or omit.
+                Markup rules — skill_get('body-markup'); a diagram in it — skill_get('mermaid').
         """
-        note_code = strip_prefix(note_code)
+        note_code = bare_code(note_code)
         if kind is not None:
             _require_kind(kind)
         row = await note_crud.note_update(
@@ -135,4 +137,4 @@ def register(mcp: "FastMCP") -> None:
         Args:
             note_code: The note to delete.
         """
-        return await note_crud.note_delete(strip_prefix(note_code))
+        return await note_crud.note_delete(bare_code(note_code))

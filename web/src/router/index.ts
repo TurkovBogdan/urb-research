@@ -1,6 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import { setupGuards } from './guards'
+import { trackNavigationKind } from './scroll'
+import { setupRoutePrefetch } from './prefetch'
+import { setupChunkReload } from './reload'
 import { designSystemRoutes } from './design-system'
 import { coreConnectorsRoutes } from '../features/core_connectors/routes'
 import { coreMcpRoutes } from '../features/core_mcp/routes'
@@ -12,10 +15,14 @@ import { webSearchRoutes } from '../features/web_search/routes'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
+  // Не прокрутка, а её опознание: обработчик ничего не мотает (возвращает `false`) и только
+  // запоминает, возврат это по истории или новый переход — мотает зону содержимого `PageLayout`.
+  scrollBehavior: trackNavigationKind,
   routes: [
     { path: '/', redirect: '/home' },
     {
       path: '/home',
+      name: 'home',
       component: () => import('../views/HomeView.vue'),
       meta: { scroll: 'y' },
     },
@@ -31,12 +38,15 @@ const router = createRouter({
     // Renders the 404 inside the app shell.
     {
       path: '/:pathMatch(.*)*',
+      name: 'not-found',
       component: () => import('../views/errors/NotFoundView.vue'),
-      meta: { scroll: 'none', padding: false },
+      meta: { scroll: 'none', padding: false, title: 'common.errors.notFound.title' },
     },
   ],
 })
 
 setupGuards(router)
+setupRoutePrefetch(router)
+setupChunkReload(router)
 
 export default router

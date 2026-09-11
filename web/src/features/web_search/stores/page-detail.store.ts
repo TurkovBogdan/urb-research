@@ -7,7 +7,9 @@ import { getPage, type WebSearchPageDetail } from '../api'
 export const usePageDetailStore = defineStore('web_search-page-detail', () => {
   const page = ref<WebSearchPageDetail | null>(null)
   const loading = ref(false)
-  const error = ref<string | null>(null)
+  // Держим сам отказ, а не его текст: показ (`SectionError`) отличает «сущности нет» от сбоя
+  // по статусу ответа, а формулировку берёт из `errorText`.
+  const error = ref<unknown>(null)
 
   async function load(code: string) {
     loading.value = true
@@ -15,7 +17,7 @@ export const usePageDetailStore = defineStore('web_search-page-detail', () => {
     try {
       page.value = await getPage(code)
     } catch (e) {
-      error.value = e instanceof Error ? e.message : String(e)
+      error.value = e
       page.value = null
     } finally {
       loading.value = false

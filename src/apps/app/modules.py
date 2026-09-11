@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from src.core.module import Module
 from src.modules.core_connectors import CoreConnectorsModule
+from src.modules.core_interface import CoreInterfaceModule
 from src.modules.core_mcp import CoreMcpModule
 from src.modules.core_monitoring import CoreMonitoringModule
 from src.modules.core_setup import CoreSetupModule
@@ -22,8 +23,9 @@ def build_modules() -> list[Module]:
     Поверх ядра (``src/core``: миграции, планировщик, зоны роутера, раздача SPA,
     settings-store) подключены ``core_setup`` — страница настроек ENV (правка ``.env``
     + рестарт), ``core_connectors`` — коннекторы к внешним API + хранение их кредов
-    (runtime-настройки), ``core_monitoring`` — раздел задач (список + запуски + логи,
-    только чтение), ``core_mcp`` — интроспекция модулей, поднятых как MCP-серверы
+    (runtime-настройки), ``core_interface`` — настройки интерфейса пользователя (тема,
+    гарнитуры, оформление документа и схем), ``core_monitoring`` — раздел задач (список +
+    запуски + логи, только чтение), ``core_mcp`` — интроспекция модулей, поднятых как MCP-серверы
     (только чтение), ``web_search`` (поиск в вебе + сохранение найденных страниц:
     запросы/выдача/страницы) и ``research`` —
     оркестратор + реестр ресёрча (пока болванка). Новый модуль — добавить
@@ -32,6 +34,7 @@ def build_modules() -> list[Module]:
     return [
         CoreSetupModule(),
         CoreConnectorsModule(),
+        CoreInterfaceModule(),
         CoreMonitoringModule(),
         CoreMcpModule(),
         WebSearchModule(),

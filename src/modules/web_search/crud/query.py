@@ -14,7 +14,7 @@ from typing import Any
 from sqlalchemy import func, select, update
 from sqlalchemy.sql.selectable import Select
 
-from src.core.database import session_scope
+from src.core.database import session_scope, write_scope
 from src.core.utils.date import utc_now
 from src.core.utils.hashing import random_hash
 from src.modules.web_search.constants import (
@@ -40,7 +40,7 @@ async def query_create(
     query: str,
     params: Any | None = None,
 ) -> WebSearchQuery:
-    async with session_scope() as s:
+    async with write_scope() as s:
         row = WebSearchQuery(
             code=query_code(),
             search_engine=search_engine,
@@ -69,7 +69,7 @@ async def query_mark_processing(code: str) -> WebSearchQuery | None:
         .values(status=SEARCH_STATUS_PROCESSING, updated_at=now)
         .returning(WebSearchQuery)
     )
-    async with session_scope() as s:
+    async with write_scope() as s:
         return (await s.execute(stmt)).scalars().first()
 
 
@@ -82,7 +82,7 @@ async def query_finish(code: str) -> WebSearchQuery | None:
         .values(status=SEARCH_STATUS_DONE, finished_at=now, error=None, updated_at=now)
         .returning(WebSearchQuery)
     )
-    async with session_scope() as s:
+    async with write_scope() as s:
         return (await s.execute(stmt)).scalars().first()
 
 
@@ -97,7 +97,7 @@ async def query_mark_error(
         .values(status=SEARCH_STATUS_ERROR, error=error, finished_at=now, updated_at=now)
         .returning(WebSearchQuery)
     )
-    async with session_scope() as s:
+    async with write_scope() as s:
         return (await s.execute(stmt)).scalars().first()
 
 
@@ -134,7 +134,7 @@ async def query_expire_stale(search_engine: str, *, before: datetime) -> int:
         )
         .values(status=SEARCH_STATUS_ERROR, error="stale", finished_at=now, updated_at=now)
     )
-    async with session_scope() as s:
+    async with write_scope() as s:
         return (await s.execute(stmt)).rowcount or 0
 
 

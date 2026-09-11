@@ -1,0 +1,146 @@
+// ── Font faces ───────────────────────────────────────────────────────────────
+// Every family the interface can be switched to is declared here; which one is in
+// use is decided at runtime by the settings store, which writes the `--font` and
+// `--font-reading` tokens. A family offered in `constants/fonts.ts` without a face
+// here would silently fall back to the system stack.
+//
+// The libre families are Google's own per-subset builds, served verbatim: the binaries
+// are not re-cut, so the OFL Reserved Font Name clause never comes into play. One family
+// = one directory `assets/fonts/<family>/`, holding every cut it ships plus its licence
+// as `OFL.txt`. Whether a family is variable or static decides its file naming and which
+// of the two mixins below declares it.
+
+// Subsetting is what keeps the choice cheap: a family the user has not selected is
+// never requested, and a selected one downloads only the ranges its text actually
+// uses — Cyrillic prose pulls the Cyrillic file and leaves latin-ext alone.
+$font-subsets: (
+  'cyrillic-ext': (U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F),
+  'cyrillic': (U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116),
+  'latin-ext': (
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308,
+    U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF
+  ),
+  'latin': (
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD
+  ),
+);
+
+// A variable family covers its whole weight range in one binary per subset, so the file
+// name is the subset alone and the face claims the range.
+@mixin variable-family($family, $slug, $weight-range) {
+  @each $subset, $range in $font-subsets {
+    @font-face {
+      font-family: $family;
+      font-style: normal;
+      font-weight: $weight-range;
+      font-display: swap;
+      src: url('../assets/fonts/#{$slug}/#{$subset}.woff2') format('woff2');
+      unicode-range: $range;
+    }
+  }
+}
+
+// A static family has no weight axis: every weight is its own binary, named
+// `<subset>-<weight>`. Declaring a range over one file would leave the browser
+// synthesising the missing weights instead of loading the drawn ones.
+@mixin static-family($family, $slug, $weights) {
+  @each $weight in $weights {
+    @each $subset, $range in $font-subsets {
+      @font-face {
+        font-family: $family;
+        font-style: normal;
+        font-weight: $weight;
+        font-display: swap;
+        src: url('../assets/fonts/#{$slug}/#{$subset}-#{$weight}.woff2') format('woff2');
+        unicode-range: $range;
+      }
+    }
+  }
+}
+
+// Onest — the default interface family (variable, wght 100–900). Shipped as one
+// file rather than per-subset ranges: it is already cut down to Latin + Russian.
+@font-face {
+  font-family: 'Onest';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('../assets/fonts/onest/regular.woff2') format('woff2'),
+       url('../assets/fonts/onest/regular.woff')  format('woff');
+}
+
+// JetBrains Mono — code, in prose and in the CodeBlock component (variable, wght 100–800).
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('../assets/fonts/jetbrains-mono/regular.woff2') format('woff2'),
+       url('../assets/fonts/jetbrains-mono/regular.woff')  format('woff');
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: italic;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('../assets/fonts/jetbrains-mono/italic.woff2') format('woff2'),
+       url('../assets/fonts/jetbrains-mono/italic.woff')  format('woff');
+}
+
+// ── Grotesques ───────────────────────────────────────────────────────────────
+
+// Golos Text — Cyrillic-first grotesque drawn for reading rather than for interfaces.
+// Its axis starts at 400: the family has no light weights, and it ships no italic at all.
+@include variable-family('Golos Text', 'golos-text', 400 900);
+
+// IBM Plex Sans — Cyrillic by Aleksandra Samulenkova; the only family bundled here that
+// carries Bulgarian localised forms (`locl BGR`).
+@include variable-family('IBM Plex Sans', 'ibm-plex-sans', 100 700);
+
+// Commissioner — humanist grotesque whose Cyrillic was drawn with Maria Doreuli. The
+// flare and volume axes are in the binary but not exposed: only `wght` is declared here.
+@include variable-family('Commissioner', 'commissioner', 100 900);
+
+// Geologica — wide stance and large apertures, the two parameters the low-vision
+// research rewards. Its `CRSV` axis is a real cursive rather than a slant.
+@include variable-family('Geologica', 'geologica', 100 900);
+
+// PT Sans — commissioned for the languages of Russia; the widest minority-language
+// Cyrillic of the bundled grotesques. Static, so Regular and Bold are separate files.
+@include static-family('PT Sans', 'pt-sans', 400 700);
+
+// ── Serifs ───────────────────────────────────────────────────────────────────
+
+// Literata — screen-first text serif (Google Play Books), for continuous reading.
+@include variable-family('Literata', 'literata', 400 700);
+
+// Source Serif 4 — text serif with an optical-size axis; its Cyrillic is judged better
+// than that of the Source Sans it was drawn to pair with.
+@include variable-family('Source Serif', 'source-serif', 200 900);
+
+// Lora — calligraphic text serif carrying the widest set of localised Cyrillic forms
+// of anything bundled here: Bulgarian, Serbian, Bashkir and Chuvash.
+@include variable-family('Lora', 'lora', 400 700);
+
+// Piazzolla — optical sizes 8–30 pt; Cyrillic drawn with Bulgarian designer Krassen Krestev.
+@include variable-family('Piazzolla', 'piazzolla', 100 900);
+
+// PT Serif — the serif of the PT system, pairs with PT Sans and PT Mono.
+@include static-family('PT Serif', 'pt-serif', 400 700);
+
+// Spectral — the serif inside Google Docs; its Cyrillic was drawn by Ilya Ruderman and
+// Yury Ostromentsky, the same experts whose reviews decided this shortlist.
+@include static-family('Spectral', 'spectral', 400 700);
+
+// ── Monospace ────────────────────────────────────────────────────────────────
+
+// Martian Mono — the only monospace here with a width axis; note it carries no South
+// Slavic letters, so Serbian and Macedonian fall through to the fallback stack.
+@include variable-family('Martian Mono', 'martian-mono', 100 800);
+
+// IBM Plex Mono — the monospace sibling of IBM Plex Sans.
+@include static-family('IBM Plex Mono', 'ibm-plex-mono', 400 700);

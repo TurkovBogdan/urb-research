@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from src.core.database import session_scope
+from src.core.database import session_scope, write_scope
 from src.core.models.tasks import CoreTask, CoreTaskLog, CoreTaskLogLevel
 from src.core.utils.date import utc_now
 
@@ -14,7 +14,7 @@ MESSAGE_MAX = 1024  # лимит ``core_tasks_logs.message`` (String(1024))
 async def create(*, task_id: int, level: CoreTaskLogLevel, message: str) -> None:
     if len(message) > MESSAGE_MAX:
         message = message[: MESSAGE_MAX - 1] + "…"
-    async with session_scope() as s:
+    async with write_scope() as s:
         s.add(
             CoreTaskLog(
                 task_id=task_id,

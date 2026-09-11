@@ -13,6 +13,7 @@ from alembic.script import ScriptDirectory
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from src.core.database.sqlite import WRITE_EXECUTION_OPTIONS, foreign_keys_disabled
 from src.core.module import Module
 
 _ALEMBIC_DIR = Path(__file__).resolve().parent / "alembic"
@@ -82,8 +83,11 @@ class AlembicRunner:
         return cfg
 
     def _do_upgrade(self, connection: Connection) -> None:
-        cfg = self._build_config(connection)
-        command.upgrade(cfg, "heads")
+        # Миграция — пишущая транзакция: батч-режим переливает данные INSERT-ом из выборки.
+        connection.execution_options(**WRITE_EXECUTION_OPTIONS)
+        with foreign_keys_disabled(connection):
+            cfg = self._build_config(connection)
+            command.upgrade(cfg, "heads")
 
     def _do_status(self, connection: Connection) -> MigrationStatus:
         script = ScriptDirectory.from_config(self._base_config())

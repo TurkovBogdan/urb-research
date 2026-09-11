@@ -26,7 +26,7 @@ from src.modules.web_search.crud import page as page_crud
 from src.modules.web_search.crud import query as query_crud
 from src.modules.web_search.crud import query_result as query_result_crud
 from src.modules.web_search.crud.page import page_code
-from src.modules.web_search.providers import base, registry
+from src.modules.web_search.providers import registry
 from src.modules.web_search.providers.base import FetchEngine, SearchEngine
 from src.modules.web_search.providers.request import SearchRequest
 from src.modules.web_search.services import searcher
@@ -35,7 +35,10 @@ from src.modules.web_search.services.searcher import Searcher
 
 class _StubProvider(SearchEngine, FetchEngine):
     code = "stub"
-    enabled_field = "tavily_gateway_enabled"  # доступность берётся из core_connectors
+
+    async def available(self) -> bool:
+        """У заглушки нет записи доступа в core_connectors — считаем её готовой."""
+        return True
 
     def __init__(self, *, results=None, error=None, pages=None, pages_per_request=20) -> None:
         self._results = results or []
@@ -142,9 +145,12 @@ async def test_search_disabled_provider_errors_before_network(db, use_stub, monk
         called = True
         return []
 
+    async def _not_ready() -> bool:
+        return False
+
     stub = use_stub(_StubProvider(results=[]))
     monkeypatch.setattr(stub, "search", _fail)
-    monkeypatch.setattr(base, "service_enabled", lambda field: False)  # шлюз выключен
+    monkeypatch.setattr(stub, "available", _not_ready)  # доступ не готов
 
     query = await Searcher.search("q")
 
@@ -224,3 +230,31 @@ async def test_submit_returns_pending_then_runs_in_background(db, use_stub):
     page = await page_crud.page_get_by_code(page_code("https://ok.com/a"))
     assert page.status == FETCH_STATUS_DONE
     assert page.body == "# body"
+
+
+@pytest.mark.db
+async def test_real_engine_without_an_access_record_errors_before_network(db):
+    """Сквозная привязка к core_connectors, без заглушки в середине.
+
+    Движок `tavily` — настоящий, из реестра; записи доступа к нему нет, поэтому прогон
+    обязан упереться в это до сети. Прежде такой запрос уходил в httpx и возвращался
+    невнятным сбоем сервиса.
+    """
+    query = await Searcher.search("q", search_engine="tavily", fetch_engine="tavily")
+
+    assert query.status == SEARCH_STATUS_ERROR
+    assert query.error == "search_engine_disabled"
+
+
+@pytest.mark.db
+async def test_a_ready_access_record_makes_the_engine_available(db):
+    from src.modules.core_connectors import service as connectors_service
+    from src.modules.web_search.providers import search_engines
+
+    assert await search_engines.is_available("tavily") is False
+
+    row = await connectors_service.create_access(connector="tavily", values={"api_key": "k"})
+    assert await search_engines.is_available("tavily") is True
+
+    await connectors_service.update_access(row.id, enabled=False)
+    assert await search_engines.is_available("tavily") is False

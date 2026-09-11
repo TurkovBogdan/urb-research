@@ -5,6 +5,8 @@ import { useI18n } from 'vue-i18n'
 
 import PageLayout from '@/layout/templates/PageLayout.vue'
 import PageHeader from '@/layout/components/PageHeader.vue'
+import SectionError from '@/components/SectionError.vue'
+import SectionHeader from '@/components/SectionHeader.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { fmtDateTime } from '@/shared/utils/date'
 
@@ -51,9 +53,7 @@ watch(
       back-to="/web-search/queries"
     />
 
-    <VAlert v-if="store.error" type="error" variant="tonal" class="mb-3">
-      {{ store.error }}
-    </VAlert>
+    <SectionError v-if="store.error" :error="store.error" />
 
     <template v-if="store.query">
       <VCard variant="outlined" rounded="lg" class="mb-3">
@@ -74,10 +74,7 @@ watch(
         </VCardText>
       </VCard>
 
-      <h2 class="section-title">
-        {{ t('web_search.query.detail.results') }}
-        <span class="count">{{ store.results.length }}</span>
-      </h2>
+      <SectionHeader :title="t('web_search.query.detail.results')" :count="store.results.length" />
 
       <VCard v-if="store.results.length" variant="outlined" rounded="lg">
         <VList lines="two" class="result-list">
@@ -143,20 +140,6 @@ watch(
   overflow-x: auto;
 }
 
-.section-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  margin: 4px 0 10px;
-}
-
-.section-title .count {
-  font-size: 12px;
-  color: var(--text-faint);
-  font-weight: 500;
-}
 
 .result-item {
   cursor: pointer;

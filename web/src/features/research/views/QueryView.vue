@@ -1,57 +1,59 @@
 <script setup lang="ts">
-import { onActivated, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { IconExternalLink } from '@tabler/icons-vue'
 
-import PageLayout from '@/layout/templates/PageLayout.vue'
-import PageHeader from '@/layout/components/PageHeader.vue'
+import DetailHead from '@/layout/components/DetailHead.vue'
+import { useDetailRail } from '@/layout/detailRail'
+import SectionError from '@/components/SectionError.vue'
+import SectionHeader from '@/components/SectionHeader.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 
 import { useQueryDetailStore } from '../stores/query-detail.store'
+import { useDetailReload } from '../useDetailReload'
 import { SOURCE_STATUS_COLOR } from '../labels'
 
 const { t } = useI18n()
-const route = useRoute()
 const router = useRouter()
 const store = useQueryDetailStore()
+const { reload } = useDetailReload(store.load)
+
+// Поиск принадлежит зоне: на уровень выше — она. Выше зоны лежит исследование, но туда ведёт уже
+// её собственная кнопка — путь наверх проходится по одному уровню за нажатие.
+const parentPath = computed(() =>
+  store.query ? `/research/areas/${store.query.area_code}` : '/research/researches',
+)
+
+const parentLabel = computed(() =>
+  store.query ? t('research.back.area') : t('research.back.researches'),
+)
 
 function openSource(code: string) {
   router.push(`/research/sources/${code}`)
 }
 
-// KeepAlive-safe reload (see ResearchView).
-function reload() {
-  const code = route.params.code
-  if (typeof code === 'string' && code) store.load(code)
-}
-onActivated(reload)
-watch(() => route.params.code, reload)
+// Колонку рисует общая рамка деталок — страница её только заполняет. Ни поиска, ни оглавления
+// у поиска нет: на странице один раздел, и искать в списке ссылок нечего.
+useDetailRail(() => ({
+  parent: parentPath.value,
+  label: parentLabel.value,
+  code: store.query?.code ?? '',
+}))
 </script>
 
 <template>
-  <PageLayout>
-    <PageHeader
-      :title="t('research.query.detail.title')"
-      :loading="store.loading"
-      back-to="/research/researches"
-    />
-
-    <VAlert v-if="store.error" type="error" variant="tonal" class="mb-3">
-      {{ store.error }}
-    </VAlert>
+  <div>
+    <SectionError v-if="store.error" :error="store.error" />
 
     <template v-if="store.query">
-      <VCard variant="outlined" rounded="lg" class="mb-4">
-        <VCardText>
-          <div class="query-text">{{ store.query.query }}</div>
-        </VCardText>
-      </VCard>
+      <!-- Имя поиска — сам запрос: другого у него нет, и в карточке он читался бы вложением,
+           а не заголовком страницы. -->
+      <DetailHead :code="store.query.code" :loading="store.loading" @refresh="reload">
+        <h1 class="query-text">{{ store.query.query }}</h1>
+      </DetailHead>
 
-      <h2 class="section-title">
-        {{ t('research.query.detail.sources') }}
-        <span class="count">{{ store.documents.length }}</span>
-      </h2>
+      <SectionHeader :title="t('research.query.detail.sources')" :count="store.documents.length" />
 
       <VCard v-if="store.documents.length" variant="outlined" rounded="lg">
         <VList lines="two" class="doc-list">
@@ -97,30 +99,18 @@ watch(() => route.params.code, reload)
         </VCardText>
       </VCard>
     </template>
-  </PageLayout>
+  </div>
 </template>
 
 <style scoped>
 .query-text {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
-  color: var(--text);
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  text-wrap: pretty;
 }
 
-.section-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  margin: 4px 0 10px;
-}
-
-.section-title .count {
-  font-size: 12px;
-  color: var(--text-faint);
-  font-weight: 500;
-}
 
 .doc-item {
   cursor: pointer;

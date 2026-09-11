@@ -1,13 +1,15 @@
 """Реестры движков: по классу на роль — поиск и получение контента.
 
-Две роли — два реестра (провайдер, умеющий обе, регистрируется в обоих). Реестр учитывает
-доступность провайдера через ``core_connectors``: ``available_codes()``/``is_available(code)``
-опираются на ``available()`` движка (коннектор можно выключить в настройках). Активный движок
-берёт синхронный сервис поиска: ``search_engines.get(code)`` / ``fetch_engines.get(code)``.
+Две роли — два реестра (провайдер, умеющий обе, регистрируется в обоих). Доступность
+провайдера — вопрос к модулю доступов: ``available_codes()``/``is_available(code)`` идут в
+``core_connectors`` за готовностью записи, поэтому они асинхронные (запись живёт в базе).
+Активный движок берёт синхронный сервис поиска: ``search_engines.get(code)`` /
+``fetch_engines.get(code)``.
 """
 
 from __future__ import annotations
 
+import asyncio
 from typing import ClassVar, Generic, TypeVar
 
 from src.modules.web_search.providers.base import FetchEngine, SearchEngine
@@ -37,13 +39,15 @@ class EngineRegistry(Generic[E]):
         """Все зарегистрированные коды (без учёта доступности)."""
         return sorted(self._engines)
 
-    def available_codes(self) -> list[str]:
-        """Коды провайдеров, чей коннектор ``core_connectors`` включён."""
-        return sorted(code for code, engine in self._engines.items() if engine.available())
+    async def available_codes(self) -> list[str]:
+        """Коды провайдеров, чья запись доступа в ``core_connectors`` готова к работе."""
+        codes = self.codes()
+        ready = await asyncio.gather(*(self._engines[code].available() for code in codes))
+        return [code for code, is_ready in zip(codes, ready) if is_ready]
 
-    def is_available(self, code: str) -> bool:
-        """Доступен ли провайдер ``code`` (его коннектор включён в настройках)."""
-        return self.get(code).available()
+    async def is_available(self, code: str) -> bool:
+        """Доступен ли провайдер ``code`` (его запись доступа готова)."""
+        return await self.get(code).available()
 
 
 class SearchEngineRegistry(EngineRegistry[SearchEngine]):

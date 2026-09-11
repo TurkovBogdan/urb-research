@@ -1,21 +1,27 @@
-"""Раздел «Сервисы» — HTTP-эндпойнт коннекторов (паспорт + баланс).
+"""``GET /connectors`` — паспорта зарегистрированных коннекторов и справочник их групп.
 
-Один маршрут ``GET /connectors``: паспорт каждого коннектора + баланс (снимается вживую у
-включённых, умеющих его; сбой одного → ``error`` в его DTO). Корень ``/connectors`` прописан
-в пути (агрегатор включает роутер без prefix). Зона internal в чистом ядре = ``allow_all``.
+Что вообще можно настроить в этой установке: код сервиса, имя, группа, владелец регистрации,
+умеет ли баланс и из каких полей состоит доступ. Значений и балансов тут нет — они
+принадлежат записям (``/accesses``). Реестр читается лениво, в момент запроса: чужой
+модуль мог зарегистрировать свой коннектор уже после сборки.
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter
 
-from src.modules.core_connectors.registry import connectors_registry
-from src.modules.core_connectors.services.dto import ConnectorView
+from src.modules.core_connectors import service
+from src.modules.core_connectors.connectors.groups import ConnectorGroup
+from src.modules.core_connectors.connectors.passport import ConnectorPassport
 
 router = APIRouter()
 
 
-@router.get("/connectors", response_model=list[ConnectorView])
-async def list_connectors() -> list[ConnectorView]:
-    """Паспорт + баланс по всем коннекторам (баланс — вживую у включённых)."""
-    return await connectors_registry.connectors(with_balance=True)
+@router.get("/connectors", response_model=list[ConnectorPassport])
+async def list_connectors() -> list[ConnectorPassport]:
+    return service.passports()
+
+
+@router.get("/connectors/groups", response_model=list[ConnectorGroup])
+async def list_connector_groups() -> list[ConnectorGroup]:
+    return service.connector_groups()

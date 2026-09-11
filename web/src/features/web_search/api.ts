@@ -126,8 +126,10 @@ export interface EnginesInfo {
 
 // Запуск поиска — fire-and-forget: бэк ставит прогон в фон и сразу отдаёт pending-запрос
 // (клиент не ждёт; прогресс виден по обновлению списка pending→processing→done).
+// `report: false` — отказ показывает сама форма, рядом с кнопкой и с сохранённым вводом;
+// тост поверх открытого окна повторял бы ту же новость вторым способом.
 export async function createQuery(body: CreateQueryBody): Promise<QueryRow> {
-  return internalApi.post<QueryRow>(`${BASE}/queries`, body)
+  return internalApi.post<QueryRow>(`${BASE}/queries`, body, { report: false })
 }
 
 // Доступные движки по ролям (включённые в core_connectors) + дефолты — для формы создания.

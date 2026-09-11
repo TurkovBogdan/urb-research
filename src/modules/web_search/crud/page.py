@@ -14,7 +14,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.sql.selectable import Select
 
-from src.core.database import session_scope
+from src.core.database import session_scope, write_scope
 from src.core.utils.date import utc_now
 from src.core.utils.hashing import text_hash
 from src.modules.web_search.constants import (
@@ -53,7 +53,7 @@ async def page_upsert(url: str, *, title: str | None = None) -> WebSearchPage:
     normalized = normalize_url(url)
     code = page_code(url)
     now = utc_now()
-    async with session_scope() as s:
+    async with write_scope() as s:
         dialect = s.bind.dialect.name if s.bind else "postgresql"
         insert = sqlite_insert if dialect == "sqlite" else pg_insert
         stmt = (
@@ -83,6 +83,18 @@ async def page_get_by_code(code: str) -> WebSearchPage | None:
         ).scalar_one_or_none()
 
 
+async def pages_by_codes(codes: list[str]) -> list[WebSearchPage]:
+    """Страницы по списку кодов (повтор получения контента); порядок не гарантирован."""
+    if not codes:
+        return []
+    async with session_scope() as s:
+        return list(
+            (await s.execute(select(WebSearchPage).where(WebSearchPage.code.in_(codes))))
+            .scalars()
+            .all()
+        )
+
+
 async def pages_mark_processing(codes: list[str], *, fetch_engine: str) -> None:
     """Пометить страницы ``processing`` перед получением контента (батч).
 
@@ -97,7 +109,7 @@ async def pages_mark_processing(codes: list[str], *, fetch_engine: str) -> None:
         .where(WebSearchPage.code.in_(codes))
         .values(status=FETCH_STATUS_PROCESSING, fetch_engine=fetch_engine, updated_at=now)
     )
-    async with session_scope() as s:
+    async with write_scope() as s:
         await s.execute(stmt)
 
 
@@ -117,7 +129,7 @@ async def page_set_body(code: str, *, body: str) -> WebSearchPage | None:
         )
         .returning(WebSearchPage)
     )
-    async with session_scope() as s:
+    async with write_scope() as s:
         return (await s.execute(stmt)).scalars().first()
 
 
@@ -130,7 +142,7 @@ async def page_set_error(code: str, *, error: str | None = None) -> WebSearchPag
         .values(status=FETCH_STATUS_ERROR, error=error, updated_at=now)
         .returning(WebSearchPage)
     )
-    async with session_scope() as s:
+    async with write_scope() as s:
         return (await s.execute(stmt)).scalars().first()
 
 
@@ -203,6 +215,7 @@ async def page_count(
 __all__ = [
     "page_upsert",
     "page_get_by_code",
+    "pages_by_codes",
     "pages_mark_processing",
     "page_set_body",
     "page_set_error",

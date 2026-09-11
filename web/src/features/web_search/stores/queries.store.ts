@@ -1,6 +1,8 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
+import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
+
 import {
   createQuery,
   listEngines,
@@ -21,12 +23,14 @@ export const useQueriesStore = defineStore('web_search-queries', () => {
   const sortBy = ref('created_at')
   const sortDir = ref<SortDir>('desc')
   const page = ref(1)
-  const pageSize = ref(50)
+  const pageSize = ref(DEFAULT_PAGE_SIZE)
 
   const items = ref<QueryRow[]>([])
   const total = ref(0)
   const loading = ref(false)
-  const error = ref<string | null>(null)
+  // Держим сам отказ, а не его текст: показ (`SectionError`) отличает «сущности нет» от сбоя
+  // по статусу ответа, а формулировку берёт из `errorText`.
+  const error = ref<unknown>(null)
 
   // Движки для формы создания (грузятся один раз): доступные коды по ролям + дефолты.
   const engines = ref<{
@@ -58,7 +62,7 @@ export const useQueriesStore = defineStore('web_search-queries', () => {
       items.value = res.items
       total.value = res.total
     } catch (e) {
-      error.value = e instanceof Error ? e.message : String(e)
+      error.value = e
     } finally {
       loading.value = false
     }

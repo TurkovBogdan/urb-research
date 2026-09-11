@@ -2,6 +2,7 @@
 import { computed, watch } from 'vue'
 
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
+import { REF_CODE, type HeadingAnchor } from '@/components/markdown/render'
 import { useReferencesStore } from '../stores/references.store'
 
 // Тело исследования/области/заметки: markdown + разрешение ссылок-кодов (TYPE@hash) в
@@ -9,13 +10,15 @@ import { useReferencesStore } from '../stores/references.store'
 // карту в рендерер (пилюля ссылки покажет заголовок вместо короткого хеша).
 const props = defineProps<{ text: string }>()
 
-const store = useReferencesStore()
+// Оглавление тела пробрасывается наверх как есть: странице оно нужно для боковой навигации,
+// а этот слой про ссылки-коды, не про заголовки.
+const emit = defineEmits<{ headings: [items: HeadingAnchor[]] }>()
 
-const REF_RE = /(?:RESEARCH|AREA|NOTE|QUERY|SOURCE)@[0-9a-f]{22}(?![0-9a-f])/g
+const store = useReferencesStore()
 
 const codes = computed(() => {
   const found = new Set<string>()
-  for (const m of props.text.matchAll(REF_RE)) found.add(m[0])
+  for (const m of props.text.matchAll(REF_CODE)) found.add(m[0])
   return [...found]
 })
 
@@ -38,5 +41,10 @@ const refLabels = computed<Record<string, string>>(() => {
 </script>
 
 <template>
-  <MarkdownRenderer :text="props.text" :ref-labels="refLabels" />
+  <MarkdownRenderer
+    heavy
+    :text="props.text"
+    :ref-labels="refLabels"
+    @headings="emit('headings', $event)"
+  />
 </template>

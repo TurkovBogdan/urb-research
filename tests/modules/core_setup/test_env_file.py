@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from types import SimpleNamespace
 
 import pytest
@@ -13,6 +14,7 @@ from src.modules.core_setup.keys import FIELDS
 def _fake_config(**over) -> SimpleNamespace:
     """Config-стенд: атрибут на каждый ENV-ключ формы (ключ в нижнем регистре)."""
     values = {f.key.lower(): "" for f in FIELDS}
+    values.update({s.key.lower(): "" for s in env_file.SECRETS})
     values.update(over)
     return SimpleNamespace(**values)
 
@@ -65,14 +67,14 @@ def test_seed_creates_env_with_defaults_when_absent(tmp_path, monkeypatch):
     created = env_file.seed_defaults_if_absent(config)
 
     assert created is True
-    values = env_file.read_values([f.key for f in FIELDS] + ["MCP_TOKEN"])
+    values = env_file.read_values([f.key for f in FIELDS])
     assert {f.key for f in FIELDS} <= set(values)  # все поля формы записаны
     assert values["DB_PROVIDER"] == "sqlite"
     assert values["DB_SSL"] == "true"  # bool → true/false
     assert values["SERVER_PORT"] == "13410"  # int → строка
     assert values["SERVER_VITE_PORT"] == ""  # None → пусто
     assert values["WORKER_ENABLED"] == "false"
-    assert len(values["MCP_TOKEN"]) >= 32  # сгенерирован bearer MCP-серверов
+    assert path.stat().st_mode & 0o777 == 0o600  # в файле секреты — читает только владелец
 
 
 @pytest.mark.pure
@@ -85,3 +87,138 @@ def test_seed_is_noop_when_env_exists(tmp_path, monkeypatch):
 
     assert created is False
     assert path.read_text(encoding="utf-8") == "DB_PROVIDER=postgres\n"  # не тронут
+
+
+@pytest.mark.pure
+def test_a_key_added_after_the_file_was_written_is_topped_up(tmp_path, monkeypatch):
+    """Ключ, появившийся в новой версии, иначе не доезжает ни до одной живой установки:
+    `seed_defaults_if_absent` пишет только отсутствующий файл (так было с UPDATE_BRANCH)."""
+    path = tmp_path / ".env"
+    path.write_text("# оператор правил руками\nDB_PROVIDER=postgres\n", encoding="utf-8")
+    monkeypatch.setattr(env_file, "env_path", lambda: path)
+
+    added = env_file.ensure_keys_present(_fake_config(update_branch="main"))
+
+    assert "UPDATE_BRANCH" in added
+    assert "DB_PROVIDER" not in added
+    text = path.read_text(encoding="utf-8")
+    assert "UPDATE_BRANCH=main" in text
+    assert "DB_PROVIDER=postgres" in text  # существующее значение не тронуто
+    assert "# оператор правил руками" in text
+    assert "# Ветка обновления" in text  # ключ объяснён, а не свалился строкой
+
+
+@pytest.mark.pure
+def test_topping_up_is_idempotent_and_never_touches_a_full_file(tmp_path, monkeypatch):
+    path = tmp_path / ".env"
+    monkeypatch.setattr(env_file, "env_path", lambda: path)
+    env_file.seed_defaults_if_absent(_fake_config(update_branch="dev"))
+    before = path.read_text(encoding="utf-8")
+
+    assert env_file.ensure_keys_present(_fake_config(update_branch="main")) == []
+    assert path.read_text(encoding="utf-8") == before
+
+
+@pytest.mark.pure
+def test_topping_up_does_not_create_a_missing_file(tmp_path, monkeypatch):
+    """Создание файла — дело `seed_defaults_if_absent`; здесь только уже живая установка."""
+    path = tmp_path / ".env"
+    monkeypatch.setattr(env_file, "env_path", lambda: path)
+
+    assert env_file.ensure_keys_present(_fake_config()) == []
+    assert path.exists() is False
+
+
+@pytest.fixture
+def env(tmp_path, monkeypatch):
+    """`.env` во временном каталоге + гарантия, что секреты не утекут в окружение теста.
+
+    ``setenv`` до вызова кода: monkeypatch запоминает исходное состояние переменной и
+    вернёт его на выходе, даже если код перезапишет её напрямую через ``os.environ``.
+    """
+    path = tmp_path / ".env"
+    path.write_text("DB_PROVIDER=sqlite\n", encoding="utf-8")
+    monkeypatch.setattr(env_file, "env_path", lambda: path)
+    for secret in env_file.SECRETS:
+        monkeypatch.setenv(secret.key, "")
+    return path
+
+
+@pytest.mark.pure
+def test_missing_secrets_are_generated_into_an_existing_env(env):
+    generated = env_file.ensure_generated(_fake_config())
+
+    assert set(generated) == {s.key for s in env_file.SECRETS}
+    values = env_file.read_values(generated)
+    assert all(values[key] for key in generated)
+    text = env.read_text(encoding="utf-8")
+    assert "DB_PROVIDER=sqlite" in text  # существующий файл не переписан
+    assert "# Мастер-ключ шифрования" in text  # ключ объяснён, а не свалился строкой
+    assert env.stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.pure
+def test_a_generated_secret_is_taken_into_use_right_away(env):
+    env_file.ensure_generated(_fake_config())
+
+    # Записали → приняли: процесс, который его выписал, шифрует уже этим ключом
+    assert os.environ["SECRETS_KEY"] == env_file.read_values(["SECRETS_KEY"])["SECRETS_KEY"]
+
+
+@pytest.mark.pure
+def test_an_existing_value_is_never_overwritten(env):
+    generated = env_file.ensure_generated(_fake_config(secrets_key="ключ-оператора"))
+
+    assert "SECRETS_KEY" not in generated
+    assert "SECRETS_KEY" not in env_file.read_values(["SECRETS_KEY"])
+
+
+@pytest.mark.pure
+def test_generation_is_idempotent(env):
+    first = env_file.ensure_generated(_fake_config())
+    value = env_file.read_values(["SECRETS_KEY"])["SECRETS_KEY"]
+
+    second = env_file.ensure_generated(_fake_config(secrets_key=value))
+
+    assert first and second == []
+    assert env_file.read_values(["SECRETS_KEY"])["SECRETS_KEY"] == value
+
+
+@pytest.mark.pure
+def test_a_key_written_by_a_neighbour_process_is_adopted_not_regenerated(env):
+    # Config пуст (прочитан до соседа), но в файле ключ уже есть — генерировать нельзя,
+    # иначе двое зашифруют разными ключами, а в файле останется один
+    env.write_text(env.read_text(encoding="utf-8") + "SECRETS_KEY=сосед\n", encoding="utf-8")
+
+    generated = env_file.ensure_generated(_fake_config())
+
+    assert "SECRETS_KEY" not in generated
+    assert env_file.read_values(["SECRETS_KEY"])["SECRETS_KEY"] == "сосед"
+
+
+@pytest.mark.pure
+def test_a_key_that_could_not_be_written_is_not_taken_into_use(env, monkeypatch):
+    def _fail(*_args, **_kwargs):
+        raise OSError("read-only file system")
+
+    monkeypatch.setattr(env_file, "write_values", _fail)
+
+    generated = env_file.ensure_generated(_fake_config())
+
+    # Ключ только в памяти зашифровал бы записи так, что после перезапуска их не прочесть
+    assert generated == []
+    assert os.environ["SECRETS_KEY"] == ""
+
+
+@pytest.mark.pure
+def test_the_generated_master_key_is_accepted_by_the_encryption_layer(env, monkeypatch):
+    from src.core.config import get_config
+    from src.modules.core_connectors.access import crypto
+
+    env_file.ensure_generated(_fake_config())
+    get_config.cache_clear()
+
+    # Формат ключа объявлен в двух модулях; тест держит их вместе
+    assert crypto.encryption_enabled() is True
+    wrapped, version = crypto.new_data_key()
+    assert crypto.unwrap_data_key(wrapped, version)

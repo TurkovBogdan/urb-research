@@ -7,9 +7,11 @@ import {
   IconPageBreak, IconTable, IconTableRow, IconLayoutBottombar, IconCode, IconMarkdown,
   IconMessage2, IconCalendarTime, IconSeparator, IconWorld, IconChartLine,
   IconBoxMultiple, IconChartBar, IconChartPie, IconLayoutCards, IconDeviceMobile,
-  IconAlertTriangle, IconLayoutKanban, IconArrowsHorizontal, IconTags,
+  IconAlertTriangle, IconBellRinging, IconInfoCircle, IconLayoutKanban, IconArrowsHorizontal, IconTags,
   IconLayoutBottombarExpand, IconToggleLeft, IconPaperclip,
-  IconMessages, IconMail, IconChevronDown, IconUsersGroup,
+  IconMessages, IconMail, IconChevronDown, IconUsersGroup, IconMoodSmile,
+  IconMoodSad, IconHeading, IconPalette, IconBrush, IconLayoutList, IconLayoutNavbar,
+  IconSearch, IconFileText, IconFolders, IconLayoutSidebar,
 } from '@tabler/icons-vue'
 import type { TablerIcon } from '@/shared/nav'
 import PageLayout from '@/layout/templates/PageLayout.vue'
@@ -44,19 +46,23 @@ const groups: Group[] = [
       { slug: 'button-group', icon: IconLayoutColumns },
       { slug: 'selects',      icon: IconSelector },
       { slug: 'inputs',       icon: IconForms },
+      { slug: 'search-field', icon: IconSearch },
       { slug: 'numbers',      icon: IconCurrencyRubel },
       { slug: 'toggle',       icon: IconToggleRight },
       { slug: 'sliders',      icon: IconAdjustmentsHorizontal },
       { slug: 'date-pickers', icon: IconCalendarTime },
+      { slug: 'icon-picker',  icon: IconMoodSmile },
+      { slug: 'color-picker', icon: IconPalette },
+      { slug: 'icon-color-picker', icon: IconBrush },
     ],
   },
   {
-    key: 'data',
+    key: 'tables',
     pages: [
+      { slug: 'table-page',  icon: IconLayoutList },
       { slug: 'data-table',  icon: IconTable },
       { slug: 'table',       icon: IconTableRow },
       { slug: 'pagination',  icon: IconPageBreak },
-      { slug: 'world-map',   icon: IconWorld },
     ],
   },
   {
@@ -65,12 +71,16 @@ const groups: Group[] = [
       { slug: 'line-chart', icon: IconChartLine },
       { slug: 'bar-chart',  icon: IconChartBar },
       { slug: 'pie-chart',  icon: IconChartPie },
+      { slug: 'world-map',  icon: IconWorld },
     ],
   },
   {
     key: 'feedback',
     pages: [
       { slug: 'alerts',       icon: IconAlertTriangle },
+      { slug: 'toasts',       icon: IconBellRinging },
+      { slug: 'callout',      icon: IconInfoCircle },
+      { slug: 'error-states', icon: IconMoodSad },
       { slug: 'loaders',      icon: IconLoader2 },
       { slug: 'skeleton',     icon: IconBoxMultiple },
       { slug: 'status-badge', icon: IconCircleDot },
@@ -97,6 +107,9 @@ const groups: Group[] = [
       { slug: 'file-cards',   icon: IconPaperclip },
       { slug: 'spoiler',      icon: IconChevronDown },
       { slug: 'members-cell', icon: IconUsersGroup },
+      { slug: 'page-header', icon: IconLayoutNavbar },
+      { slug: 'detail-nav', icon: IconLayoutSidebar },
+      { slug: 'section-header', icon: IconHeading },
     ],
   },
   {
@@ -104,6 +117,15 @@ const groups: Group[] = [
     pages: [
       { slug: 'kanban',        icon: IconLayoutKanban },
       { slug: 'edge-scroller', icon: IconArrowsHorizontal },
+    ],
+  },
+  // Проектные — то, что живёт в `features/` и знает про домен (исследования, полки). Остальные
+  // разделы держат кирпичи, которые можно унести в любой проект; эти — нет.
+  {
+    key: 'project',
+    pages: [
+      { slug: 'research-card', icon: IconFileText },
+      { slug: 'group-select',  icon: IconFolders },
     ],
   },
 ]
