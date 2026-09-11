@@ -22,6 +22,11 @@ import {
   fontStack,
 } from '@/constants/fonts'
 import {
+  DEFAULT_CODE_VARIANT,
+  codeVariant,
+  type CodeVariant,
+} from '@/constants/code'
+import {
   DEFAULT_DIAGRAM_ALIGN,
   DEFAULT_DIAGRAM_HEIGHT,
   type DiagramAlign,
@@ -114,7 +119,15 @@ export const useSettingsStore = defineStore('settings', () => {
     headingWeight: synced('interface_font_heading_weight', DEFAULT_HEADING_WEIGHT, intCodec),
     readingMeasure: synced('interface_font_reading_measure', DEFAULT_READING_MEASURE, intCodec),
     monoFont: synced('interface_font_mono', DEFAULT_MONO_FONT, strCodec),
+    // Вид блока чинится на чтении: испорченный ключ иначе разъехался бы по всем блокам тела.
+    codeVariant: synced<CodeVariant>('interface_code_variant', DEFAULT_CODE_VARIANT, {
+      parse: codeVariant,
+      serialize: (v) => v,
+    }),
     codeSize: synced('interface_font_code_size', DEFAULT_CODE_SIZE, intCodec),
+    // Нумерация строк в блоке кода: выбор задаёт, с чем блок открывается. Кнопка в шапке самого
+    // блока остаётся — она гасит или зажигает номера в одном листинге, не трогая настройку.
+    codeLineNumbers: synced('interface_code_line_numbers', true, boolCodec),
   })
 
   // Оформление схем — свой узел, а не часть типографики: токенами оно не раздаётся, его читает

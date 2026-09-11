@@ -4,9 +4,11 @@ import { useRouter } from 'vue-router'
 import CodeBlock from './CodeBlock.vue'
 import DiagramBlock from './DiagramBlock.vue'
 import { useAfterRouteTransition } from '@/composables/useRouteTransition'
+import { useSettingsStore } from '@/stores/settings'
 import { renderMarkdown, type HeadingAnchor } from './markdown/render'
 
 const router = useRouter()
+const settings = useSettingsStore()
 
 const props = defineProps<{
   text: string
@@ -84,9 +86,13 @@ function unmountCodeBlocks() {
   mountedSlots = []
 }
 
+// Повторный вызов на том же теле — не пересборка, а обновление: `render` в тот же слот с тем же
+// компонентом правит пропы, поэтому смена настройки нумерации доезжает до блоков без повторной
+// подсветки. Список слотов собирается заново, иначе на каждом вызове в нём копились бы дубли.
 function mountCodeBlocks() {
   const container = body.value
   if (!container) return
+  mountedSlots = []
   container.querySelectorAll<HTMLElement>('.md-code-slot').forEach((slot) => {
     const block = rendered.value.codeBlocks[Number(slot.dataset.codeIndex)]
     if (!block) return
@@ -94,12 +100,24 @@ function mountCodeBlocks() {
     const isOneLiner = !block.code.trim().includes('\n')
     const vnode = block.language === DIAGRAM_LANGUAGE
       ? h(DiagramBlock, { code })
-      : h(CodeBlock, { code, lang: block.language || undefined, variant: isOneLiner ? 'compact' : 'icon' })
+      : h(CodeBlock, {
+          code,
+          lang: block.language || undefined,
+          // Однострочник — командная плашка независимо от выбранного вида: он про содержимое,
+          // а не про оформление.
+          variant: isOneLiner ? 'compact' : settings.typography.codeVariant,
+          showLineNumbers: settings.typography.codeLineNumbers,
+        })
     vnode.appContext = appContext
     render(vnode, slot)
     mountedSlots.push(slot)
   })
 }
+
+watch(
+  () => [settings.typography.codeVariant, settings.typography.codeLineNumbers],
+  () => mountCodeBlocks(),
+)
 
 // v-html replaces the container's children, so the previous instances are unmounted first —
 // while their slots (detached by then or not) are still known here.

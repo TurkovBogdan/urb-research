@@ -71,6 +71,19 @@ def test_reading_weight_takes_the_css_ladder_by_hundreds():
     assert registry.rejection("interface_font_reading_weight", 350) == "значение вне набора допустимых"
 
 
+def test_code_variant_offers_the_three_chooseable_looks():
+    assert registry.SETTINGS["interface_code_variant"].default == "minimal"
+    assert registry.rejection("interface_code_variant", "minimal") is None
+    # `compact` — вид однострочника, он следует из содержимого и человеком не выбирается.
+    assert registry.rejection("interface_code_variant", "compact") == "значение вне набора допустимых"
+
+
+def test_code_line_numbers_is_a_switch_and_starts_on():
+    assert registry.SETTINGS["interface_code_line_numbers"].default is True
+    assert registry.rejection("interface_code_line_numbers", False) is None
+    assert registry.rejection("interface_code_line_numbers", 1) is not None
+
+
 def test_code_size_is_its_own_ladder_below_the_reading_one():
     assert registry.SETTINGS["interface_font_code_size"].default == 12
     assert registry.rejection("interface_font_code_size", 11) is None

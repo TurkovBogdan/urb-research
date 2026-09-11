@@ -49,6 +49,11 @@ async function copy() {
 }
 
 const resolvedVariant = () => props.variant ?? 'icon'
+
+// Однострочник рисуется командной плашкой, и нумеровать в нём нечего: единственная «1» слева
+// ничего не различает, а плашку сдвигает. Запрет живёт здесь, а не в месте применения: снаружи
+// про вид блока знать не обязаны — настройка нумерации общая на все блоки тела.
+const numbersShown = () => lineNumbers.value && resolvedVariant() !== 'compact'
 </script>
 
 <template>
@@ -102,7 +107,7 @@ const resolvedVariant = () => props.variant ?? 'icon'
 
     <div
       class="code-block__body"
-      :class="{ 'code-block__body--line-numbers': lineNumbers }"
+      :class="{ 'code-block__body--line-numbers': numbersShown() }"
       v-html="html"
     />
 

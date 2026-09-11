@@ -8,6 +8,7 @@ import SettingsGroup from '@/components/settings/SettingsGroup.vue'
 import SwitchPanel from '@/components/SwitchPanel.vue'
 import VSelectStepper from '@/components/VSelectStepper.vue'
 import { useSettingsStore } from '@/stores/settings'
+import { CODE_VARIANTS, type CodeVariantOption } from '@/constants/code'
 import {
   DIAGRAM_ALIGNS,
   DIAGRAM_HEIGHTS,
@@ -57,7 +58,7 @@ const PREVIEW = `# Заголовок первого уровня
 Второй абзац — чтобы стало видно расстояние между разделами и то, что отступ над заголовком
 заметно больше отступа под ним: заголовок принадлежит тексту, который идёт следом. Внутри
 строки встречаются \`inline-код\`, **жирное выделение**, *курсив* и [внешняя ссылка](https://example.com),
-а ещё пилюля ссылки на сущность — RESEARCH@ef8a7d2f258de68b188bda.
+а ещё пилюля ссылки на сущность — RESEARCH@ef8a7d2f25.
 
 ### Заголовок третьего уровня
 
@@ -106,6 +107,10 @@ function themeProps(option: ThemeOption) {
 }
 
 function alignProps(option: DiagramAlignOption) {
+  return { subtitle: option.note }
+}
+
+function variantProps(option: CodeVariantOption) {
   return { subtitle: option.note }
 }
 
@@ -309,6 +314,22 @@ const researchViewOptions = RESEARCH_LIST_VIEWS.map((view) => ({
         :description="t('settings.interface.group.code.description')"
       >
         <div class="setting">
+          <VSelect
+            v-model="settings.typography.codeVariant"
+            :items="CODE_VARIANTS"
+            item-title="label"
+            item-value="code"
+            :item-props="variantProps"
+            :chips="false"
+            :label="t('settings.interface.code.variant.label')"
+            variant="outlined"
+            density="comfortable"
+            hide-details="auto"
+          />
+          <p class="setting__desc">{{ t('settings.interface.code.variant.description') }}</p>
+        </div>
+
+        <div class="setting">
           <VSelectStepper
             v-model="settings.typography.monoFont"
             :items="MONO_FONTS"
@@ -336,6 +357,12 @@ const researchViewOptions = RESEARCH_LIST_VIEWS.map((view) => ({
           />
           <p class="setting__desc">{{ t('settings.interface.size.code.description') }}</p>
         </div>
+
+        <SwitchPanel
+          v-model="settings.typography.codeLineNumbers"
+          :title="t('settings.interface.code.line_numbers.label')"
+          :description="t('settings.interface.code.line_numbers.description')"
+        />
       </SettingsGroup>
 
       <VCard variant="outlined" rounded="lg">
