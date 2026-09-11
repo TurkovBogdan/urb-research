@@ -13,7 +13,7 @@ from src.core import scheduler
 from src.core.app_factory import create_app
 from src.core.app_path import project_root
 from src.core.config import Config
-from src.core.database import session_scope
+from src.core.database import close_database, create_all, init_database, session_scope
 from src.core.database.migrations import AlembicRunner
 from src.core.module import Module
 from src.core.router.degraded import PendingMigrationsGate, degraded_pending, mark_degraded
@@ -127,6 +127,31 @@ async def test_empty_base_applies_the_chain_and_serves(tmp_path: Path, started_s
         await engine.dispose()
     assert status.up_to_date
     assert status.current_heads
+
+
+@pytest.mark.db
+async def test_tables_without_a_version_row_degrade_instead_of_crashing(
+    tmp_path: Path, started_scheduler
+):
+    """База, собранная когда-то через ``create_all``: таблицы есть, ``alembic_version`` нет.
+    Цепочка падает на первом же ``CREATE TABLE`` — lifespan обязан выжить и деградировать."""
+    config = _file_db_config(tmp_path, worker_enabled=True)
+    engine = await init_database(config)
+    await create_all(engine)
+    await close_database()
+
+    app = create_app(modules=[AuthStubModule()], config=config)
+    async with app.router.lifespan_context(app):
+        pending = degraded_pending(app)
+        async with _client(app) as client:
+            health = await client.get("/internal/health")
+            page = await client.get("/research")
+
+    assert pending
+    assert health.status_code == 200
+    assert health.json() == {"status": "degraded", "pending": pending}
+    assert page.status_code == 503
+    assert started_scheduler == []
 
 
 @pytest.mark.db

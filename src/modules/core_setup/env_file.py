@@ -93,6 +93,35 @@ def seed_defaults_if_absent(config: Config) -> bool:
     return True
 
 
+def ensure_keys_present(config: Config) -> list[str]:
+    """Дописать в СУЩЕСТВУЮЩИЙ ``.env`` ключи формы, которых в нём ещё нет.
+
+    ``seed_defaults_if_absent`` пишет только файл, которого нет, поэтому ключ, появившийся
+    в новой версии (так пришёл ``UPDATE_BRANCH``), не доезжает ни до одной живой установки:
+    его нет ни в файле, ни на странице настроек, и поправить значение оператору негде.
+    Пишется ТЕКУЩЕЕ значение ``Config`` (дефолт кода, если ключ не задан больше нигде) —
+    поведение установки не меняется, меняется видимость. Возвращает добавленные ключи.
+    """
+    if not env_path().is_file():
+        return []
+    with _write_lock():
+        present = read_values(field.key for field in FIELDS)
+        missing = [field for field in FIELDS if field.key not in present]
+        if not missing:
+            return []
+        write_values(
+            {field.key: _config_default(field, config) for field in missing},
+            comments={field.key: _key_comment(field) for field in missing},
+        )
+        _restrict_access()
+    return [field.key for field in missing]
+
+
+def _key_comment(field: SetupField) -> str:
+    described = f"{field.label} — {field.description}" if field.description else field.label
+    return f"# {described}"
+
+
 def _assignment_key(line: str) -> str | None:
     """Ключ строки ``KEY=value`` (без коммента/пробелов); None — если это не присваивание."""
     match = re.match(r"\s*([A-Za-z_][A-Za-z0-9_]*)\s*=", line)
@@ -201,6 +230,7 @@ __all__ = [
     "GeneratedSecret",
     "env_path",
     "ensure_generated",
+    "ensure_keys_present",
     "read_values",
     "seed_defaults_if_absent",
     "write_values",

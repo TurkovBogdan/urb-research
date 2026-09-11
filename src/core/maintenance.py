@@ -1,16 +1,10 @@
 """Maintenance flag — «an update is in progress, do not launch anything».
 
-Stdlib only, on purpose: the flag is read before `Config()` is built and before any database
-import, and the updater raises it while the checkout under it is being rewritten.
-
-The file lives at `<project>/runtime/maintenance.json`, deliberately NOT under
-`runtime/<APP_ENV>/`: `resolve_runtime_root()` reads `APP_ENV` from the process environment
-(default `dev`) while `Config.app_env` defaults to `prod` and is never exported, so a writer and
-a reader would pick different roots and the flag would silently never be seen.
-
-Activity is a live pid, not a wall-clock TTL: a TTL alone expires the flag mid-`uv sync` on an NTP
-jump, and keeps the install down for an hour after a SIGKILL. The age bound is only a backstop
-against a pid that outlives its file.
+A JSON file at `<project>/runtime/maintenance.json`; active while its pid is a live updater and
+the file is younger than `MAX_AGE_SECONDS`. `begin` creates it exclusively (`MaintenanceHeld`
+when another updater got there first), `end` removes it. Stdlib only: the flag is read before
+`Config()` and before any database import. Why the path and the liveness rule are what they
+are: `AGENTS/docs/platform/update.md`.
 """
 
 from __future__ import annotations

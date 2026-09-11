@@ -1,21 +1,10 @@
-"""Which processes of THIS checkout an update must stop — selection first, killing second.
+"""Which processes of THIS checkout an update must stop, and stopping them.
 
-Selecting is the dangerous half, so it is a pure function over a process table: give it a list of
-`Process` records and it returns the `KillTarget`s it would act on, with the reason each matched.
-Nothing is signalled unless `terminate()` is called with `dry_run=False`.
-
-Why a loose pattern is not allowed (`pkill -f app.py` has taken down a session before):
-
-- the coding agent and the MCP stdio shims carry `src/app.py` *inside their own arguments*
-  (`--mcp-config`), so argv alone matches them;
-- a second install of this project runs the same file name, and its launcher argv may even hold an
-  absolute path to its own `src/app.py` — the working directory is what tells the installs apart;
-- a `--worker` binds no port, so a listener sweep cannot find it at all;
-- hot reload runs a supervisor that holds the socket and respawns its child, and that child's argv
-  (`--multiprocessing-fork`) names neither `app.py` nor a role — only the ppid chain finds it.
-
-Hence: entry-point token resolved against this checkout + `cwd` + an explicit veto on anything
-MCP- or agent-shaped, then descendants by ppid.
+`select_kill_targets` is a pure function over a process table (`Process` records in, `KillTarget`s
+out with the reason each matched); `plan_kill` runs it against `/proc`; `terminate` signals a plan
+and proves the processes are gone. Nothing is signalled unless `terminate(dry_run=False)` is
+called explicitly. Why the selection is this strict (cwd + resolved entry point + a veto on
+anything MCP- or agent-shaped, then descendants by ppid): `AGENTS/docs/platform/update.md`.
 """
 
 from __future__ import annotations
@@ -23,21 +12,32 @@ from __future__ import annotations
 import os
 import signal
 import time
-from collections.abc import Iterable, Sequence
+from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from src.core.app_path import project_root
+from src.core.update.errors import UpdateRefused
 
 VETO_ARGV_MARKERS = ("--mcp-", "claude")
 
-# `migrate` and `update` are the updater's own subprocesses, not the served install.
-NON_SERVICE_SUBCOMMANDS = frozenset({"migrate", "update"})
+# `migrate`, `backup` and `update` are the updater's own subprocesses, not the served install.
+NON_SERVICE_SUBCOMMANDS = frozenset({"migrate", "backup", "update"})
 
 MATCH_LAUNCHER = "launcher"
 MATCH_DESCENDANT = "descendant"
 
 TERM_GRACE_SECONDS = 3.0
+KILL_GRACE_SECONDS = 3.0
+LIVENESS_POLL_SECONDS = 0.2
+
+# A reaped-but-unreported process still shows up in `/proc`; it holds nothing open and writes
+# nothing, so for this module it is dead.
+ZOMBIE_STATE = "Z"
+
+
+class ProcessesSurvived(UpdateRefused):
+    """Something this checkout runs is still alive after TERM and KILL."""
 
 
 @dataclass(frozen=True)
@@ -91,17 +91,23 @@ def select_kill_targets(
     checkout: Path,
     own_pid: int,
     own_process_group: int,
+    own_ancestors: Collection[int] = (),
 ) -> list[KillTarget]:
     """Launchers of `checkout/src/app.py` (plus `uvicorn src.apps…`) and their descendants.
 
     The veto applies to descendants too: a shim or an agent session that happens to sit under a
     matched process is still never a target.
+
+    `own_ancestors` is what makes the self-protection hold under `uv run`, which puts the updater
+    in a NEW process group: the group rule then covers only the updater's own children, so the
+    chain up to the invoking shell is excluded by pid instead.
     """
 
     def is_protected(process: Process) -> bool:
         return (
             process.pid == own_pid
             or process.pgid == own_process_group
+            or process.pid in own_ancestors
             or _argv_is_vetoed(process.argv)
         )
 
@@ -125,33 +131,72 @@ def select_kill_targets(
 def plan_kill(checkout: Path | None = None) -> KillPlan:
     """The same selection against the live `/proc` table. Reads only; signals nothing."""
     root = Path(checkout).resolve() if checkout is not None else project_root()
+    processes = read_process_table()
     return KillPlan(
         checkout=root,
         targets=select_kill_targets(
-            read_process_table(),
+            processes,
             checkout=root,
             own_pid=os.getpid(),
             own_process_group=os.getpgrp(),
+            own_ancestors=ancestor_pids(processes, os.getpid()),
         ),
     )
 
 
-def terminate(plan: KillPlan, *, dry_run: bool = True, grace_seconds: float = TERM_GRACE_SECONDS) -> list[int]:
-    """TERM the plan, wait out the grace period, KILL whatever is left. Returns signalled pids.
+def terminate(
+    plan: KillPlan, *, dry_run: bool = True, grace_seconds: float = TERM_GRACE_SECONDS
+) -> list[int]:
+    """TERM the plan, wait out the grace period, KILL the remainder, then prove they are gone.
 
     Signals are sent ONLY when `dry_run=False` is passed explicitly — the default of this function
     is deliberately harmless, because the cost of a mis-selection here is someone else's install.
+
+    Nothing here trusts a return code: `os.kill` succeeds against a process that ignores TERM, and
+    a refused signal is not a dead process either. Liveness is what the caller needs, because a
+    survivor writes to the base while `migrate upgrade` rewrites its schema, and SQLite DDL is not
+    transactional across revisions.
     """
     if dry_run:
         return []
 
-    signalled = [pid for pid in plan.pids if _signal(pid, signal.SIGTERM)]
-    if not signalled:
-        return []
-    time.sleep(grace_seconds)
-    for pid in signalled:
+    for pid in plan.pids:
+        _signal(pid, signal.SIGTERM)
+    survivors = _wait_for_exit(plan.pids, grace_seconds)
+    for pid in survivors:
         _signal(pid, signal.SIGKILL)
-    return signalled
+    stubborn = _wait_for_exit(survivors, KILL_GRACE_SECONDS)
+    if stubborn:
+        raise ProcessesSurvived(
+            "still alive after TERM and KILL: "
+            + ", ".join(str(pid) for pid in stubborn)
+            + " — the database stays untouched while anything can still write to it"
+        )
+    return list(plan.pids)
+
+
+def process_is_running(pid: int) -> bool:
+    """Alive in the only sense that matters here — a zombie holds nothing open."""
+    try:
+        stat_line = (Path("/proc") / str(pid) / "stat").read_text(
+            encoding="utf-8", errors="replace"
+        )
+    except OSError:
+        return False
+    try:
+        return parse_proc_state(stat_line) != ZOMBIE_STATE
+    except IndexError:
+        return False
+
+
+def _wait_for_exit(pids: Sequence[int], timeout: float) -> list[int]:
+    """The pids of `pids` still running when the timeout expires."""
+    deadline = time.monotonic() + timeout
+    alive = [pid for pid in pids if process_is_running(pid)]
+    while alive and time.monotonic() < deadline:
+        time.sleep(LIVENESS_POLL_SECONDS)
+        alive = [pid for pid in alive if process_is_running(pid)]
+    return alive
 
 
 def read_process_table() -> list[Process]:
@@ -160,13 +205,20 @@ def read_process_table() -> list[Process]:
 
 
 def parse_proc_stat(stat_line: str) -> tuple[int, int]:
-    """`(ppid, pgid)` from `/proc/<pid>/stat`.
+    """`(ppid, pgid)` from `/proc/<pid>/stat`."""
+    fields = _fields_after_comm(stat_line)
+    return int(fields[1]), int(fields[2])
 
-    The comm field is skipped by its LAST `)`: a process name may contain spaces and parentheses,
-    so splitting the line on whitespace shifts every field after it.
-    """
-    fields_after_comm = stat_line[stat_line.rfind(")") + 1:].split()
-    return int(fields_after_comm[1]), int(fields_after_comm[2])
+
+def parse_proc_state(stat_line: str) -> str:
+    """The one-letter run state from `/proc/<pid>/stat` (`R`, `S`, `Z`, …)."""
+    return _fields_after_comm(stat_line)[0]
+
+
+def _fields_after_comm(stat_line: str) -> list[str]:
+    """Everything past the comm field, which is skipped by its LAST `)`: a process name may
+    contain spaces and parentheses, so splitting the whole line shifts every field after it."""
+    return stat_line[stat_line.rfind(")") + 1:].split()
 
 
 def _serves_this_checkout(process: Process, checkout: Path) -> bool:
@@ -205,6 +257,17 @@ def _runs_uvicorn_app(argv: Sequence[str]) -> bool:
 
 def _argv_is_vetoed(argv: Iterable[str]) -> bool:
     return any(marker in token for token in argv for marker in VETO_ARGV_MARKERS)
+
+
+def ancestor_pids(processes: Sequence[Process], pid: int) -> set[int]:
+    """The chain of parents above `pid` — the updater's own launcher, shell and terminal."""
+    parent_by_pid = {process.pid: process.ppid for process in processes}
+    ancestors: set[int] = set()
+    parent = parent_by_pid.get(pid)
+    while parent is not None and parent not in ancestors:
+        ancestors.add(parent)
+        parent = parent_by_pid.get(parent)
+    return ancestors
 
 
 def _descendants(processes: Sequence[Process], ancestor_pid: int) -> list[Process]:
@@ -254,23 +317,36 @@ def _read_cwd(proc: Path) -> Path | None:
 
 
 def _signal(pid: int, sent: signal.Signals) -> bool:
+    """True when the signal was delivered or the process was already gone.
+
+    A refusal (another user's process) returns False and is otherwise silent on purpose: what the
+    caller acts on is whether the process is still running, not whether a signal was accepted.
+    """
     try:
         os.kill(pid, sent)
+    except ProcessLookupError:
+        return True
     except OSError:
         return False
     return True
 
 
 __all__ = [
+    "KILL_GRACE_SECONDS",
     "KillPlan",
     "KillTarget",
     "MATCH_DESCENDANT",
     "MATCH_LAUNCHER",
     "NON_SERVICE_SUBCOMMANDS",
     "Process",
+    "ProcessesSurvived",
+    "TERM_GRACE_SECONDS",
     "VETO_ARGV_MARKERS",
+    "ancestor_pids",
     "parse_proc_stat",
+    "parse_proc_state",
     "plan_kill",
+    "process_is_running",
     "read_process_table",
     "select_kill_targets",
     "terminate",

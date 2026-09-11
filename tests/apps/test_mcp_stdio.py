@@ -1,4 +1,8 @@
-"""apps/app.mcp_stdio: шим — резолв кода, детект/спавн backend, браузер, прокси."""
+"""apps/app.mcp_stdio: шим — резолв кода, детект/спавн backend, браузер, прокси.
+
+Сам запуск backend и опрос готовности живут в `src/core/backend_launch.py` (общие с
+апдейтером) — их тесты там же, `tests/core/test_backend_launch.py`.
+"""
 
 from __future__ import annotations
 
@@ -6,10 +10,11 @@ import subprocess
 import types
 from datetime import datetime
 
-import httpx
 import pytest
 
 from src.apps.app import mcp_stdio
+from src.core import backend_launch
+from src.core.backend_launch import BackendHealth
 from src.core.maintenance import MaintenanceFlag
 
 
@@ -30,18 +35,6 @@ def no_maintenance_flag(monkeypatch):
 
 
 @pytest.mark.pure
-def test_connect_host_falls_back_to_loopback():
-    assert mcp_stdio._connect_host(_cfg(server_host="0.0.0.0")) == "127.0.0.1"
-    assert mcp_stdio._connect_host(_cfg(server_host="")) == "127.0.0.1"
-    assert mcp_stdio._connect_host(_cfg(server_host="10.0.0.5")) == "10.0.0.5"
-
-
-@pytest.mark.pure
-def test_base_url_uses_connect_host_and_port():
-    assert mcp_stdio._base_url(_cfg(server_port=9)) == "http://127.0.0.1:9"
-
-
-@pytest.mark.pure
 def test_resolve_code_prefers_config():
     assert mcp_stdio._resolve_code(_cfg(mcp_stdio_code="explicit")) == "explicit"
 
@@ -52,63 +45,6 @@ def test_resolve_code_picks_sole_mounted_server():
     assert mcp_stdio._resolve_code(_cfg()) == "research"
 
 
-def _health_response(payload, status_code=200):
-    return types.SimpleNamespace(status_code=status_code, json=lambda: payload)
-
-
-@pytest.mark.pure
-def test_backend_alive_true_on_ok_payload(monkeypatch):
-    monkeypatch.setattr(
-        mcp_stdio.httpx, "get", lambda *a, **k: _health_response({"status": "ok"})
-    )
-    assert mcp_stdio._backend_alive(_cfg()) is True
-
-
-@pytest.mark.pure
-def test_backend_alive_false_on_degraded_payload(monkeypatch):
-    """Деградировавший backend отвечает 200 — готовность решает `status`, а не код."""
-    monkeypatch.setattr(
-        mcp_stdio.httpx,
-        "get",
-        lambda *a, **k: _health_response({"status": "degraded", "pending": ["rem_005"]}),
-    )
-    assert mcp_stdio._backend_alive(_cfg()) is False
-
-
-@pytest.mark.pure
-def test_backend_alive_false_on_unparsable_body(monkeypatch):
-    def _not_json(*a, **k):
-        return types.SimpleNamespace(
-            status_code=200, json=lambda: (_ for _ in ()).throw(ValueError("not json"))
-        )
-
-    monkeypatch.setattr(mcp_stdio.httpx, "get", _not_json)
-    assert mcp_stdio._backend_alive(_cfg()) is False
-
-
-@pytest.mark.pure
-def test_backend_alive_false_on_error(monkeypatch):
-    def _boom(*a, **k):
-        raise httpx.ConnectError("down")
-
-    monkeypatch.setattr(mcp_stdio.httpx, "get", _boom)
-    assert mcp_stdio._backend_alive(_cfg()) is False
-
-
-@pytest.mark.pure
-def test_probe_health_carries_pending_revisions(monkeypatch):
-    monkeypatch.setattr(
-        mcp_stdio.httpx,
-        "get",
-        lambda *a, **k: _health_response({"status": "degraded", "pending": ["rem_005", "wsm_004"]}),
-    )
-    health = mcp_stdio._probe_health(_cfg())
-    assert health is not None
-    assert health.is_ready is False
-    assert health.pending == ("rem_005", "wsm_004")
-    assert "rem_005, wsm_004" in health.describe()
-
-
 @pytest.mark.pure
 def test_spawn_backend_command_env_and_detached(monkeypatch, tmp_path):
     rec = {}
@@ -117,7 +53,7 @@ def test_spawn_backend_command_env_and_detached(monkeypatch, tmp_path):
         rec["cmd"] = cmd
         rec["kw"] = kw
 
-    monkeypatch.setattr(mcp_stdio.subprocess, "Popen", _fake_popen)
+    monkeypatch.setattr(backend_launch.subprocess, "Popen", _fake_popen)
     monkeypatch.setattr(mcp_stdio, "_backend_log_path", lambda c: tmp_path / "backend.log")
 
     mcp_stdio._spawn_backend(_cfg(mcp_stdio_start_worker=False))
@@ -135,7 +71,9 @@ def test_spawn_backend_command_env_and_detached(monkeypatch, tmp_path):
 @pytest.mark.pure
 def test_spawn_backend_adds_worker_when_enabled(monkeypatch, tmp_path):
     rec = {}
-    monkeypatch.setattr(mcp_stdio.subprocess, "Popen", lambda cmd, **kw: rec.update(cmd=cmd, kw=kw))
+    monkeypatch.setattr(
+        backend_launch.subprocess, "Popen", lambda cmd, **kw: rec.update(cmd=cmd, kw=kw)
+    )
     monkeypatch.setattr(mcp_stdio, "_backend_log_path", lambda c: tmp_path / "backend.log")
 
     mcp_stdio._spawn_backend(_cfg(mcp_stdio_start_worker=True))
@@ -145,24 +83,9 @@ def test_spawn_backend_adds_worker_when_enabled(monkeypatch, tmp_path):
 
 
 @pytest.mark.pure
-def test_wait_ready_true_when_backend_comes_up(monkeypatch):
-    states = iter([False, True])
-    monkeypatch.setattr(mcp_stdio, "_backend_alive", lambda c: next(states))
-    monkeypatch.setattr(mcp_stdio.time, "sleep", lambda s: None)
-    assert mcp_stdio._wait_ready(_cfg(mcp_stdio_boot_timeout=5)) is True
-
-
-@pytest.mark.pure
-def test_wait_ready_false_on_timeout(monkeypatch):
-    monkeypatch.setattr(mcp_stdio, "_backend_alive", lambda c: False)
-    monkeypatch.setattr(mcp_stdio.time, "sleep", lambda s: None)
-    assert mcp_stdio._wait_ready(_cfg(mcp_stdio_boot_timeout=0)) is False
-
-
-@pytest.mark.pure
 def test_ensure_backend_noop_when_alive(monkeypatch):
     calls = []
-    monkeypatch.setattr(mcp_stdio, "_probe_health", lambda c: mcp_stdio.BackendHealth("ok"))
+    monkeypatch.setattr(mcp_stdio, "probe_health", lambda c: BackendHealth("ok"))
     monkeypatch.setattr(mcp_stdio, "_spawn_backend", lambda c: calls.append("spawn"))
     monkeypatch.setattr(mcp_stdio, "_open_home", lambda c: calls.append("browser"))
     mcp_stdio._ensure_backend(_cfg())
@@ -172,9 +95,9 @@ def test_ensure_backend_noop_when_alive(monkeypatch):
 @pytest.mark.pure
 def test_ensure_backend_boots_then_opens_browser(monkeypatch):
     calls = []
-    monkeypatch.setattr(mcp_stdio, "_probe_health", lambda c: None)
+    monkeypatch.setattr(mcp_stdio, "probe_health", lambda c: None)
     monkeypatch.setattr(mcp_stdio, "_spawn_backend", lambda c: calls.append("spawn"))
-    monkeypatch.setattr(mcp_stdio, "_wait_ready", lambda c: True)
+    monkeypatch.setattr(mcp_stdio, "wait_until_ready", lambda c, timeout: BackendHealth("ok"))
     monkeypatch.setattr(mcp_stdio, "_open_home", lambda c: calls.append("browser"))
     mcp_stdio._ensure_backend(_cfg())
     assert calls == ["spawn", "browser"]
@@ -183,9 +106,9 @@ def test_ensure_backend_boots_then_opens_browser(monkeypatch):
 @pytest.mark.pure
 def test_ensure_backend_raises_and_skips_browser_on_timeout(monkeypatch):
     calls = []
-    monkeypatch.setattr(mcp_stdio, "_probe_health", lambda c: None)
+    monkeypatch.setattr(mcp_stdio, "probe_health", lambda c: None)
     monkeypatch.setattr(mcp_stdio, "_spawn_backend", lambda c: calls.append("spawn"))
-    monkeypatch.setattr(mcp_stdio, "_wait_ready", lambda c: False)
+    monkeypatch.setattr(mcp_stdio, "wait_until_ready", lambda c, timeout: None)
     monkeypatch.setattr(mcp_stdio, "_open_home", lambda c: calls.append("browser"))
     with pytest.raises(RuntimeError):
         mcp_stdio._ensure_backend(_cfg())
@@ -193,13 +116,31 @@ def test_ensure_backend_raises_and_skips_browser_on_timeout(monkeypatch):
 
 
 @pytest.mark.pure
+def test_ensure_backend_raises_when_the_spawned_backend_comes_up_degraded(monkeypatch):
+    """Поднялся, но схема отстала: браузер не открываем, называем ревизии."""
+    calls = []
+    monkeypatch.setattr(mcp_stdio, "probe_health", lambda c: None)
+    monkeypatch.setattr(mcp_stdio, "_spawn_backend", lambda c: calls.append("spawn"))
+    monkeypatch.setattr(
+        mcp_stdio, "wait_until_ready", lambda c, timeout: BackendHealth("degraded", ("rem_005",))
+    )
+    monkeypatch.setattr(mcp_stdio, "_open_home", lambda c: calls.append("browser"))
+
+    with pytest.raises(RuntimeError) as refusal:
+        mcp_stdio._ensure_backend(_cfg())
+
+    assert "rem_005" in str(refusal.value)
+    assert calls == ["spawn"]
+
+
+@pytest.mark.pure
 def test_ensure_backend_fails_fast_on_degraded_backend(monkeypatch):
     """Деградировавший backend жив — второй не спавним, а называем причину и ревизии."""
     calls = []
-    degraded = mcp_stdio.BackendHealth("degraded", ("rem_005",))
-    monkeypatch.setattr(mcp_stdio, "_probe_health", lambda c: degraded)
+    degraded = BackendHealth("degraded", ("rem_005",))
+    monkeypatch.setattr(mcp_stdio, "probe_health", lambda c: degraded)
     monkeypatch.setattr(mcp_stdio, "_spawn_backend", lambda c: calls.append("spawn"))
-    monkeypatch.setattr(mcp_stdio, "_wait_ready", lambda c: calls.append("wait"))
+    monkeypatch.setattr(mcp_stdio, "wait_until_ready", lambda c, timeout: calls.append("wait"))
     monkeypatch.setattr(mcp_stdio, "_open_home", lambda c: calls.append("browser"))
 
     with pytest.raises(RuntimeError) as refusal:
@@ -217,7 +158,7 @@ def test_ensure_backend_refuses_while_an_update_holds_the_flag(monkeypatch):
         pid=4242, started_at=datetime(2026, 9, 11, 10, 0), reason="update to head"
     )
     monkeypatch.setattr(mcp_stdio.maintenance, "active", lambda: held)
-    monkeypatch.setattr(mcp_stdio, "_probe_health", lambda c: calls.append("probe"))
+    monkeypatch.setattr(mcp_stdio, "probe_health", lambda c: calls.append("probe"))
     monkeypatch.setattr(mcp_stdio, "_spawn_backend", lambda c: calls.append("spawn"))
 
     with pytest.raises(RuntimeError) as refusal:

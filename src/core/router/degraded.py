@@ -1,12 +1,9 @@
 """Degraded serve — the schema is behind the code, so nothing but health answers.
 
-Raising in `lifespan` instead would take the SPA, the API and `/internal/health` down together,
-and the product's entry point is an MCP client: the operator would see a bare connection timeout
-with the reason only in a log file. So the app comes up, this gate answers every request with the
-pending revisions, and no data route ever runs.
-
-Applying the chain here is not an option either — that is the mechanism that migrated a live base
-unasked. Migrations are applied outside the app (`app.py update`, `AGENTS/tools/migrate-dev.sh`).
+`mark_degraded(app, pending)` records the verdict in `app.state`; `PendingMigrationsGate`
+answers every request 503 (JSON under the machine zones, an HTML stub elsewhere) while it is
+set, with `/internal/health` exempt and reporting `degraded` at 200. Why a stub rather than a
+raising lifespan: `AGENTS/docs/platform/update.md`.
 """
 
 from __future__ import annotations

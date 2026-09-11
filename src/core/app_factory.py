@@ -49,22 +49,43 @@ async def _apply_chain_or_degrade(
     """
     runner = AlembicRunner(modules=modules)
     status = await runner.status(engine)
-    fresh_install = not status.current_heads
-    if fresh_install:
-        await runner.upgrade_head(engine)
-        _LOG.info(
-            "lifespan: пустая база — накатили всю цепочку (%d ревизий)", len(status.pending)
-        )
+    pending = [revision.revision for revision in status.pending]
+    no_revision_recorded = not status.current_heads
+    if no_revision_recorded:
+        await _bootstrap_or_degrade(app, runner, engine, pending)
         return
     if status.up_to_date:
         return
-    pending = [revision.revision for revision in status.pending]
     mark_degraded(app, pending)
     _LOG.error(
         "lifespan: схема БД отстала от кода — отдаём заглушку вместо данных; "
         "не применены: %s (накатить обновлением установки, не стартом приложения)",
         ", ".join(pending),
     )
+
+
+async def _bootstrap_or_degrade(
+    app: FastAPI, runner: AlembicRunner, engine: AsyncEngine, pending: list[str]
+) -> None:
+    """Без записи в ``alembic_version`` база считается пустой — но может ею не быть.
+
+    База, собранная когда-то через ``create_all``, таблицы уже несёт, и первая же ревизия падает
+    на ``table already exists``. Исключение здесь уронило бы lifespan целиком — ровно тот слепой
+    отказ, ради которого существует режим заглушки, — поэтому такая база деградирует, а причина
+    уходит в лог.
+    """
+    try:
+        await runner.upgrade_head(engine)
+    except Exception:  # noqa: BLE001
+        mark_degraded(app, pending)
+        _LOG.exception(
+            "lifespan: в базе нет alembic_version, но цепочка на неё не легла — отдаём заглушку; "
+            "не применены: %s (схема есть, а истории миграций нет — базу надо привести к "
+            "ревизии вручную)",
+            ", ".join(pending),
+        )
+        return
+    _LOG.info("lifespan: пустая база — накатили всю цепочку (%d ревизий)", len(pending))
 
 
 def create_app(modules: Sequence[Module], config: Config) -> FastAPI:

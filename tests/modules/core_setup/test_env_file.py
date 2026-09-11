@@ -89,6 +89,46 @@ def test_seed_is_noop_when_env_exists(tmp_path, monkeypatch):
     assert path.read_text(encoding="utf-8") == "DB_PROVIDER=postgres\n"  # не тронут
 
 
+@pytest.mark.pure
+def test_a_key_added_after_the_file_was_written_is_topped_up(tmp_path, monkeypatch):
+    """Ключ, появившийся в новой версии, иначе не доезжает ни до одной живой установки:
+    `seed_defaults_if_absent` пишет только отсутствующий файл (так было с UPDATE_BRANCH)."""
+    path = tmp_path / ".env"
+    path.write_text("# оператор правил руками\nDB_PROVIDER=postgres\n", encoding="utf-8")
+    monkeypatch.setattr(env_file, "env_path", lambda: path)
+
+    added = env_file.ensure_keys_present(_fake_config(update_branch="main"))
+
+    assert "UPDATE_BRANCH" in added
+    assert "DB_PROVIDER" not in added
+    text = path.read_text(encoding="utf-8")
+    assert "UPDATE_BRANCH=main" in text
+    assert "DB_PROVIDER=postgres" in text  # существующее значение не тронуто
+    assert "# оператор правил руками" in text
+    assert "# Ветка обновления" in text  # ключ объяснён, а не свалился строкой
+
+
+@pytest.mark.pure
+def test_topping_up_is_idempotent_and_never_touches_a_full_file(tmp_path, monkeypatch):
+    path = tmp_path / ".env"
+    monkeypatch.setattr(env_file, "env_path", lambda: path)
+    env_file.seed_defaults_if_absent(_fake_config(update_branch="dev"))
+    before = path.read_text(encoding="utf-8")
+
+    assert env_file.ensure_keys_present(_fake_config(update_branch="main")) == []
+    assert path.read_text(encoding="utf-8") == before
+
+
+@pytest.mark.pure
+def test_topping_up_does_not_create_a_missing_file(tmp_path, monkeypatch):
+    """Создание файла — дело `seed_defaults_if_absent`; здесь только уже живая установка."""
+    path = tmp_path / ".env"
+    monkeypatch.setattr(env_file, "env_path", lambda: path)
+
+    assert env_file.ensure_keys_present(_fake_config()) == []
+    assert path.exists() is False
+
+
 @pytest.fixture
 def env(tmp_path, monkeypatch):
     """`.env` во временном каталоге + гарантия, что секреты не утекут в окружение теста.

@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from src.core import update
+from src.core.update import selection
 from src.core.update import (
     MATCH_DESCENDANT,
     MATCH_LAUNCHER,
@@ -195,6 +196,33 @@ def test_excludes_own_pid_and_own_process_group():
 
 
 @pytest.mark.pure
+def test_excludes_the_updaters_own_ancestors_whatever_their_process_group():
+    """`uv run` puts the updater in a new process group, so the group rule alone would not
+    protect the shell that launched it — the ancestor chain is excluded by pid instead."""
+    launcher_of_the_updater = process(50, "python src/app.py --backend", pgid=50)
+    elsewhere = process(200, "python src/app.py --backend", pgid=200)
+
+    targets = select_kill_targets(
+        [launcher_of_the_updater, elsewhere],
+        checkout=CHECKOUT,
+        own_pid=100,
+        own_process_group=100,
+        own_ancestors={50},
+    )
+
+    assert [target.process.pid for target in targets] == [200]
+
+
+@pytest.mark.pure
+def test_ancestor_pids_walks_the_parent_chain():
+    terminal = process(10, "bash", ppid=1)
+    wrapper = process(20, "uv run python src/app.py update", ppid=10)
+    updater = process(30, "python src/app.py update", ppid=20)
+
+    assert update.ancestor_pids([terminal, wrapper, updater], 30) == {20, 10, 1}
+
+
+@pytest.mark.pure
 def test_ignores_a_process_with_an_unreadable_cwd():
     unreadable = process(100, "python src/app.py --backend", cwd=None)
 
@@ -213,7 +241,9 @@ def test_parse_proc_stat_survives_a_comm_with_spaces_and_parens():
 @pytest.mark.pure
 def test_terminate_sends_nothing_by_default(monkeypatch: pytest.MonkeyPatch):
     signalled: list[tuple[int, int]] = []
-    monkeypatch.setattr(update, "_signal", lambda pid, sent: signalled.append((pid, sent)) or True)
+    monkeypatch.setattr(
+        selection, "_signal", lambda pid, sent: signalled.append((pid, sent)) or True
+    )
     plan = KillPlan(
         checkout=CHECKOUT,
         targets=select_kill_targets(
