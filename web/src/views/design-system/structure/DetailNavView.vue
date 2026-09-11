@@ -32,6 +32,7 @@ const snippet = `// routes.ts — деталки дети общей рамки
 useDetailRail(() => ({
   parent: PARENT_PATH,
   label: t('research.back.researches'),
+  code: store.research?.code ?? '',
   appearance: true,
   sections: navSections.value,
   search: {
@@ -88,6 +89,7 @@ const SAMPLE_PARENT = '/design-system/detail-nav'
           <DetailNav
             :parent="SAMPLE_PARENT"
             :label="t('design-system.section.detail-nav.sample.exit')"
+            :code="SAMPLE_CODE"
             appearance
           />
         </div>
@@ -140,7 +142,7 @@ const SAMPLE_PARENT = '/design-system/detail-nav'
           <div class="ds-row">
             <span class="ds-tag">code</span>
             <p class="ds-part">{{ t('design-system.section.detail-nav.part.code') }}</p>
-            <span class="ds-spec">вторая и последняя кнопка</span>
+            <span class="ds-spec">шапка + колонка</span>
           </div>
           <div class="ds-row">
             <span class="ds-tag">DetailHead</span>

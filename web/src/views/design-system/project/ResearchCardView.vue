@@ -19,8 +19,11 @@ const row = (over: Partial<ResearchListRow>): ResearchListRow => ({
   group_color: 'sky',
   area_count: 5,
   query_count: 5,
+  document_count: 26,
   document_kept: 8,
   document_filtered: 15,
+  document_error: 3,
+  created_at: '2026-08-14 10:02:00',
   updated_at: '2026-08-27 23:14:00',
   ...over,
 })

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from src.core.database import session_scope
+from src.core.database import session_scope, write_scope
 from src.core.utils.hashing import random_hash
 from src.modules.research.constants import NOTE_DESCRIPTION_MAX, NOTE_TITLE_MAX
 from src.modules.research.models.note import ResearchNote
@@ -36,7 +36,7 @@ async def note_create(
     description: str | None = None,
     body: str | None = None,
 ) -> ResearchNote:
-    async with session_scope() as s:
+    async with write_scope() as s:
         row = ResearchNote(
             code=note_code(),
             research_code=research_code,
@@ -76,7 +76,7 @@ async def note_update(
     body: str | None = None,
 ) -> ResearchNote | None:
     """Обновить переданные поля заметки (``None`` = не трогать; ``body`` без лимита)."""
-    async with session_scope() as s:
+    async with write_scope() as s:
         row = await s.get(ResearchNote, code)
         if row is None:
             return None
@@ -95,7 +95,7 @@ async def note_update(
 
 async def note_delete(code: str) -> bool:
     """Удалить заметку. ``True`` — существовала и удалена."""
-    async with session_scope() as s:
+    async with write_scope() as s:
         row = await s.get(ResearchNote, code)
         if row is None:
             return False

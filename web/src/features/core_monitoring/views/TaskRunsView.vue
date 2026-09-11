@@ -6,6 +6,7 @@ import { fmtDateTimeSec, fmtRelative, fmtDuration, fmtTimeSec } from '@/shared/u
 import PageLayout from '@/layout/templates/PageLayout.vue'
 import PageHeader from '@/layout/components/PageHeader.vue'
 import TablePaginationBar from '@/components/TablePaginationBar.vue'
+import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { useTaskText } from '../taskText'
 import {
   fetchTask,
@@ -28,7 +29,7 @@ const refreshing = ref(false)    // фоновое обновление (фил�
 const error = ref<string | null>(null)
 
 const page = ref(1)
-const pageSize = ref(25)
+const pageSize = ref(DEFAULT_PAGE_SIZE)
 const statusFilter = ref<TaskRunInfo['status'] | null>(null)
 const sortBy = ref<string>('started_at')
 const sortDir = ref<'asc' | 'desc'>('desc')

@@ -531,12 +531,16 @@ a { color: var(--accent); text-decoration: none; &:hover { text-decoration: unde
 }
 
 .v-field {
-  --v-field-border-opacity: 1;
   font-family: var(--font);
   border-radius: var(--radius-sm);
   background: var(--input-bg);
 
-  .v-field__outline { color: var(--border); }
+  // Плотность обводки задаётся на самой `.v-field__outline`, а не на поле: Vuetify объявляет
+  // `--v-field-border-opacity: 0.38` именно на ней, и переменная, поставленная выше по дереву,
+  // до кусков обводки не доходит — выигрывает ближайший предок (та же ловушка, что с высотой
+  // поля). Без этого обводка поля рисуется в 38% силы токена `--border`, а граница соседней
+  // кнопки — в полную: в сросшейся паре «поле + кнопка» половины выходят разной плотности.
+  .v-field__outline { --v-field-border-opacity: 1; color: var(--border); }
   &:hover .v-field__outline            { color: var(--accent); }
   &.v-field--focused .v-field__outline { color: var(--accent); }
 
@@ -1122,6 +1126,11 @@ a { color: var(--accent); text-decoration: none; &:hover { text-decoration: unde
 .v-data-table-header__sort-icon svg { width: 16px; height: 16px; }
 .v-data-table__th--sorted .v-data-table-header__sort-icon { color: var(--text-muted); }
 
+// Указатель сортировки всегда ПОСЛЕ названия колонки. Vuetify разворачивает шапку колонок,
+// выровненных по правому краю (`flex-direction: row-reverse`), и в одной таблице стрелка
+// оказывалась то справа от названия, то слева — у числовых колонок.
+.v-data-table-column--align-end .v-data-table-header__content { flex-direction: row; }
+
 // Plain VTable opts in by marking a header `th.sortable` (+ `.sorted` when active)
 // and rendering a `.sort-icon` child — same opacity ladder as VDataTable above.
 .v-table:not(.v-data-table) {
@@ -1291,6 +1300,13 @@ a { color: var(--accent); text-decoration: none; &:hover { text-decoration: unde
     border-start-end-radius: 0;
     border-end-end-radius: 0;
   }
+
+  // Кнопка перед полем встречается только у шага «предыдущий/следующий», поэтому левый край
+  // поля срезается по её наличию, а не всегда: у пары с одной кнопкой справа он круглый.
+  &:has(> .field-group__btn--before) .v-field {
+    border-start-start-radius: 0;
+    border-end-start-radius: 0;
+  }
 }
 
 // Селектор с `.v-btn` намеренно: скругление иконочной кнопке задаёт `.v-btn.v-btn--icon` выше по
@@ -1312,4 +1328,38 @@ a { color: var(--accent); text-decoration: none; &:hover { text-decoration: unde
 
   &.v-btn--density-comfortable { width: 32px; min-width: 32px; height: 32px; }
   &.v-btn--density-compact     { width: 28px; min-width: 28px; height: 28px; }
+}
+
+// Та же кнопка, но с другой стороны поля: круглые углы и наложение границы переезжают налево.
+.field-group__btn--before.v-btn {
+  margin-inline-start: 0;
+  margin-inline-end: -1px;
+  border-start-start-radius: var(--radius-sm);
+  border-end-start-radius: var(--radius-sm);
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+}
+
+// ── Utility: поля группы настроек в колонках (.settings-columns) ──────────────
+// Карточка настроек идёт во всю ширину страницы, а её поля стоят в три колонки: ключи одной
+// группы читаются одним взглядом, а не длинным столбцом. Один дом на оба экрана настроек —
+// схемные поля модулей (/settings/modules) и клиентские (/settings/interface) раскладываются
+// одинаково, иначе они выглядели бы настройками разного сорта.
+//
+// `align-items: start` — у полей в строке подписи разной длины; без него короткое поле
+// растянулось бы по высоте соседа. Ниже ~1200px три колонки дают поле уже читаемого, поэтому
+// ступеньками сходим к одной.
+.settings-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px 24px;
+}
+
+@media (max-width: 1200px) {
+  .settings-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 700px) {
+  .settings-columns { grid-template-columns: minmax(0, 1fr); }
 }

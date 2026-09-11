@@ -15,6 +15,22 @@ from src.modules.web_search.providers import base
 from src.modules.web_search.providers.base import SearchEngine
 
 
+def _connector_with(**methods: Any):
+    """Подмена ``open_connector``: коннектор-заглушка с заданными методами.
+
+    Адаптер берёт коннектор на каждый вызов через модуль доступов, поэтому шов теста
+    проходит именно здесь — ни ключа, ни записи доступа для маппинга не нужно.
+    """
+    connector = type(
+        "_StubConnector", (), {name: staticmethod(fn) for name, fn in methods.items()}
+    )()
+
+    async def _open(_service: str, **_kwargs: Any):
+        return connector
+
+    return _open
+
+
 @pytest.mark.pure
 def test_search_registry_has_all_engines():
     assert set(search_engines.codes()) >= {"tavily", "firecrawl", "xai"}  # Grok — движок поиска
@@ -36,10 +52,9 @@ def test_web_scrapper_is_fetch_only():
 
 
 @pytest.mark.pure
-async def test_web_scrapper_maps_batch_content_by_url():
+async def test_web_scrapper_maps_batch_content_by_url(monkeypatch):
+    from src.modules.web_search.providers.web_scrapper import client as web_scrapper_client
     from src.modules.web_search.providers.web_scrapper.client import WebScrapperEngine
-
-    engine = WebScrapperEngine()
 
     async def _fake_scrap_batch(_params: Any) -> dict[str, Any]:
         return {
@@ -50,9 +65,15 @@ async def test_web_scrapper_maps_batch_content_by_url():
             "elapsed_ms": 12,
         }
 
-    engine.gateway.scrap_batch = _fake_scrap_batch  # type: ignore[method-assign]
+    monkeypatch.setattr(
+        web_scrapper_client,
+        "open_connector",
+        _connector_with(scrap_batch=_fake_scrap_batch),
+    )
 
-    pages = await engine.fetch_pages(["https://a.com", "https://b.com", "https://c.com"])
+    pages = await WebScrapperEngine().fetch_pages(
+        ["https://a.com", "https://b.com", "https://c.com"]
+    )
 
     assert pages == {
         "https://a.com": "# A",
@@ -70,13 +91,17 @@ def test_registry_unknown_raises():
 
 
 @pytest.mark.pure
-def test_registry_reflects_gateway_availability(monkeypatch):
-    monkeypatch.setattr(base, "service_enabled", lambda field: field != "xai_gateway_enabled")
+async def test_registry_reflects_access_readiness(monkeypatch):
+    async def _ready(service: str) -> bool:
+        return service != "xai"
 
-    assert "xai" not in search_engines.available_codes()  # шлюз xAI выключен
-    assert "tavily" in search_engines.available_codes()
-    assert search_engines.is_available("tavily") is True
-    assert search_engines.is_available("xai") is False
+    monkeypatch.setattr(base, "access_available", _ready)
+
+    available = await search_engines.available_codes()
+    assert "xai" not in available  # доступа к xAI нет → движок недоступен
+    assert "tavily" in available
+    assert await search_engines.is_available("tavily") is True
+    assert await search_engines.is_available("xai") is False
 
 
 class _FakeEngine(SearchEngine):
@@ -115,7 +140,8 @@ def _xai_response(links: list[dict[str, Any]], sources: list[str]) -> dict[str, 
 
 
 @pytest.mark.pure
-async def test_xai_search_drops_ungrounded_links():
+async def test_xai_search_drops_ungrounded_links(monkeypatch):
+    from src.modules.web_search.providers.xai import client as xai_client
     from src.modules.web_search.providers.xai.client import XaiSearchEngine
 
     links = [
@@ -125,14 +151,12 @@ async def test_xai_search_drops_ungrounded_links():
     ]
     payload = _xai_response(links, sources=["https://real.com/a", "https://real.com/b"])
 
-    engine = XaiSearchEngine()
-
     async def _fake_responses(_params: Any) -> dict[str, Any]:
         return payload
 
-    engine.gateway.responses = _fake_responses  # type: ignore[method-assign]
+    monkeypatch.setattr(xai_client, "open_connector", _connector_with(responses=_fake_responses))
 
-    results = await engine.search(SearchRequest(query="q", max_results=5))
+    results = await XaiSearchEngine().search(SearchRequest(query="q", max_results=5))
 
     assert [r["url"] for r in results] == ["https://real.com/a", "https://real.com/b/"]
     assert [r["rank"] for r in results] == [1, 2]
@@ -142,14 +166,13 @@ async def test_xai_search_drops_ungrounded_links():
 
 
 @pytest.mark.pure
-async def test_xai_search_survives_unparseable_output():
+async def test_xai_search_survives_unparseable_output(monkeypatch):
+    from src.modules.web_search.providers.xai import client as xai_client
     from src.modules.web_search.providers.xai.client import XaiSearchEngine
-
-    engine = XaiSearchEngine()
 
     async def _fake_responses(_params: Any) -> dict[str, Any]:
         return {"output": [{"type": "message", "content": [{"text": "not json"}]}]}
 
-    engine.gateway.responses = _fake_responses  # type: ignore[method-assign]
+    monkeypatch.setattr(xai_client, "open_connector", _connector_with(responses=_fake_responses))
 
-    assert await engine.search(SearchRequest(query="q")) == []
+    assert await XaiSearchEngine().search(SearchRequest(query="q")) == []

@@ -1,156 +1,64 @@
-"""Runtime-настройки core_connectors: креды внешних сервисов (секреты).
+"""Runtime-настройки самого модуля: бюджет на опрос сервисов.
 
-Ключи хранятся в ``core_modules_settings`` под модулем ``core_connectors``, маскируются
-на чтение и правятся на ``/core/settings``. Читаются через
-``get_module_store("core_connectors")``. ENV не используется — ключи горячие,
-переключаемые на лету (граница «ENV = только bootstrap до БД» сюда не попадает).
+Кредов здесь больше нет — они переехали в таблицу записей доступа (динамический реестр и
+статическая схема несовместимы: схемы регистрируются раньше любого ``configure()``, store
+кодогенерён по схеме, а поле-выбор валидирует по кортежу времени сборки). В схеме остаются
+только собственные ручки модуля.
+
+Обе — про время: опрос баланса не боевой вызов, и ждать его столько же, сколько скрейпа
+страницы, незачем. Таймаут ограничивает один вызов, дедлайн — всю выдачу списка; иначе
+одного медленного сервиса хватает, чтобы положить страницу целиком.
 """
 
 from __future__ import annotations
 
-from src.core.settings import BoolField, StrField, VisibleWhen, get_module_store
+from src.core.settings import IntField, get_module_store
 
 MODULE = "core_connectors"
 
-_TAVILY = "Tavily"
-_FIRECRAWL = "Firecrawl"
-_XAI = "Grok (xAI)"
-_OPENROUTER = "OpenRouter"
-_OPENAI = "OpenAI"
-_ANTHROPIC = "Anthropic (Claude)"
-_WEB_SCRAPPER = "daemon-web-scrapper"
+BALANCE_TIMEOUT_DEFAULT = 15
+POLL_DEADLINE_DEFAULT = 25
+
+_POLL = "Опрос сервисов"
 
 SCHEMA = (
-    BoolField(
-        key="tavily_gateway_enabled",
-        label="Включить Tavily",
-        description="Сервис для поиска информации в вебе и извлечения контента страниц.",
-        default_=True,
-        group=_TAVILY,
+    IntField(
+        key="balance_timeout",
+        label="Таймаут запроса баланса, с",
+        description="Сколько ждать ответа одного сервиса при снятии баланса или проверке.",
+        default_=BALANCE_TIMEOUT_DEFAULT,
+        min=1,
+        max=120,
+        group=_POLL,
     ),
-    StrField(
-        key="tavily_api_key",
-        label="API-ключ Tavily",
-        description="Секретный ключ доступа к API Tavily. Получить: [app.tavily.com](https://app.tavily.com/home).",
-        secret=True,
-        group=_TAVILY,
-        visible_when=VisibleWhen("tavily_gateway_enabled"),
-    ),
-    BoolField(
-        key="firecrawl_gateway_enabled",
-        label="Включить Firecrawl",
-        description="Сервис для скрапинга веб-страниц и поиска информации.",
-        default_=True,
-        group=_FIRECRAWL,
-    ),
-    StrField(
-        key="firecrawl_api_key",
-        label="API-ключ Firecrawl",
-        description="Секретный ключ доступа к API Firecrawl. Получить: [firecrawl.dev](https://www.firecrawl.dev/app/api-keys).",
-        secret=True,
-        group=_FIRECRAWL,
-        visible_when=VisibleWhen("firecrawl_gateway_enabled"),
-    ),
-    BoolField(
-        key="xai_gateway_enabled",
-        label="Включить Grok (xAI)",
-        description="ИИ-модель Grok для агентского поиска в вебе и соцсети X.",
-        default_=True,
-        group=_XAI,
-    ),
-    StrField(
-        key="xai_api_key",
-        label="API-ключ xAI",
-        description="Секретный ключ доступа к API xAI. Получить: [console.x.ai](https://console.x.ai).",
-        secret=True,
-        group=_XAI,
-        visible_when=VisibleWhen("xai_gateway_enabled"),
-    ),
-    StrField(
-        key="xai_management_api_key",
-        label="Management-ключ xAI",
-        description="Секретный ключ Management API xAI — для баланса и лимитов трат. Отдельный от основного API-ключа. Создать: [console.x.ai](https://console.x.ai) → Settings → Management Keys.",
-        secret=True,
-        group=_XAI,
-        visible_when=VisibleWhen("xai_gateway_enabled"),
-    ),
-    BoolField(
-        key="openrouter_gateway_enabled",
-        label="Включить OpenRouter",
-        description="Единый API-шлюз к LLM разных провайдеров.",
-        default_=True,
-        group=_OPENROUTER,
-    ),
-    StrField(
-        key="openrouter_api_key",
-        label="API-ключ OpenRouter",
-        description="Секретный ключ доступа к API OpenRouter. Получить: [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys).",
-        secret=True,
-        group=_OPENROUTER,
-        visible_when=VisibleWhen("openrouter_gateway_enabled"),
-    ),
-    BoolField(
-        key="openai_gateway_enabled",
-        label="Включить OpenAI",
-        description="LLM-провайдер OpenAI (GPT, o-серия). Для расхода нужен Admin-ключ.",
-        default_=True,
-        group=_OPENAI,
-    ),
-    StrField(
-        key="openai_admin_api_key",
-        label="Admin-ключ OpenAI",
-        description="Секретный Admin-ключ OpenAI (sk-admin-…) — для отчёта о расходах. Обычный API-ключ не подойдёт. Создать: [platform.openai.com](https://platform.openai.com/settings/organization/admin-keys).",
-        secret=True,
-        group=_OPENAI,
-        visible_when=VisibleWhen("openai_gateway_enabled"),
-    ),
-    BoolField(
-        key="anthropic_gateway_enabled",
-        label="Включить Anthropic (Claude)",
-        description="LLM-провайдер Anthropic (Claude). Для расхода нужен Admin-ключ.",
-        default_=True,
-        group=_ANTHROPIC,
-    ),
-    StrField(
-        key="anthropic_admin_api_key",
-        label="Admin-ключ Anthropic",
-        description="Секретный Admin-ключ Anthropic (sk-ant-admin…) — для отчёта о расходах. Обычный API-ключ не подойдёт. Создать: [console.anthropic.com](https://console.anthropic.com/settings/admin-keys).",
-        secret=True,
-        group=_ANTHROPIC,
-        visible_when=VisibleWhen("anthropic_gateway_enabled"),
-    ),
-    BoolField(
-        key="web_scrapper_gateway_enabled",
-        label="Включить daemon-web-scrapper",
-        description="Локальный браузерный демон (порт 19020) для скрейпинга страниц в markdown.",
-        default_=True,
-        group=_WEB_SCRAPPER,
-    ),
-    StrField(
-        key="web_scrapper_api_key",
-        label="Токен daemon-web-scrapper",
-        description="Bearer-токен демона (SCRAPER_API_KEY). Оставьте пустым, если у демона авторизация отключена.",
-        secret=True,
-        group=_WEB_SCRAPPER,
-        visible_when=VisibleWhen("web_scrapper_gateway_enabled"),
+    IntField(
+        key="poll_deadline",
+        label="Дедлайн опроса, с",
+        description="Общий потолок времени на опрос всех интеграций страницы; не успевшие отдают ошибку в своей карточке.",
+        default_=POLL_DEADLINE_DEFAULT,
+        min=1,
+        max=300,
+        group=_POLL,
     ),
 )
 
 
-def service_api_key(field_key: str) -> str:
-    """Токен сервиса из runtime-настроек; пусто, если не задан/store не загружен."""
+def _setting(field_key: str, fallback: int) -> int:
+    """Настройка из store; ``fallback``, если store ещё не загружен (скрипт/тест)."""
     try:
         return getattr(get_module_store(MODULE), field_key)
     except RuntimeError:
-        return ""
+        return fallback
 
 
-def service_enabled(field_key: str) -> bool:
-    """Включён ли шлюз (runtime-настройка); True, если store ещё не загружен (скрипт/тест)."""
-    try:
-        return getattr(get_module_store(MODULE), field_key)
-    except RuntimeError:
-        return True
+def balance_timeout() -> int:
+    """Потолок времени на один вызов баланса/проверки."""
+    return _setting("balance_timeout", BALANCE_TIMEOUT_DEFAULT)
 
 
-__all__ = ["SCHEMA", "MODULE", "service_api_key", "service_enabled"]
+def poll_deadline() -> int:
+    """Потолок времени на опрос всех коннекторов сразу."""
+    return _setting("poll_deadline", POLL_DEADLINE_DEFAULT)
+
+
+__all__ = ["SCHEMA", "MODULE", "balance_timeout", "poll_deadline"]

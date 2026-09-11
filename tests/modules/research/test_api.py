@@ -12,10 +12,10 @@ from sqlalchemy import update
 
 from src.core.api import register_exception_handlers
 from src.core.config import Config
-from src.core.database import close_database, init_database, session_scope
+from src.core.database import close_database, init_database, write_scope
 from src.core.database.runtime import Base
 from src.modules.research.api import router
-from src.modules.research.constants import DOC_FILTERED, DOC_KEPT
+from src.modules.research.constants import DOC_ERROR, DOC_FILTERED, DOC_KEPT
 from src.modules.research.models.research import Research
 from src.modules.research.crud import area as area_crud
 from src.modules.research.crud import group as group_crud
@@ -85,7 +85,9 @@ async def test_list_keeps_its_counters(client):
     row = (await client.get("/internal/research/researches")).json()["items"][0]
 
     assert row["area_count"] == 0 and row["query_count"] == 0
+    assert row["document_count"] == 0
     assert row["document_kept"] == 0 and row["document_filtered"] == 0
+    assert row["document_error"] == 0
 
 
 async def test_detail_reports_the_group(client):
@@ -203,7 +205,7 @@ async def test_list_groups_by_position_is_in_display_order(client):
 async def _group_with_research_updated_at(title: str, updated_at: datetime):
     group = await group_crud.group_create(title=title)
     research = await research_crud.research_create(title=f"R-{title}", group_code=group.code)
-    async with session_scope() as s:
+    async with write_scope() as s:
         await s.execute(
             update(Research).where(Research.code == research.code).values(updated_at=updated_at)
         )
@@ -697,7 +699,7 @@ async def _titles(client, **params) -> list[str]:
 async def _set_dates(code: str, *, created_at: datetime, updated_at: datetime) -> None:
     """Даты пишем напрямую: колонки с precision=0, а подряд созданные строки делят одну секунду —
     сортировку по датам иначе решал бы тайбрейк по случайному коду."""
-    async with session_scope() as s:
+    async with write_scope() as s:
         row = await s.get(Research, code)
         row.created_at = created_at
         row.updated_at = updated_at
@@ -779,6 +781,46 @@ async def test_list_sorts_by_kept_and_filtered_separately(client):
 
     assert by_kept == ["Принимает", "Отсеивает"]
     assert by_filtered == ["Отсеивает", "Принимает"]
+
+
+async def test_list_counts_every_source_and_sorts_by_that_total(client):
+    """Колонка «Источники» считает все статусы, поэтому её порядок — не порядок принятых."""
+    await _with_documents("Много всего", kept=1, filtered=3)
+    await _with_documents("Мало, но принято", kept=2, filtered=0)
+
+    rows = (await client.get("/internal/research/researches")).json()["items"]
+    totals = {row["title"]: row["document_count"] for row in rows}
+
+    assert totals == {"Много всего": 4, "Мало, но принято": 2}
+    assert await _titles(client, sort_by="document_count", sort_dir="desc") == [
+        "Много всего",
+        "Мало, но принято",
+    ]
+
+
+async def test_list_reports_sources_that_failed_to_download(client):
+    """Не скачавшиеся видно отдельным счётчиком, и в общее число они тоже входят."""
+    research = await research_crud.research_create(title="С ошибками")
+    area = await area_crud.area_create(research_code=research.code, title="Область")
+    query = await source_query_crud.source_query_create(
+        research_code=research.code,
+        area_code=area.code,
+        search_code="0" * 22,
+        query="q",
+    )
+    page = await page_crud.page_upsert("https://example.test/dead")
+    await source_document_crud.source_document_create(
+        research_code=research.code,
+        area_code=area.code,
+        query_code=query.code,
+        page_code=page.code,
+        status=DOC_ERROR,
+    )
+
+    row = (await client.get("/internal/research/researches")).json()["items"][0]
+
+    assert row["document_error"] == 1
+    assert row["document_count"] == 1
 
 
 async def test_sorting_by_a_count_respects_the_group_filter(client):
@@ -1688,7 +1730,11 @@ async def test_refetch_refuses_a_disabled_fetch_engine(client, use_search, monke
     """Движок контента выключен — отказ до сети, а не молчаливый пустой прогон."""
     tree = await _tree_with_broken_source("https://example.test/off")
     engine = use_search(pages={})
-    monkeypatch.setattr(engine, "available", lambda: False)
+
+    async def _not_ready() -> bool:
+        return False
+
+    monkeypatch.setattr(engine, "available", _not_ready)
 
     r = await client.post(f"{BASE}/researches/{tree['research']}/documents/refetch")
 

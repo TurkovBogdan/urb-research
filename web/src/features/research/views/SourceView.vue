@@ -101,6 +101,7 @@ const review = computed(() => {
 useDetailRail(() => ({
   parent: parentPath.value,
   label: parentLabel.value,
+  code: store.source?.code ?? '',
   appearance: true,
   sections: store.source ? navSections.value : [],
   search: store.source
@@ -354,6 +355,7 @@ useDetailRail(() => ({
   max-width: var(--reading-measure, 92ch);
   font-family: var(--font-reading);
   font-size: var(--reading-size, 14px);
+  font-weight: var(--reading-weight, 300);
   line-height: 1.7;
   color: var(--text);
   white-space: pre-wrap;

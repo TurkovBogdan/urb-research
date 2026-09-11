@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
-from src.core.database import session_scope
+from src.core.database import session_scope, write_scope
 from src.core.utils.date import utc_now
 from src.modules.web_search.models.page import WebSearchPage
 from src.modules.web_search.models.query_result import WebSearchQueryResult
@@ -25,7 +25,7 @@ async def result_add(
 ) -> None:
     """Добавить строку выдачи; дубль ``(query_code, page_code)`` тихо пропускается."""
     now = utc_now()
-    async with session_scope() as s:
+    async with write_scope() as s:
         dialect = s.bind.dialect.name if s.bind else "postgresql"
         insert = sqlite_insert if dialect == "sqlite" else pg_insert
         stmt = (

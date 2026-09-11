@@ -67,7 +67,10 @@ class _StubSearch(SearchEngine, FetchEngine):
     """
 
     code = "stub"
-    enabled_field = "tavily_gateway_enabled"  # доступность из core_connectors (дефолт True)
+
+    async def available(self) -> bool:
+        """Записи доступа в core_connectors у заглушки нет — считаем её готовой."""
+        return True
 
     def __init__(self, results=None, pages=None, fetch_raises=None) -> None:
         self.results = results or []

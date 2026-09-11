@@ -38,6 +38,7 @@ function openSource(code: string) {
 useDetailRail(() => ({
   parent: parentPath.value,
   label: parentLabel.value,
+  code: store.query?.code ?? '',
 }))
 </script>
 

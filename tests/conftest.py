@@ -227,6 +227,20 @@ async def _dispose_engine_between_tests(request):
     await close_database()
 
 
+@pytest.fixture(autouse=True)
+def _clear_access_store():
+    """Кеш значений доступа живёт в процессе, а база у каждого теста своя.
+
+    Идентификаторы записей повторяются от теста к тесту, поэтому без сброса второй
+    тест получил бы значения первого.
+    """
+    from src.modules.core_connectors.access.store import access_store
+
+    access_store.clear()
+    yield
+    access_store.clear()
+
+
 @pytest.fixture
 def config() -> Config:
     """Тестовый ``Config`` (in-memory SQLite либо Postgres из ``TEST_PG_DSN``)."""

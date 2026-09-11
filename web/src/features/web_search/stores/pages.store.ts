@@ -1,6 +1,8 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
+import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
+
 import { listPages, type WebSearchPageRow, type PageStatus, type SortDir } from '../api'
 
 // Список страниц (web_search_page). Текстовый фильтр — по url. Сортировка серверная
@@ -12,7 +14,7 @@ export const usePagesStore = defineStore('web_search-pages', () => {
   const sortBy = ref('created_at')
   const sortDir = ref<SortDir>('desc')
   const page = ref(1)
-  const pageSize = ref(50)
+  const pageSize = ref(DEFAULT_PAGE_SIZE)
 
   const items = ref<WebSearchPageRow[]>([])
   const total = ref(0)

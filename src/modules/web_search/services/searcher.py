@@ -14,8 +14,8 @@
 параллельно под семафором ``fetch_concurrency``) → ``done``. Очереди/планировщика/ретраев нет:
 сбой движка → запрос ``error`` (исключение не пробрасывается), сбой страницы → эта страница
 ``error``. Движки — из runtime-настроек; вне загруженных настроек (скрипт/тест) — дефолты.
-Отключённый в ``core_connectors`` движок поиска ловится до сети: запрос сразу ``error``
-(``error="search_engine_disabled"``).
+Движок без готового доступа в ``core_connectors`` (записи нет, выключена или не заполнена)
+ловится до сети: запрос сразу ``error`` (``error="search_engine_disabled"``).
 
 Троттлинг (несколько прогонов бьют по лимитам API): перед началом работы прогон ждёт
 свободного слота — не больше ``max_concurrent_searches`` одновременных ``processing`` на
@@ -57,14 +57,14 @@ class Searcher:
     """Фасад сервиса поиска: доступные движки + запуск прогона (блокирующий/фоновый)."""
 
     @staticmethod
-    def search_engines() -> list[str]:
-        """Коды доступных (включённых в ``core_connectors``) движков поиска."""
-        return search_engine_registry.available_codes()
+    async def search_engines() -> list[str]:
+        """Коды движков поиска, чей доступ в ``core_connectors`` готов к работе."""
+        return await search_engine_registry.available_codes()
 
     @staticmethod
-    def fetch_engines() -> list[str]:
+    async def fetch_engines() -> list[str]:
         """Коды доступных движков получения контента."""
-        return fetch_engine_registry.available_codes()
+        return await fetch_engine_registry.available_codes()
 
     @staticmethod
     async def search(
@@ -152,7 +152,7 @@ class Searcher:
 
         Сбой движка поиска → запрос ``error`` (без исключения); сбой фетча батча → его страницы ``error``.
         """
-        if not engine.available():
+        if not await engine.available():
             await query_crud.query_mark_error(code, error="search_engine_disabled")
             return
         await _acquire_search_slot(engine.code)
@@ -178,7 +178,7 @@ class Searcher:
         ``error``; недоступный по сети — обычный исход, страница получает ``error``.
         """
         fetcher = fetch_engine_registry.get(fetch_engine or Searcher._default_fetch_engine())
-        if not fetcher.available():
+        if not await fetcher.available():
             raise RuntimeError("fetch_engine_disabled")
         await _fetch_pages(fetcher, await page_crud.pages_by_codes(page_codes))
 

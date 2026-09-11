@@ -1,8 +1,10 @@
 """Базовые классы провайдеров — две независимые роли движка поверх коннекторов ``core_connectors``.
 
-Каждый движок обёрнут вокруг коннектора ``core_connectors``, который можно выключить в настройках
-(``*_gateway_enabled``): ``available()`` читает этот тумблер — реестр по нему отдаёт список
-доступных провайдеров. Две функции внешнего веба, у каждой свой выбор провайдера:
+Каждый движок работает через коннектор, который открывается по коду сервиса
+(``open_connector``): ключ, адрес и включённость живут в записи доступа, а не здесь.
+``available()`` спрашивает у модуля доступов, готова ли запись (есть, включена, заполнена) —
+реестр по этому признаку отдаёт список доступных провайдеров. Две функции внешнего веба,
+у каждой свой выбор провайдера:
 - ``SearchEngine`` — поиск: ``search(request)`` → список ссылок
   ``[{url, rank?, score?, summary?, title?, meta?}]`` (контент НЕ тянет; ``summary`` — краткое
   содержание в контексте запроса, ``title`` — заголовок документа, ``meta`` — остаточные
@@ -20,23 +22,22 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, ClassVar
 
-from src.modules.core_connectors.settings import service_enabled
+from src.modules.core_connectors.service import access_available
 from src.modules.web_search.providers.request import SearchRequest
 
 
 class SearchEngine(ABC):
     """Движок поиска: по запросу возвращает ссылки (без контента страниц).
 
-    Провайдер задаёт ``code`` и ``enabled_field`` (= ``ENABLED_FIELD`` его коннектора
-    ``core_connectors``); ``available()`` читает этот тумблер (выключен → провайдер недоступен).
+    ``code`` совпадает с кодом коннектора в ``core_connectors`` — это и есть привязка
+    потребителя к сервису; ``available()`` спрашивает готовность его записи доступа.
     """
 
     code: ClassVar[str]
-    enabled_field: ClassVar[str]
 
-    def available(self) -> bool:
-        """Доступен ли провайдер: его коннектор ``core_connectors`` включён в настройках."""
-        return service_enabled(self.enabled_field)
+    async def available(self) -> bool:
+        """Готов ли доступ к сервису: запись есть, включена и заполнена (без сети)."""
+        return await access_available(self.code)
 
     @abstractmethod
     async def search(self, request: SearchRequest) -> list[dict[str, Any]]:
@@ -46,17 +47,16 @@ class SearchEngine(ABC):
 class FetchEngine(ABC):
     """Движок получения контента: по url'ам возвращает markdown.
 
-    Провайдер задаёт ``code`` и ``enabled_field`` (= ``ENABLED_FIELD`` его коннектора
-    ``core_connectors``); ``available()`` читает этот тумблер (выключен → провайдер недоступен).
+    ``code`` совпадает с кодом коннектора в ``core_connectors``; ``available()`` спрашивает
+    готовность его записи доступа.
     """
 
     code: ClassVar[str]
-    enabled_field: ClassVar[str]
     pages_per_request: ClassVar[int] = 1  # сколько url движок берёт за один запрос контента
 
-    def available(self) -> bool:
-        """Доступен ли провайдер: его коннектор ``core_connectors`` включён в настройках."""
-        return service_enabled(self.enabled_field)
+    async def available(self) -> bool:
+        """Готов ли доступ к сервису: запись есть, включена и заполнена (без сети)."""
+        return await access_available(self.code)
 
     @abstractmethod
     async def fetch_pages(self, urls: list[str]) -> dict[str, str | None]:

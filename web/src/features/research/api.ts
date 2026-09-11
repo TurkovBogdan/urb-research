@@ -31,14 +31,18 @@ export interface ResearchListRow {
   description: string
   group_code: string | null
   group_name: string
-  // Вид группы едет со строкой: имена из реестров `groupIcons.ts` / `groupColors.ts`, пустые —
+  // Вид группы едет со строкой: имена из реестров `shared/icons.ts` / `groupColors.ts`, пустые —
   // когда группы нет. Иначе списку пришлось бы держать ещё и справочник групп ради метки.
   group_icon: string
   group_color: string
   area_count: number
   query_count: number
+  // Источники одной колонкой: всего, а рядом разбор — принятые, отсеянные и не скачавшиеся.
+  document_count: number
   document_kept: number
   document_filtered: number
+  document_error: number
+  created_at: string
   updated_at: string
 }
 
@@ -82,7 +86,7 @@ export interface ResearchDetail {
   description: string
   group_code: string | null
   group_name: string
-  // Вид группы, как и у строки списка: имена из реестров `groupIcons.ts` / `groupColors.ts`,
+  // Вид группы, как и у строки списка: имена из реестров `shared/icons.ts` / `groupColors.ts`,
   // пустые — когда группы нет.
   group_icon: string
   group_color: string
@@ -145,11 +149,22 @@ export const RESEARCH_SORT_FIELDS = [
   'title',
   'area_count',
   'query_count',
-  'document_kept',
-  'document_filtered',
+  'document_count',
 ] as const
 
 export type ResearchSortBy = (typeof RESEARCH_SORT_FIELDS)[number]
+
+/** Незнакомый ключ (правили localStorage, откатили версию) не должен уехать в запрос: бэк на него
+    ответит отказом, и список останется пустым без внятной причины. */
+export function resolveResearchSortBy(value: string): ResearchSortBy {
+  return RESEARCH_SORT_FIELDS.includes(value as ResearchSortBy)
+    ? (value as ResearchSortBy)
+    : RESEARCH_SORT_FIELDS[0]
+}
+
+export function resolveSortDir(value: string): SortDir {
+  return value === 'asc' ? 'asc' : 'desc'
+}
 
 export interface ListResearchesParams {
   query?: string
@@ -212,7 +227,7 @@ export interface GroupRow {
   code: string
   title: string
   description: string
-  // Имя иконки из палитры бэка; рисуется через constants/groupIcons.ts.
+  // Имя иконки из палитры бэка; рисуется через shared/icons.ts.
   icon: string
   // Имя цвета из палитры бэка; ступени тона — в constants/groupColors.ts.
   color: string
@@ -257,6 +272,12 @@ export const GROUP_SORT_FIELDS = [
 ] as const
 
 export type GroupSortBy = (typeof GROUP_SORT_FIELDS)[number]
+
+export function resolveGroupSortBy(value: string): GroupSortBy {
+  return GROUP_SORT_FIELDS.includes(value as GroupSortBy)
+    ? (value as GroupSortBy)
+    : GROUP_SORT_FIELDS[0]
+}
 
 export interface ListGroupsParams {
   sort_by?: GroupSortBy

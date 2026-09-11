@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from sqlalchemy import func, select, update
 
-from src.core.database import session_scope
+from src.core.database import session_scope, write_scope
 from src.core.utils.hashing import random_hash
 from src.modules.research.constants import (
     GROUP_COLOR_MAX,
@@ -51,7 +51,7 @@ async def group_create(
     sort: int | None = None,
 ) -> ResearchGroup:
     """Создать группу. ``sort`` не задан → ``GROUP_SORT_DEFAULT`` (дефолт модели)."""
-    async with session_scope() as s:
+    async with write_scope() as s:
         row = ResearchGroup(
             code=group_code(),
             title=_clip(title, GROUP_TITLE_MAX),
@@ -144,7 +144,7 @@ async def group_update(
     sort: int | None = None,
 ) -> ResearchGroup | None:
     """Обновить переданные поля группы (``None`` = не трогать)."""
-    async with session_scope() as s:
+    async with write_scope() as s:
         row = await s.get(ResearchGroup, code)
         if row is None:
             return None
@@ -183,7 +183,7 @@ async def group_delete(
         for research_code in await _research_codes_of(code):
             await research_crud.research_delete(research_code)
 
-    async with session_scope() as s:
+    async with write_scope() as s:
         row = await s.get(ResearchGroup, code)
         if row is None:
             return False

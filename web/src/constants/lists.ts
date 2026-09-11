@@ -22,13 +22,6 @@ export const RESEARCH_LIST_VIEWS: ResearchListViewOption[] = [
   { code: 'grouped', label: 'settings.interface.list.research.grouped', icon: IconFolders },
 ]
 
-// Размеры страницы у списков исследований. Начинаются с 200, потому что строка реестра — это
-// название, описание и пять счётчиков: весь реестр помещается в одну страницу, и мельчить её
-// значило бы заставлять листать там, где листать нечего. Первое значение — умолчание.
-// У остальных таблиц проекта (источники, страницы веб-поиска, запуски задач) лестница своя,
-// стандартная: там строка тянет за собой материал.
-export const RESEARCH_PAGE_SIZES = [200, 500, 1000]
-
 /** Незнакомое значение (правили localStorage, откатили версию) не должно оставить список пустым. */
 export function resolveResearchListView(value: string): ResearchListView {
   return RESEARCH_LIST_VIEWS.some((view) => view.code === value)

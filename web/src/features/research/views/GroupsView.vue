@@ -20,7 +20,7 @@ import SearchField from '@/components/SearchField.vue'
 import { useClipboard } from '@/composables/useClipboard'
 import { deeperScope, deeperScopeModel } from '../search'
 import { groupColorVars } from '../constants/groupColors'
-import { GROUP_ICON_FALLBACK, groupIcon } from '../constants/groupIcons'
+import { ICON_FALLBACK, iconByName } from '@/shared/icons'
 import GroupFormDialog from '../components/GroupFormDialog.vue'
 import GroupDeleteDialog from '../components/GroupDeleteDialog.vue'
 import { useGroupsStore } from '../stores/groups.store'
@@ -179,7 +179,7 @@ function remove(group: GroupListRow) {
       >
         <header class="group-card__header">
           <span class="group-card__icon">
-            <component :is="groupIcon(group.icon)" :size="20" :stroke-width="1.6" />
+            <component :is="iconByName(group.icon)" :size="20" :stroke-width="1.6" />
           </span>
           <h3 class="group-card__title">{{ group.title }}</h3>
 
@@ -253,7 +253,7 @@ function remove(group: GroupListRow) {
       >
         <header class="group-card__header">
           <span class="group-card__icon">
-            <component :is="GROUP_ICON_FALLBACK" :size="20" :stroke-width="1.6" />
+            <component :is="ICON_FALLBACK" :size="20" :stroke-width="1.6" />
           </span>
           <h3 class="group-card__title">{{ t('research.group.ungrouped.title') }}</h3>
         </header>

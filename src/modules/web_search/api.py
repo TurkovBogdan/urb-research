@@ -38,7 +38,7 @@ class CreateQueryBody(BaseModel):
 
 
 class EnginesInfo(BaseModel):
-    """Доступные движки по ролям (коды включённых в ``core_connectors``) + дефолты для формы."""
+    """Доступные движки по ролям (коды с готовым доступом в ``core_connectors``) + дефолты формы."""
 
     search: list[str]
     fetch: list[str]
@@ -95,10 +95,10 @@ async def create_query(body: CreateQueryBody) -> QueryRow:
 
 @router.get("/engines")
 async def list_engines() -> EnginesInfo:
-    """Доступные движки по ролям (включённые в ``core_connectors``) + дефолты для формы создания."""
+    """Доступные движки по ролям (с готовым доступом в ``core_connectors``) + дефолты формы."""
     return EnginesInfo(
-        search=Searcher.search_engines(),
-        fetch=Searcher.fetch_engines(),
+        search=await Searcher.search_engines(),
+        fetch=await Searcher.fetch_engines(),
         search_default=settings.search_engine(),
         fetch_default=settings.fetch_engine(),
     )

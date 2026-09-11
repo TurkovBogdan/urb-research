@@ -8,7 +8,7 @@ import ColorPicker from '@/components/ColorPicker.vue'
 // Демо идёт на настоящем наборе — палитре полок research: выдуманный список показывал бы
 // раскладку на цветах, которых в приложении нет.
 import { groupColorNames, groupColorVars } from '@/features/research/constants/groupColors'
-import { groupIcon } from '@/features/research/constants/groupIcons'
+import { iconByName } from '@/shared/icons'
 
 const { t } = useI18n()
 
@@ -75,7 +75,7 @@ function modelLiteral(value: string | null): string {
           <span class="ds-tag">plate</span>
           <div class="ds-controls">
             <span v-for="name in colors" :key="name" class="ds-plate color-tones" :style="groupColorVars(name)">
-              <component :is="groupIcon('flask')" :size="18" :stroke-width="1.6" />
+              <component :is="iconByName('flask')" :size="18" :stroke-width="1.6" />
             </span>
           </div>
           <span class="ds-spec">groupColorVars(name)</span>
@@ -85,7 +85,7 @@ function modelLiteral(value: string | null): string {
           <span class="ds-tag">unset</span>
           <div class="ds-controls">
             <span class="ds-plate color-tones" :style="groupColorVars(null)">
-              <component :is="groupIcon('flask')" :size="18" :stroke-width="1.6" />
+              <component :is="iconByName('flask')" :size="18" :stroke-width="1.6" />
             </span>
           </div>
           <span class="ds-spec">groupColorVars(null) → accent</span>

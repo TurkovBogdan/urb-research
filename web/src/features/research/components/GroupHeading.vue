@@ -3,10 +3,10 @@
 // именно линейка — заголовок без неё читался бы как подпись к первой плитке, а не как начало
 // раздела.
 //
-// Вид полки берётся из тех же реестров, что и плашка на плитке (`groupIcons` / `groupColors`):
+// Вид полки берётся из тех же реестров, что и плашка на плитке (`shared/icons` / `groupColors`):
 // у полки один облик по всему разделу.
 import { groupColorVars } from '../constants/groupColors'
-import { groupIcon } from '../constants/groupIcons'
+import { iconByName } from '@/shared/icons'
 
 const props = defineProps<{
   title: string
@@ -21,7 +21,7 @@ const props = defineProps<{
   <div class="group-heading">
     <div class="group-heading__row color-tones" :style="groupColorVars(props.color)">
       <span class="group-heading__icon" :class="{ 'group-heading__icon--plain': props.ungrouped }">
-        <component :is="groupIcon(props.icon)" :size="16" :stroke-width="1.7" />
+        <component :is="iconByName(props.icon)" :size="16" :stroke-width="1.7" />
       </span>
       <h3 class="group-heading__title">{{ props.title }}</h3>
     </div>

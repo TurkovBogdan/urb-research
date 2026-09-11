@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import update
 
-from src.core.database import session_scope
+from src.core.database import write_scope
 from src.modules.research.constants import (
     GROUP_COLOR_MAX,
     GROUP_DESCRIPTION_MAX,
@@ -28,7 +28,7 @@ pytestmark = pytest.mark.db
 
 async def _attach(research_code: str, group_code: str) -> None:
     """Привязать исследование к группе напрямую — ``crud/research.py`` про группы ещё не знает."""
-    async with session_scope() as s:
+    async with write_scope() as s:
         await s.execute(
             update(Research)
             .where(Research.code == research_code)

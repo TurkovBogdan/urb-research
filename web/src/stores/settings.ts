@@ -1,13 +1,20 @@
 import { defineStore } from 'pinia'
-import { ref, reactive, watch, computed, type Ref } from 'vue'
+import { reactive, watch, computed } from 'vue'
 import { i18n, setLocale, type AppLocale } from '@/plugins/i18n'
+import { boolCodec, intCodec, persisted, strCodec, type Codec } from '@/shared/utils/persisted'
+import { synced } from '@/shared/utils/synced'
 import {
+  DEFAULT_CODE_SIZE,
   DEFAULT_DIAGRAM_FONT,
+  DEFAULT_HEADING_FONT,
+  DEFAULT_HEADING_WEIGHT,
   DEFAULT_INTERFACE_FONT,
   DEFAULT_MONO_FONT,
   DEFAULT_READING_FONT,
   DEFAULT_READING_MEASURE,
   DEFAULT_READING_SIZE,
+  DEFAULT_READING_WEIGHT,
+  HEADING_FONTS,
   INTERFACE_FONTS,
   MONO_FONTS,
   NO_MEASURE,
@@ -36,29 +43,15 @@ import vuetify from '@/plugins/vuetify'
 // Central store for the user's local (client-side) settings — the single home for
 // everything that used to live scattered across plugins/preferences.ts, layout/store.ts
 // and plugins/i18n.ts. State holds NORMAL typed values (real booleans / enums); the
-// codec translates each to/from its localStorage string. A value equal to its default is
-// NOT written (the key is removed), so storage holds only deliberate deviations.
-
-interface Codec<T> {
-  parse: (raw: string) => T
-  serialize: (value: T) => string
-}
-
-const boolCodec: Codec<boolean> = { parse: (raw) => raw === '1', serialize: (v) => (v ? '1' : '0') }
-const strCodec: Codec<string> = { parse: (raw) => raw, serialize: (v) => v }
-const intCodec: Codec<number> = { parse: (raw) => Number.parseInt(raw, 10), serialize: (v) => String(v) }
-
-function persisted<T>(key: string, def: T, codec: Codec<T>): Ref<T> {
-  const has = typeof localStorage !== 'undefined'
-  const raw = has ? localStorage.getItem(key) : null
-  const state = ref(raw === null ? def : codec.parse(raw)) as Ref<T>
-  watch(state, (v) => {
-    if (!has) return
-    if (v === def) localStorage.removeItem(key)
-    else localStorage.setItem(key, codec.serialize(v))
-  })
-  return state
-}
+// codec translates each to/from its localStorage string (see shared/utils/persisted).
+//
+// Здесь живут ВЫБОРЫ человека — то, что он однажды настроил под себя. Состояние интерфейсов
+// (какой порядок в каком списке он оставил, пока работал) — соседний стор `ui-state`.
+//
+// Внешний вид приложения ведёт `synced`: источник истины — база (модуль `core_interface`),
+// localStorage под ним остаётся кешем, который красит страницу до первого кадра. Имена ключей
+// совпадают с ключами реестра на бэкенде. То, чего в реестре нет — таймзона, формат даты и
+// наследие витрины, — остаётся на `persisted`, то есть живёт только в этом браузере.
 
 export const AUTO = 'auto'
 
@@ -81,16 +74,16 @@ export const useSettingsStore = defineStore('settings', () => {
   })
 
   const ui = reactive({
-    sidebarCollapsed: persisted('app.sidebar_collapsed', false, boolCodec),
+    sidebarCollapsed: synced('interface_sidebar_collapsed', false, boolCodec),
     // Оглавление документа в боковой навигации деталки. У длинного тела это десяток-полтора
     // строк — кому они мешают, выключает их здесь, а сами разделы страницы остаются.
-    documentNav: persisted('app.nav.document', true, boolCodec),
+    documentNav: synced('interface_nav_document', true, boolCodec),
   })
 
   // Раскладка списков. Codec чинит значение на чтении, а не при показе: иначе испорченный ключ
   // разъезжался бы по всем потребителям, и каждому пришлось бы страховаться самому.
   const lists = reactive({
-    researchView: persisted<ResearchListView>('app.list.research_view', DEFAULT_RESEARCH_LIST_VIEW, {
+    researchView: synced<ResearchListView>('interface_list_research_view', DEFAULT_RESEARCH_LIST_VIEW, {
       parse: resolveResearchListView,
       serialize: (v) => v,
     }),
@@ -102,7 +95,7 @@ export const useSettingsStore = defineStore('settings', () => {
   })
 
   const appearance = reactive({
-    theme: persisted<ThemeMode>('app.theme', DEFAULT_THEME, strCodec as Codec<ThemeMode>),
+    theme: synced<ThemeMode>('interface_theme', DEFAULT_THEME, strCodec as Codec<ThemeMode>),
   })
 
   // While the mode is `system` the OS can flip underneath us, so the scheme is re-applied on
@@ -113,29 +106,37 @@ export const useSettingsStore = defineStore('settings', () => {
   })
 
   const typography = reactive({
-    interfaceFont: persisted('app.font.interface', DEFAULT_INTERFACE_FONT, strCodec),
-    readingFont: persisted('app.font.reading', DEFAULT_READING_FONT, strCodec),
-    readingSize: persisted('app.font.reading_size', DEFAULT_READING_SIZE, intCodec),
-    readingMeasure: persisted('app.font.reading_measure', DEFAULT_READING_MEASURE, intCodec),
-    monoFont: persisted('app.font.mono', DEFAULT_MONO_FONT, strCodec),
+    interfaceFont: synced('interface_font', DEFAULT_INTERFACE_FONT, strCodec),
+    readingFont: synced('interface_font_reading', DEFAULT_READING_FONT, strCodec),
+    headingFont: synced('interface_font_heading', DEFAULT_HEADING_FONT, strCodec),
+    readingSize: synced('interface_font_reading_size', DEFAULT_READING_SIZE, intCodec),
+    readingWeight: synced('interface_font_reading_weight', DEFAULT_READING_WEIGHT, intCodec),
+    headingWeight: synced('interface_font_heading_weight', DEFAULT_HEADING_WEIGHT, intCodec),
+    readingMeasure: synced('interface_font_reading_measure', DEFAULT_READING_MEASURE, intCodec),
+    monoFont: synced('interface_font_mono', DEFAULT_MONO_FONT, strCodec),
+    codeSize: synced('interface_font_code_size', DEFAULT_CODE_SIZE, intCodec),
   })
 
   // Оформление схем — свой узел, а не часть типографики: токенами оно не раздаётся, его читает
   // сам компонент схемы. Гарнитура тоже здесь, чтобы у настроек схем был один дом; в CSS она не
   // уходит — рендерер подставляет имя семьи внутрь SVG и по нему же считает ширину подписей.
   const diagrams = reactive({
-    font: persisted('app.font.diagram', DEFAULT_DIAGRAM_FONT, strCodec),
-    align: persisted('app.diagram.align', DEFAULT_DIAGRAM_ALIGN, strCodec as Codec<DiagramAlign>),
-    maxHeight: persisted('app.diagram.max_height', DEFAULT_DIAGRAM_HEIGHT, intCodec),
+    font: synced('interface_font_diagram', DEFAULT_DIAGRAM_FONT, strCodec),
+    align: synced('interface_diagram_align', DEFAULT_DIAGRAM_ALIGN, strCodec as Codec<DiagramAlign>),
+    maxHeight: synced('interface_diagram_max_height', DEFAULT_DIAGRAM_HEIGHT, intCodec),
   })
 
   watch(
     () => [
       typography.interfaceFont,
       typography.readingFont,
+      typography.headingFont,
       typography.readingSize,
+      typography.readingWeight,
+      typography.headingWeight,
       typography.readingMeasure,
       typography.monoFont,
+      typography.codeSize,
     ],
     () => applyTypographyTokens(typography),
     { immediate: true },
@@ -160,12 +161,16 @@ function applyScheme(scheme: ColorScheme): void {
 interface TypographyChoice {
   interfaceFont: string
   readingFont: string
+  headingFont: string
   readingSize: number
+  readingWeight: number
+  headingWeight: number
   readingMeasure: number
   monoFont: string
+  codeSize: number
 }
 
-function applyTypographyTokens({ interfaceFont, readingFont, readingSize, readingMeasure, monoFont }: TypographyChoice): void {
+function applyTypographyTokens({ interfaceFont, readingFont, headingFont, readingSize, readingWeight, headingWeight, readingMeasure, monoFont, codeSize }: TypographyChoice): void {
   if (typeof document === 'undefined') return
   const root = document.documentElement.style
   const ui = fontStack(INTERFACE_FONTS, interfaceFont, DEFAULT_INTERFACE_FONT)
@@ -173,13 +178,25 @@ function applyTypographyTokens({ interfaceFont, readingFont, readingSize, readin
   root.setProperty('--v-font-body', ui)
   root.setProperty('--v-font-heading', ui)
   root.setProperty('--font-reading', fontStack(READING_FONTS, readingFont, DEFAULT_READING_FONT))
+  // Пункт «как шрифт текста» несёт стеком ссылку на соседний токен, поэтому развилки здесь нет:
+  // при нём в `--font-heading` уезжает `var(--font-reading)` и следует за ним сам.
+  root.setProperty('--font-heading', fontStack(HEADING_FONTS, headingFont, DEFAULT_HEADING_FONT))
   root.setProperty('--font-mono', fontStack(MONO_FONTS, monoFont, DEFAULT_MONO_FONT))
   // A stale or hand-edited storage value would otherwise reach CSS as `NaNpx` / `NaNch` and
   // take the whole prose scale — or the column width — down with it.
   const size = Number.isFinite(readingSize) ? readingSize : DEFAULT_READING_SIZE
   root.setProperty('--reading-size', `${size}px`)
+  const weight = Number.isFinite(readingWeight) ? readingWeight : DEFAULT_READING_WEIGHT
+  root.setProperty('--reading-weight', `${weight}`)
+  const heading = Number.isFinite(headingWeight) ? headingWeight : DEFAULT_HEADING_WEIGHT
+  root.setProperty('--heading-weight', `${heading}`)
   const measure = Number.isFinite(readingMeasure) ? readingMeasure : DEFAULT_READING_MEASURE
   root.setProperty('--reading-measure', measure === NO_MEASURE ? 'none' : `${measure}ch`)
+  // Кегль листинга принадлежит зоне чтения, а не всякому блоку кода в приложении: сниппеты
+  // дизайн-системы и панели подсказок живут своей жизнью. Зона чтения раздаёт его дальше сама
+  // (`MarkdownRenderer` → `--code-size`), поэтому имя токена с приставкой роли.
+  const code = Number.isFinite(codeSize) ? codeSize : DEFAULT_CODE_SIZE
+  root.setProperty('--reading-code-size', `${code}px`)
 }
 
 // IANA zone list for the picker; empty if the engine lacks Intl.supportedValuesOf.

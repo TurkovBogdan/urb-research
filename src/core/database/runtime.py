@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase
 
 from src.core.config import Config
+from src.core.database.sqlite import WRITE_EXECUTION_OPTIONS, configure_sqlite
 
 
 # ── Declarative base ─────────────────────────────────────────────────────────
@@ -55,6 +56,7 @@ async def init_database(config: Config) -> AsyncEngine:
         future=True,
         **config.engine_kwargs,
     )
+    configure_sqlite(_engine, config)
     _session_factory = async_sessionmaker(
         bind=_engine,
         autoflush=False,
@@ -94,10 +96,29 @@ async def create_all(engine: AsyncEngine) -> None:
 
 @asynccontextmanager
 async def session_scope() -> AsyncIterator[AsyncSession]:
-    """Транзакционный контекст вне HTTP-запроса (фоновые задачи, скрипты)."""
+    """Читающий транзакционный контекст. Изменяющий оператор в нём — ошибка."""
+    async with _scope(writing=False) as session:
+        yield session
+
+
+@asynccontextmanager
+async def write_scope() -> AsyncIterator[AsyncSession]:
+    """Пишущий транзакционный контекст: на SQLite транзакция открывается ``BEGIN IMMEDIATE``.
+
+    Намерение объявляется до первого оператора, иначе транзакция, начавшаяся с чтения,
+    не сможет стать пишущей — отказ придёт мимо ожидания блокировки (``database/sqlite.py``).
+    """
+    async with _scope(writing=True) as session:
+        yield session
+
+
+@asynccontextmanager
+async def _scope(*, writing: bool) -> AsyncIterator[AsyncSession]:
     assert _session_factory is not None, "init_database() not called"
     session = _session_factory()
     try:
+        if writing:
+            await session.connection(execution_options=WRITE_EXECUTION_OPTIONS)
         yield session
         await session.commit()
     except Exception:
@@ -113,4 +134,5 @@ __all__ = [
     "get_engine",
     "init_database",
     "session_scope",
+    "write_scope",
 ]

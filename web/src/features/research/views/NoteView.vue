@@ -95,6 +95,7 @@ const updatedAt = computed(() => {
 useDetailRail(() => ({
   parent: parentPath.value,
   label: parentLabel.value,
+  code: store.note?.code ?? '',
   appearance: true,
   sections: store.note ? navSections.value : [],
   search: store.note
@@ -223,6 +224,7 @@ useDetailRail(() => ({
   max-width: var(--reading-measure, 92ch);
   font-family: var(--font-reading);
   font-size: var(--reading-size, 14px);
+  font-weight: var(--reading-weight, 300);
   line-height: 1.7;
   color: var(--text);
   text-wrap: pretty;

@@ -215,6 +215,7 @@ const { reload } = useDetailReload(store.load)
 useDetailRail(() => ({
   parent: PARENT_PATH,
   label: t('research.back.researches'),
+  code: store.research?.code ?? '',
   appearance: true,
   sections: store.research ? navSections.value : [],
   search: store.research
@@ -464,6 +465,7 @@ useDetailRail(() => ({
   max-width: var(--reading-measure, 92ch);
   font-family: var(--font-reading);
   font-size: var(--reading-size, 14px);
+  font-weight: var(--reading-weight, 300);
   line-height: 1.7;
   color: var(--text);
   text-wrap: pretty;

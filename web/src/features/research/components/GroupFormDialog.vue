@@ -15,7 +15,7 @@ import IconColorPicker from '@/components/IconColorPicker.vue'
 import { errorText } from '@/api/errorText'
 
 import { groupColorNames, groupColorVars } from '../constants/groupColors'
-import { groupIcon, groupIconNames } from '../constants/groupIcons'
+import { iconByName, iconNames } from '@/shared/icons'
 import { createGroup, updateGroup, type GroupBody, type GroupRow } from '../api'
 
 // Стартовая позиция новой полки — та же, что ставит бэкенд (`GROUP_SORT_DEFAULT`). Показываем
@@ -30,7 +30,7 @@ const emit = defineEmits<{ saved: [] }>()
 
 const { t } = useI18n()
 
-const icons = groupIconNames()
+const icons = iconNames()
 const colors = groupColorNames()
 
 const title = ref('')
@@ -135,7 +135,7 @@ async function save() {
           v-model:color="color"
           :icons="icons"
           :colors="colors"
-          :resolve-icon="groupIcon"
+          :resolve-icon="iconByName"
           :resolve-color="groupColorVars"
           :height="160"
           clearable

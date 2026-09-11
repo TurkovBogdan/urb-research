@@ -118,7 +118,7 @@ function select(value: unknown) {
 
     <template #selection="{ item }">
       <span class="group-select__value">
-        <GroupSwatch :icon="item.icon" :color="item.color" :plain="item.plain" :size="18" />
+        <GroupSwatch :icon="item.icon" :color="item.color" :plain="item.plain" :width="18" />
         {{ item.title }}
       </span>
     </template>

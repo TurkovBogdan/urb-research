@@ -65,6 +65,29 @@ def test_value_outside_the_option_set_is_rejected():
     assert registry.rejection("interface_theme", "plaid") == "значение вне набора допустимых"
 
 
+def test_reading_weight_takes_the_css_ladder_by_hundreds():
+    assert registry.SETTINGS["interface_font_reading_weight"].default == 300
+    assert registry.rejection("interface_font_reading_weight", 900) is None
+    assert registry.rejection("interface_font_reading_weight", 350) == "значение вне набора допустимых"
+
+
+def test_code_size_is_its_own_ladder_below_the_reading_one():
+    assert registry.SETTINGS["interface_font_code_size"].default == 12
+    assert registry.rejection("interface_font_code_size", 11) is None
+    assert registry.rejection("interface_font_code_size", 20) == "значение вне набора допустимых"
+
+
+def test_heading_font_defaults_to_the_reading_one():
+    assert registry.SETTINGS["interface_font_heading"].default == "reading"
+    assert registry.rejection("interface_font_heading", "literata") is None
+
+
+def test_heading_weight_stands_above_the_text_by_default():
+    assert registry.SETTINGS["interface_font_heading_weight"].default == 600
+    assert registry.rejection("interface_font_heading_weight", 100) is None
+    assert registry.rejection("interface_font_heading_weight", 650) == "значение вне набора допустимых"
+
+
 def test_failing_predicate_is_rejected(monkeypatch):
     monkeypatch.setitem(
         registry.SETTINGS, "interface_font", Setting("onest", check=lambda value: value == "onest")

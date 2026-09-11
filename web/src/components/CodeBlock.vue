@@ -221,14 +221,17 @@ const resolvedVariant = () => props.variant ?? 'icon'
   opacity: 1;
 }
 
-/* Reset the global `code` chip (accent colour, border, padding) that main.scss paints on every
-   bare `code` — inside a highlighted panel it would draw a box around the whole listing. */
+/* Reset the global `code` chip (accent colour, border, padding, size) that main.scss paints on
+   every bare `code` — inside a highlighted panel it would draw a box around the whole listing.
+   Кегль сбрасывается в `inherit` наравне с остальным: он там тоже прибит (12px), и без сброса
+   размер листинга держал бы он, а от `pre` менялась бы только высота строки. */
 .code-block__body :deep(code) {
   background: transparent !important;
   color: inherit !important;
   border: none !important;
   border-radius: 0 !important;
   padding: 0 !important;
+  font-size: inherit !important;
 }
 
 /* Strip any token-level backgrounds the theme may inject */
@@ -246,7 +249,9 @@ const resolvedVariant = () => props.variant ?? 'icon'
   border-radius: 0;
   border: none;
   font-family: var(--font-mono);
-  font-size: 12px;
+  /* Кегль листинга задаёт место, где блок стоит: в теле документа его выбирает человек
+     (`--code-size` приходит из зоны чтения), в дизайн-системе и панелях остаётся литерал. */
+  font-size: var(--code-size, 12px);
   line-height: 1.65;
 }
 

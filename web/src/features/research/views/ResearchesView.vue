@@ -29,6 +29,10 @@ const sortOptions = computed(() =>
   RESEARCH_SORT_FIELDS.map((field) => ({ title: t(`research.sort.by.${field}`), value: field })),
 )
 
+// Плитки рамки строк не имеют, и порядок в них назвать нечем — им ручка сортировки нужна.
+// Таблица называет его заголовком колонки, по которой сортирует.
+const sortByFilters = computed(() => settings.lists.researchView === 'grouped')
+
 // null — все полки; UNGROUPED_CODE — только не разложенные (бэк читает пустой код именно так).
 const groupFilterTitle = computed(() => {
   if (store.groupFilter === null) return t('research.group.select.all')
@@ -153,8 +157,10 @@ onActivated(() => {
             @update:model-value="selectGroup"
           />
           <!-- Поле и направление — одна ручка (`.field-group`, см. /design-system/selects):
-               направление сортировки без поля, по которому сортируют, ничего не значит. -->
-          <div class="field-group filter-grid__sort">
+               направление сортировки без поля, по которому сортируют, ничего не значит.
+               В таблице этой ручки нет: там порядком управляют заголовки колонок, и вторая
+               ручка о том же означала бы два способа сказать одно, расходящиеся на глазах. -->
+          <div v-if="sortByFilters" class="field-group filter-grid__sort">
             <VSelect
               :model-value="store.sortBy"
               :items="sortOptions"

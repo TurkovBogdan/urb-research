@@ -12,7 +12,7 @@ from datetime import datetime
 from sqlalchemy import delete, func, select
 from sqlalchemy.sql.selectable import Select
 
-from src.core.database import session_scope
+from src.core.database import session_scope, write_scope
 from src.core.utils.hashing import random_hash
 from src.modules.research.constants import (
     DOC_FILTERED,
@@ -88,6 +88,7 @@ RESEARCH_SORT_COLUMNS = {
     "title": Research.title,
     "area_count": _children_count(ResearchArea),
     "query_count": _children_count(ResearchSourceQuery),
+    "document_count": _children_count(ResearchSourceDocument),
     "document_kept": _children_count(
         ResearchSourceDocument, ResearchSourceDocument.status == DOC_KEPT
     ),
@@ -145,7 +146,7 @@ async def research_create(
     body: str | None = None,
     group_code: str | None = None,
 ) -> Research:
-    async with session_scope() as s:
+    async with write_scope() as s:
         row = Research(
             code=research_code(),
             group_code=group_code or None,
@@ -195,7 +196,7 @@ async def research_update(
     ``group_code=""`` — убрать из группы (``NULL``): пустая строка означает «не задано» во всех
     текстовых полях модуля, а для ссылки единственная форма «не задано» — ``NULL``.
     """
-    async with session_scope() as s:
+    async with write_scope() as s:
         row = await s.get(Research, code)
         if row is None:
             return None
@@ -245,7 +246,7 @@ async def research_updated_at_by_group_codes(group_codes: list[str]) -> dict[str
 async def research_delete(code: str) -> bool:
     """Удалить исследование целиком. Каскад — вручную (sqlite FK-каскад выключен): источники →
     запросы → заметки → области → само исследование. ``True`` — существовало и удалено."""
-    async with session_scope() as s:
+    async with write_scope() as s:
         row = await s.get(Research, code)
         if row is None:
             return False

@@ -9,10 +9,7 @@ import pytest
 
 from src.modules.research.icons import GROUP_ICONS, group_icons
 
-_FRONT_REGISTRY = (
-    Path(__file__).resolve().parents[3]
-    / "web/src/features/research/constants/groupIcons.ts"
-)
+_FRONT_REGISTRY = Path(__file__).resolve().parents[3] / "web/src/shared/icons.ts"
 
 pytestmark = pytest.mark.pure
 
@@ -37,6 +34,11 @@ def test_front_registry_covers_exactly_the_palette():
 
     Тест читает TS-реестр как текст: это единственный шов между двумя языками, и молчаливое
     расхождение здесь выглядит как «иконка почему-то стала папкой».
+
+    Реестр общий (`shared/icons.ts`) — из него же рисуются иконки групп коннекторов, — но
+    сверка остаётся точной: он же отдаёт палитру пикеру группы (`iconNames()`), и лишнее имя
+    в нём означало бы иконку, которой в палитре бэка нет. Новая иконка группы коннектора,
+    которой нет в `icons.py`, требует внести её и туда.
     """
     registry = _FRONT_REGISTRY.read_text(encoding="utf-8")
     mapped = re.findall(r"^  '([a-z0-9-]+)': (Icon\w+),$", registry, re.M)

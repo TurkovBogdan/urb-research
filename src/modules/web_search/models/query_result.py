@@ -40,6 +40,7 @@ class WebSearchQueryResult(Base):
             "query_code", "page_code", name="uq_web_search_query_result_query_page"
         ),
         Index("ix_web_search_query_result_query_code", "query_code"),
+        Index("ix_web_search_query_result_page_code", "page_code"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

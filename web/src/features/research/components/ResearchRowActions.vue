@@ -135,7 +135,9 @@ const researchesPath = (code: string) => `/research/researches/${code}`
 
 .row-actions__btn:hover { color: var(--text); }
 
-.row-actions__btn--done { color: var(--success); }
+/* Галочка подтверждает копирование формой, а не цветом: зелёный тут читался бы как статус
+   строки, хотя относится к нажатию. */
+.row-actions__btn--done { color: var(--text-muted); }
 
 /* Необратимый пункт назван цветом ещё до нажатия — иконка тоже, иначе подпись выглядит
    подкрашенной по ошибке. */

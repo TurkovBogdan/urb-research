@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 from ulid import ULID
 
-from src.core.database import session_scope
+from src.core.database import session_scope, write_scope
 from src.core.database.runtime import Base
 from src.core.database.types import timestamp
 from src.core.utils.date import utc_now
@@ -110,7 +110,7 @@ async def release_for_owners(owners: list[str]) -> None:
     """DELETE WHERE owner IN (...). Bulk cleanup для zombie-уборки задач."""
     if not owners:
         return
-    async with session_scope() as s:
+    async with write_scope() as s:
         await s.execute(
             delete(CoreLockRow).where(CoreLockRow.owner.in_(owners))
         )
@@ -136,13 +136,13 @@ class CoreLock:
         """
         if owner is None:
             owner = str(ULID())
-        async with session_scope() as s:
+        async with write_scope() as s:
             ok = await _acquire(s, key=key, owner=owner, ttl_seconds=ttl)
         return cls(key, owner) if ok else None
 
     async def release(self) -> bool:
         """Снять лок. True = реально сняли (мы ещё были владельцем)."""
-        async with session_scope() as s:
+        async with write_scope() as s:
             return await _release(s, key=self.key, owner=self.owner)
 
     async def is_owner(self) -> bool:
@@ -154,7 +154,7 @@ class CoreLock:
         """Продлить TTL (секунды). Сначала проверяем владение, потом UPDATE."""
         if not await self.is_owner():
             return False
-        async with session_scope() as s:
+        async with write_scope() as s:
             return await _extend(
                 s, key=self.key, owner=self.owner, ttl_seconds=ttl
             )
@@ -162,7 +162,7 @@ class CoreLock:
     @classmethod
     async def force_release(cls, key: str) -> bool:
         """Снять лок по ключу без проверки владельца. True = реально сняли."""
-        async with session_scope() as s:
+        async with write_scope() as s:
             result = await s.execute(
                 delete(CoreLockRow).where(CoreLockRow.key == key)
             )

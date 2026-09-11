@@ -1,9 +1,13 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
+import { useUiStateStore } from '@/stores/ui-state'
+
 import {
   listGroups,
   listResearches,
+  resolveGroupSortBy,
+  resolveSortDir,
   searchGroups,
   UNGROUPED_CODE,
   type GroupListRow,
@@ -29,9 +33,17 @@ export const useGroupsStore = defineStore('research-groups', () => {
   const loading = ref(true)
   const error = ref<unknown>(null)
 
-  // Умолчание зеркалит бэк: сверху та полка, где недавно работали.
-  const sortBy = ref<GroupSortBy>('research_updated_at')
-  const sortDir = ref<SortDir>('desc')
+  // Порядок одалживается у хранилища состояния интерфейсов — он переживает перезагрузку вкладки.
+  // Умолчание там зеркалит бэк: сверху та полка, где недавно работали.
+  const ui = useUiStateStore()
+  const sortBy = computed<GroupSortBy>({
+    get: () => resolveGroupSortBy(ui.groupSort.by),
+    set: (value) => { ui.groupSort.by = value },
+  })
+  const sortDir = computed<SortDir>({
+    get: () => resolveSortDir(ui.groupSort.dir),
+    set: (value) => { ui.groupSort.dir = value },
+  })
 
   const query = ref('')
   // Глубина поиска: включено — стог считает и весь текст лежащих на полке исследований,

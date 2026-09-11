@@ -28,18 +28,39 @@ const ONEST: FontOption = {
   note: 'Гротеск с кириллицей в основе. Шрифт приложения по умолчанию.',
 }
 
-const INTER: FontOption = {
-  code: 'inter',
-  label: 'Inter',
-  stack: `'Inter', ${SANS_FALLBACK}`,
-  note: 'Спроектирован под плотные интерфейсы: крупные строчные, узкие пропорции.',
-}
-
 const GOLOS: FontOption = {
   code: 'golos',
   label: 'Golos Text',
   stack: `'Golos Text', ${SANS_FALLBACK}`,
-  note: 'Нарисован под чтение русского текста, а не под интерфейс.',
+  note: 'Нарисован под чтение русского текста, а не под интерфейс. Курсива в семействе нет.',
+}
+
+const IBM_PLEX_SANS: FontOption = {
+  code: 'ibm-plex-sans',
+  label: 'IBM Plex Sans',
+  stack: `'IBM Plex Sans', ${SANS_FALLBACK}`,
+  note: 'Кириллицу рисовала Александра Самуленкова. Единственный здесь с болгарскими начертаниями.',
+}
+
+const PT_SANS: FontOption = {
+  code: 'pt-sans',
+  label: 'PT Sans',
+  stack: `'PT Sans', ${SANS_FALLBACK}`,
+  note: 'Сделан под языки России: самое широкое покрытие кириллицы и настоящий курсив.',
+}
+
+const COMMISSIONER: FontOption = {
+  code: 'commissioner',
+  label: 'Commissioner',
+  stack: `'Commissioner', ${SANS_FALLBACK}`,
+  note: 'Гуманистический гротеск, кириллицу консультировала Мария Дореули.',
+}
+
+const GEOLOGICA: FontOption = {
+  code: 'geologica',
+  label: 'Geologica',
+  stack: `'Geologica', ${SANS_FALLBACK}`,
+  note: 'Широкие пропорции и открытые апертуры — то, что помогает слабовидящим читателям.',
 }
 
 const LITERATA: FontOption = {
@@ -49,11 +70,60 @@ const LITERATA: FontOption = {
   note: 'Экранная антиква для длинного чтения (шрифт Google Play Books).',
 }
 
+const PT_SERIF: FontOption = {
+  code: 'pt-serif',
+  label: 'PT Serif',
+  stack: `'PT Serif', ${SERIF_FALLBACK}`,
+  note: 'Антиква той же семьи, что PT Sans; её кириллицу эксперты считают ещё удачнее.',
+}
+
+const SOURCE_SERIF: FontOption = {
+  code: 'source-serif',
+  label: 'Source Serif',
+  stack: `'Source Serif', ${SERIF_FALLBACK}`,
+  note: 'Экранная антиква с оптической осью; кириллица лучше, чем у парного Source Sans.',
+}
+
+const LORA: FontOption = {
+  code: 'lora',
+  label: 'Lora',
+  stack: `'Lora', ${SERIF_FALLBACK}`,
+  note: 'Каллиграфическая антиква; самый широкий набор локализованных начертаний кириллицы.',
+}
+
+const PIAZZOLLA: FontOption = {
+  code: 'piazzolla',
+  label: 'Piazzolla',
+  stack: `'Piazzolla', ${SERIF_FALLBACK}`,
+  note: 'Оптическая ось 8–30 pt: рисунок знака подстраивается под кегль набора.',
+}
+
+const SPECTRAL: FontOption = {
+  code: 'spectral',
+  label: 'Spectral',
+  stack: `'Spectral', ${SERIF_FALLBACK}`,
+  note: 'Антиква Google Docs; кириллицу рисовали Илья Рудерман и Юрий Остроменцкий.',
+}
+
 const JETBRAINS_MONO: FontOption = {
   code: 'jetbrains-mono',
   label: 'JetBrains Mono',
   stack: `'JetBrains Mono', ${MONO_FALLBACK}`,
   note: 'Нарисован под чтение кода: широкие пробелы, различимые ноль и буква O.',
+}
+
+const IBM_PLEX_MONO: FontOption = {
+  code: 'ibm-plex-mono',
+  label: 'IBM Plex Mono',
+  stack: `'IBM Plex Mono', ${MONO_FALLBACK}`,
+  note: 'Моноширинная пара к IBM Plex Sans — если интерфейс набран им же.',
+}
+
+const MARTIAN_MONO: FontOption = {
+  code: 'martian-mono',
+  label: 'Martian Mono',
+  stack: `'Martian Mono', ${MONO_FALLBACK}`,
+  note: 'Единственный моноширинный с осью ширины. Сербских и македонских букв в нём нет.',
 }
 
 const SYSTEM_MONO: FontOption = {
@@ -77,24 +147,61 @@ const SYSTEM_SERIF: FontOption = {
   note: 'Georgia или её замена из системы — ничего не загружается.',
 }
 
-export const INTERFACE_FONTS: FontOption[] = [ONEST, INTER, GOLOS, SYSTEM_SANS]
+export const INTERFACE_FONTS: FontOption[] = [
+  ONEST,
+  GOLOS,
+  IBM_PLEX_SANS,
+  PT_SANS,
+  COMMISSIONER,
+  GEOLOGICA,
+  SYSTEM_SANS,
+]
 
-export const READING_FONTS: FontOption[] = [ONEST, GOLOS, LITERATA, INTER, SYSTEM_SERIF, SYSTEM_SANS]
+// Антиквы стоят первыми: роль чтения — это длинный текст, и именно здесь засечки уместны.
+export const READING_FONTS: FontOption[] = [
+  LITERATA,
+  PT_SERIF,
+  SOURCE_SERIF,
+  LORA,
+  PIAZZOLLA,
+  SPECTRAL,
+  ONEST,
+  GOLOS,
+  IBM_PLEX_SANS,
+  PT_SANS,
+  SYSTEM_SERIF,
+  SYSTEM_SANS,
+]
+
+// «Как шрифт текста» — не гарнитура, а отказ от выбора: заголовки набираются тем же, чем набран
+// текст, и следуют за ним при смене. Стек — ссылка на его токен, поэтому строка списка набрана
+// тем, что выбрано сейчас, а в CSS значение подставляется без развилки в коде.
+const HEADING_AS_READING: FontOption = {
+  code: 'reading',
+  label: 'Как шрифт текста',
+  stack: 'var(--font-reading)',
+  note: 'Заголовки набраны тем же, чем текст, и меняются вместе с ним.',
+}
+
+// Заголовки берут либо шрифт текста, либо свой — набор тот же, что у зоны чтения: заголовок
+// живёт в том же документе, и семьи, негодные для чтения подряд, негодны и здесь.
+export const HEADING_FONTS: FontOption[] = [HEADING_AS_READING, ...READING_FONTS]
 
 // Код — своя роль: моноширинный набор в блоках кода, инлайновых чипах и технических подписях
 // (`--font-mono`). Схемам он не предлагается: раскладка меряет подписи буквенными пропорциями,
 // а моноширинная строка шире — она вылезла бы за границы блоков.
-export const MONO_FONTS: FontOption[] = [JETBRAINS_MONO, SYSTEM_MONO]
+export const MONO_FONTS: FontOption[] = [JETBRAINS_MONO, IBM_PLEX_MONO, MARTIAN_MONO, SYSTEM_MONO]
 
-// Схемы — третья роль: подпись внутри блока живёт в тесной коробке, ширину которой раскладка
-// посчитала заранее по метрикам Inter. Отсюда и состав, и порядок: антиквы в списке нет, а
-// Inter стоит по умолчанию — на нём подписи ложатся в коробки точнее всего.
-export const DIAGRAM_FONTS: FontOption[] = [INTER, ONEST, GOLOS, SYSTEM_SANS]
+// Схемы — третья роль: подпись внутри блока живёт в тесной коробке, и рендерер меряет её
+// той гарнитурой, что выбрана. Отсюда состав: только гротески с плотным рисунком — антиква
+// и моноширинный набирают подпись шире, чем рассчитана коробка.
+export const DIAGRAM_FONTS: FontOption[] = [ONEST, GOLOS, IBM_PLEX_SANS, PT_SANS, SYSTEM_SANS]
 
 export const DEFAULT_INTERFACE_FONT = ONEST.code
 export const DEFAULT_READING_FONT = ONEST.code
+export const DEFAULT_HEADING_FONT = HEADING_AS_READING.code
 export const DEFAULT_MONO_FONT = JETBRAINS_MONO.code
-export const DEFAULT_DIAGRAM_FONT = INTER.code
+export const DEFAULT_DIAGRAM_FONT = ONEST.code
 
 // Base size of the reading zone in pixels. Everything inside a body is sized in `em` off
 // this one value, so a step moves the whole prose scale — headings, code, tables, indents —
@@ -103,6 +210,28 @@ export const DEFAULT_DIAGRAM_FONT = INTER.code
 export const READING_SIZES = [14, 15, 16, 17, 18, 20] as const
 
 export const DEFAULT_READING_SIZE = 14
+
+// Насыщенность зоны чтения — вся шкала CSS, от 100 до 900. Заголовки и выделения в теле
+// не следуют за ней: они заданы своим весом, иначе разница между текстом и выделением в нём
+// исчезла бы вместе с выбором.
+//
+// Оговорка про нижний край: начертания легче нормального есть не у всех подключённых семей
+// (у PT Sans, PT Serif, Spectral и IBM Plex Mono их нет вовсе, у Golos Text ось начинается
+// с 400) — там браузер возьмёт ближайшее доступное, и 100–300 нарисуются как 400.
+export const READING_WEIGHTS = [100, 200, 300, 400, 500, 600, 700, 800, 900] as const
+
+export const DEFAULT_READING_WEIGHT = 300
+
+// Заголовки идут по той же шкале, но своим выбором: разница между ними и текстом — это и есть
+// то, чем читается разбиение на разделы, и держать её приходится в паре с весом текста.
+export const DEFAULT_HEADING_WEIGHT = 600
+
+// Кегль блока кода в теле документа, в пикселях. Своя лестница и свой выбор: моноширинный набор
+// при том же кегле выглядит крупнее пропорционального, и листинг, набранный вровень с текстом,
+// перетягивает внимание на себя. Номера строк и отступы внутри блока заданы в `em` и идут следом.
+export const CODE_SIZES = [11, 12, 13, 14, 15, 16] as const
+
+export const DEFAULT_CODE_SIZE = 12
 
 // Width of the running-text column, in `ch`. Tables, code blocks and images are outside it —
 // they are scanned rather than read line by line, and squeezing them into the text column only

@@ -10,7 +10,7 @@ import pytest
 from sqlalchemy import select
 
 from src.core.config import Config
-from src.core.database import close_database, init_database, session_scope
+from src.core.database import close_database, init_database, session_scope, write_scope
 from src.core.locks import CoreLock, CoreLockRow, release_for_owners
 from src.core.locks.lock import _acquire, _extend, _is_owner, _release
 
@@ -35,25 +35,25 @@ async def db(config: Config):
 
 @pytest.mark.db
 async def test_crud_acquire_free(db):
-    async with session_scope() as s:
+    async with write_scope() as s:
         ok = await _acquire(s, key="k1", owner="o1", ttl_seconds=60)
     assert ok is True
 
 
 @pytest.mark.db
 async def test_crud_acquire_busy_returns_false(db):
-    async with session_scope() as s:
+    async with write_scope() as s:
         await _acquire(s, key="k", owner="o1", ttl_seconds=60)
-    async with session_scope() as s:
+    async with write_scope() as s:
         ok = await _acquire(s, key="k", owner="o2", ttl_seconds=60)
     assert ok is False
 
 
 @pytest.mark.db
 async def test_crud_acquire_expired_is_taken_over(db):
-    async with session_scope() as s:
+    async with write_scope() as s:
         await _acquire(s, key="k", owner="o1", ttl_seconds=-1)
-    async with session_scope() as s:
+    async with write_scope() as s:
         ok = await _acquire(s, key="k", owner="o2", ttl_seconds=60)
     assert ok is True
     async with session_scope() as s:
@@ -63,9 +63,9 @@ async def test_crud_acquire_expired_is_taken_over(db):
 
 @pytest.mark.db
 async def test_crud_release_by_owner_deletes_row(db):
-    async with session_scope() as s:
+    async with write_scope() as s:
         await _acquire(s, key="k", owner="o1", ttl_seconds=60)
-    async with session_scope() as s:
+    async with write_scope() as s:
         ok = await _release(s, key="k", owner="o1")
     assert ok is True
     async with session_scope() as s:
@@ -75,9 +75,9 @@ async def test_crud_release_by_owner_deletes_row(db):
 
 @pytest.mark.db
 async def test_crud_release_wrong_owner_no_op(db):
-    async with session_scope() as s:
+    async with write_scope() as s:
         await _acquire(s, key="k", owner="o1", ttl_seconds=60)
-    async with session_scope() as s:
+    async with write_scope() as s:
         ok = await _release(s, key="k", owner="o2")
     assert ok is False
     async with session_scope() as s:
@@ -87,7 +87,7 @@ async def test_crud_release_wrong_owner_no_op(db):
 
 @pytest.mark.db
 async def test_crud_is_owner_true_for_current_false_for_other(db):
-    async with session_scope() as s:
+    async with write_scope() as s:
         await _acquire(s, key="k", owner="o1", ttl_seconds=60)
     async with session_scope() as s:
         assert await _is_owner(s, key="k", owner="o1") is True
@@ -97,9 +97,9 @@ async def test_crud_is_owner_true_for_current_false_for_other(db):
 
 @pytest.mark.db
 async def test_crud_is_owner_after_takeover_returns_false(db):
-    async with session_scope() as s:
+    async with write_scope() as s:
         await _acquire(s, key="k", owner="o1", ttl_seconds=-1)
-    async with session_scope() as s:
+    async with write_scope() as s:
         await _acquire(s, key="k", owner="o2", ttl_seconds=60)
     async with session_scope() as s:
         assert await _is_owner(s, key="k", owner="o1") is False
@@ -108,16 +108,16 @@ async def test_crud_is_owner_after_takeover_returns_false(db):
 
 @pytest.mark.db
 async def test_crud_extend_only_for_owner(db):
-    async with session_scope() as s:
+    async with write_scope() as s:
         await _acquire(s, key="k", owner="o1", ttl_seconds=60)
-    async with session_scope() as s:
+    async with write_scope() as s:
         assert await _extend(s, key="k", owner="o2", ttl_seconds=60) is False
         assert await _extend(s, key="k", owner="o1", ttl_seconds=60) is True
 
 
 @pytest.mark.db
 async def test_crud_release_for_owners_bulk(db):
-    async with session_scope() as s:
+    async with write_scope() as s:
         await _acquire(s, key="k1", owner="task_run:1", ttl_seconds=60)
         await _acquire(s, key="k2", owner="task_run:2", ttl_seconds=60)
         await _acquire(s, key="k3", owner="task_run:3", ttl_seconds=60)
@@ -129,7 +129,7 @@ async def test_crud_release_for_owners_bulk(db):
 
 @pytest.mark.db
 async def test_crud_release_for_owners_empty_list_noop(db):
-    async with session_scope() as s:
+    async with write_scope() as s:
         await _acquire(s, key="k", owner="o", ttl_seconds=60)
     await release_for_owners([])
     async with session_scope() as s:

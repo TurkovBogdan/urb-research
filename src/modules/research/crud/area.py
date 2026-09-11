@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from sqlalchemy import delete, func, select
 
-from src.core.database import session_scope
+from src.core.database import session_scope, write_scope
 from src.core.utils.hashing import random_hash
 from src.modules.research.constants import (
     AREA_BRIEF_MAX,
@@ -44,7 +44,7 @@ async def area_create(
     scope: str | None = None,
     expectations: str | None = None,
 ) -> ResearchArea:
-    async with session_scope() as s:
+    async with write_scope() as s:
         row = ResearchArea(
             code=area_code(),
             research_code=research_code,
@@ -89,7 +89,7 @@ async def area_update(
     body: str | None = None,
 ) -> ResearchArea | None:
     """Обновить переданные поля области (``None`` = не трогать; ``body`` без лимита)."""
-    async with session_scope() as s:
+    async with write_scope() as s:
         row = await s.get(ResearchArea, code)
         if row is None:
             return None
@@ -113,7 +113,7 @@ async def area_update(
 async def area_delete(code: str) -> bool:
     """Удалить область. Каскад вручную: источники → запросы области → сама область.
     ``True`` — существовала и удалена."""
-    async with session_scope() as s:
+    async with write_scope() as s:
         row = await s.get(ResearchArea, code)
         if row is None:
             return False

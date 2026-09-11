@@ -15,16 +15,17 @@ server-side инструментом ``web_search`` + строгий structured 
 from __future__ import annotations
 
 import json
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 
-from src.modules.core_connectors.services.xai import (
+from src.modules.core_connectors.connectors.xai import (
     GROK_FLAGSHIP,
-    XaiGateway,
+    XaiConnector,
     XaiResponsesParams,
     XaiWebSearchFilters,
     XaiWebSearchTool,
     json_schema_text,
 )
+from src.modules.core_connectors.service import open_connector
 from src.modules.web_search.providers.base import SearchEngine
 from src.modules.web_search.providers.request import SearchRequest
 
@@ -64,10 +65,6 @@ LINKS_SCHEMA: dict[str, Any] = {
 
 class XaiSearchEngine(SearchEngine):
     code: ClassVar[str] = "xai"
-    enabled_field: ClassVar[str] = XaiGateway.ENABLED_FIELD
-
-    def __init__(self) -> None:
-        self.gateway = XaiGateway()
 
     async def search(self, request: SearchRequest) -> list[dict[str, Any]]:
         tool = XaiWebSearchTool(filters=_domain_filters(request))
@@ -78,7 +75,8 @@ class XaiSearchEngine(SearchEngine):
             tools=[tool],
             text=json_schema_text("relevant_links", LINKS_SCHEMA),
         )
-        data = await self.gateway.responses(params)
+        connector = cast(XaiConnector, await open_connector(self.code))
+        data = await connector.responses(params)
         grounded = _grounded_links(_parsed_links(data), _searched_urls(data))
         return [
             {

@@ -3,6 +3,7 @@ import PageLayout from '@/layout/templates/PageLayout.vue'
 import PageHeader from '@/layout/components/PageHeader.vue'
 import CodeBlock from '@/components/CodeBlock.vue'
 import VSelectSearch from '@/components/VSelectSearch.vue'
+import VSelectStepper from '@/components/VSelectStepper.vue'
 import {
   IconSearch,
   IconMapPin,
@@ -118,6 +119,31 @@ const groupSnippet = `<template>
       <IconSortDescending v-else :size="16" />
     </VBtn>
   </div>
+</template>`
+
+// Селект с шагом — на примере кегля: варианты стоят лестницей, и соседний перебирают подряд,
+// сравнивая результат на глаз.
+const sizeOptions = [14, 15, 16, 17, 18, 20].map((size) => ({ title: `${size} px`, value: size }))
+const stepSize = ref(16)
+const stepShelf = ref('devops')
+
+const stepperSnippet = `<script setup lang="ts">
+import VSelectStepper from '@/components/VSelectStepper.vue'
+import { ref } from 'vue'
+
+const sizes = [14, 15, 16, 17, 18, 20].map(s => ({ title: \`\${s} px\`, value: s }))
+const size = ref(16)
+<\/script>
+
+<template>
+  <VSelectStepper
+    v-model="size"
+    :items="sizes"
+    label="Размер текста"
+    variant="outlined"
+    density="comfortable"
+    hide-details
+  />
 </template>`
 
 const { t } = useI18n()
@@ -452,6 +478,66 @@ const { t } = useI18n()
       <CodeBlock :code="groupSnippet" lang="vue" variant="icon" class="mt-3" />
     </section>
 
+    <!-- Select + prev/next steppers -->
+    <section class="ds-section">
+      <h6 class="mb-3">{{ t('design-system.section.selects.withSteppers') }}</h6>
+      <div class="ds-card">
+
+        <div class="ds-row ds-row--center">
+          <span class="ds-tag">default</span>
+          <div class="ds-controls">
+            <VSelectStepper
+              class="ds-stepper"
+              v-model="stepSize"
+              :items="sizeOptions"
+              label="Размер текста"
+              variant="outlined"
+              hide-details
+            />
+          </div>
+          <span class="ds-spec">36px · лестница значений</span>
+        </div>
+
+        <div class="ds-row ds-row--center">
+          <span class="ds-tag">comfortable</span>
+          <div class="ds-controls">
+            <VSelectStepper
+              class="ds-stepper"
+              v-model="stepShelf"
+              :items="shelfOptions"
+              label="Полка"
+              variant="outlined"
+              density="comfortable"
+              hide-details
+            />
+          </div>
+          <span class="ds-spec">32px · объекты</span>
+        </div>
+
+      </div>
+
+      <p class="ds-note">
+        Шаг по соседнему варианту, когда порядок пунктов осмыслен: кегль, вес, высота, размер
+        страницы. Открывать список ради шага на один пункт — три движения вместо одного, но и
+        список остаётся: прыжок к далёкому варианту кнопками был бы долгим. Края
+        <strong>не заворачиваются</strong> — на первом пункте гаснет левая кнопка, на последнем
+        правая: иначе жмущий на шаг проскакивает границу набора и не замечает этого.
+        Ничего не выбрано — шаг вперёд берёт первый пункт, назад последний.
+      </p>
+
+      <p class="ds-note">
+        Срастание — та же пара классов <code>.field-group</code> /
+        <code>.field-group__btn</code>, что у кнопки справа, плюс модификатор
+        <code>--before</code> для кнопки слева. Логика шага живёт в компоненте
+        <code>VSelectStepper</code> (обёртка над VSelect: <code>$attrs</code> и слоты проходят
+        насквозь), а не в месте применения — считать индекс и гасить кнопки на краях в каждом
+        экране заново незачем. <code>density</code> у него отдельным пропом: её держат и поле,
+        и обе кнопки.
+      </p>
+
+      <CodeBlock :code="stepperSnippet" lang="vue" variant="icon" class="mt-3" />
+    </section>
+
     <!-- Sizes (density axis) -->
     <section class="ds-section">
       <h6 class="mb-3">{{ t('design-system.section.selects.sizes') }}</h6>
@@ -554,6 +640,12 @@ const { t } = useI18n()
 .v-select, .v-autocomplete {
   min-width: 220px;
   max-width: 280px;
+}
+
+/* У селекта с шагом ширину держит вся тройка: поле внутри компонента до правила выше не
+   достаёт (чужая область видимости), а кнопки по краям должны стоять на её границах. */
+.ds-stepper {
+  width: 280px;
 }
 
 /* Плашка пункта: иконка в цвете сущности — так полка узнаётся в реестре исследований. */

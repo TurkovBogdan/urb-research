@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, String, Text, text
+from sqlalchemy import ForeignKey, Index, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.core.database.runtime import Base
@@ -32,6 +32,7 @@ from src.modules.research.constants import RESEARCH_DESCRIPTION_MAX
 
 class Research(Base):
     __tablename__ = "research_index"
+    __table_args__ = (Index("ix_research_index_group_code", "group_code"),)
 
     code: Mapped[str] = mapped_column(String(25), primary_key=True)
     group_code: Mapped[str | None] = mapped_column(

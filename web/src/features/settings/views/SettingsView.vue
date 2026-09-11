@@ -31,7 +31,7 @@ const { localizeField } = useSettingText()
 // Названия модулей в шапке карточек. Если ключа нет — показываем как есть.
 const MODULE_LABELS: Record<string, string> = {
   hh: 'Headhunter',
-  core_connectors: 'Сервисы',
+  core_connectors: 'Интеграции',
   web_search: 'Веб-поиск',
 }
 
@@ -202,7 +202,7 @@ async function saveAll() {
       {{ error }}
     </VAlert>
 
-    <div v-if="!loading" class="modules-grid">
+    <div v-if="!loading" class="modules-list">
       <VCard
         v-for="m in moduleBlocks"
         :key="m.module"
@@ -235,7 +235,7 @@ async function saveAll() {
               @update:model-value="onChange(m.module, b.header.key, $event)"
             />
 
-            <div v-if="b.fields.length" class="field-block__fields">
+            <div v-if="b.fields.length" class="field-block__fields settings-columns">
               <SettingField
                 v-for="f in b.fields"
                 :key="f.key"
@@ -254,24 +254,12 @@ async function saveAll() {
 </template>
 
 <style scoped>
-/* Раскладка та же, что у «Настройки сервера»: колонки с потолком ширины и высотой по
-   содержимому. `minmax(320, 440)` — поле ввода шире ~440px читается хуже, лишнюю ширину отдаём
-   соседней колонке; на типовой ширине контента (~930px) встают две колонки.
-   `align-items: start` — карточка ровно по своему содержимому: у модулей число полей разное,
-   и без него короткая карточка тянулась бы до высоты «Сервисов» с их девятью ключами. */
-.modules-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 440px));
-  align-items: start;
-  justify-content: start;
+/* Карточка модуля занимает всю ширину страницы: раскладку в колонки взял на себя блок полей
+   внутри, и модули идут стопкой сверху вниз в порядке схемы. */
+.modules-list {
+  display: flex;
+  flex-direction: column;
   gap: 16px;
-}
-
-/* Одна колонка на узком экране — иначе поля сжимаются до нечитаемых. */
-@media (max-width: 700px) {
-  .modules-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 /* Блок = группа полей схемы. Внутри поля стоят теснее, чем блоки между собой: расстояние и есть
@@ -280,12 +268,6 @@ async function saveAll() {
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-
-.field-block__fields {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
 }
 
 /* Поля под тумблером — его содержимое, а не соседи: сдвиг и линейка слева показывают, что ключ

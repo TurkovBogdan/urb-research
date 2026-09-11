@@ -353,8 +353,13 @@ async def list_researches(
             **group_style_fields(group),
             area_count=area_counts.get(r.code, 0),
             query_count=query_counts.get(r.code, 0),
+            # Всего источников — сумма по всем статусам: отдельного запроса ради неё не нужно,
+            # разбивка по статусам уже посчитана.
+            document_count=sum(doc_counts.get(r.code, {}).values()),
             document_kept=doc_counts.get(r.code, {}).get(DOC_KEPT, 0),
             document_filtered=doc_counts.get(r.code, {}).get(DOC_FILTERED, 0),
+            document_error=doc_counts.get(r.code, {}).get(DOC_ERROR, 0),
+            created_at=r.created_at,
         )
         for r, group in rows
     ]

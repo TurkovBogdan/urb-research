@@ -7,11 +7,11 @@ import PageHeader from '@/layout/components/PageHeader.vue'
 import IconPicker from '@/components/IconPicker.vue'
 // Демо идёт на настоящем наборе — палитре полок research (120 кодов): выдуманный список
 // показывал бы прокрутку и поиск на данных, которых в приложении нет.
-import { groupIcon, groupIconNames } from '@/features/research/constants/groupIcons'
+import { iconByName, iconNames } from '@/shared/icons'
 
 const { t } = useI18n()
 
-const icons = groupIconNames()
+const icons = iconNames()
 
 const picked = ref<string>('flask')
 const empty = ref<string | null>(null)
@@ -33,7 +33,7 @@ const short = ref<string>('folder')
         <div class="ds-row">
           <span class="ds-tag">default</span>
           <div class="ds-controls ds-controls--stack">
-            <IconPicker v-model="picked" :icons="icons" :resolve="groupIcon" />
+            <IconPicker v-model="picked" :icons="icons" :resolve="iconByName" />
           </div>
           <span class="ds-spec">v-model, :icons, :resolve</span>
         </div>
@@ -41,7 +41,7 @@ const short = ref<string>('folder')
         <div class="ds-row">
           <span class="ds-tag">empty</span>
           <div class="ds-controls ds-controls--stack">
-            <IconPicker v-model="empty" :icons="icons" :resolve="groupIcon" />
+            <IconPicker v-model="empty" :icons="icons" :resolve="iconByName" />
           </div>
           <span class="ds-spec">v-model=null</span>
         </div>
@@ -54,7 +54,7 @@ const short = ref<string>('folder')
         <div class="ds-row">
           <span class="ds-tag">height</span>
           <div class="ds-controls ds-controls--stack">
-            <IconPicker v-model="short" :icons="icons" :resolve="groupIcon" :height="120" />
+            <IconPicker v-model="short" :icons="icons" :resolve="iconByName" :height="120" />
           </div>
           <span class="ds-spec">:height="120"</span>
         </div>

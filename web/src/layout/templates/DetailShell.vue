@@ -26,7 +26,12 @@ const rail = detailRail()
     <DetailLayout>
       <template #rail>
         <template v-if="rail">
-          <DetailNav :parent="rail.parent" :label="rail.label" :appearance="rail.appearance">
+          <DetailNav
+            :parent="rail.parent"
+            :label="rail.label"
+            :code="rail.code"
+            :appearance="rail.appearance"
+          >
             <template v-if="rail.search">
               <VTextField
                 :model-value="rail.search.value"

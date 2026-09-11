@@ -11,8 +11,9 @@
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { IconChevronLeft, IconSettings } from '@tabler/icons-vue'
+import { IconCheck, IconChevronLeft, IconCopy, IconSettings } from '@tabler/icons-vue'
 
+import { useClipboard } from '@/composables/useClipboard'
 import { useNavigationHistory } from '@/composables/useNavigationHistory'
 
 import DocumentAppearance from './DocumentAppearance.vue'
@@ -23,16 +24,20 @@ const props = withDefaults(defineProps<{
   /** Имя запасного места — «К списку исследований». Стоит на кнопке только тогда, когда уходить
       придётся туда: при заходе по прямой ссылке. Без него всегда «Назад». */
   label?: string
+  /** Код показанного объекта. Пока его нет (страница грузится), кнопки копирования нет. */
+  code?: string
   /** Страница показывает документ: в строке выхода появляется шестерёнка его оформления. */
   appearance?: boolean
 }>(), {
   label: '',
+  code: '',
   appearance: false,
 })
 
 const { t } = useI18n()
 const router = useRouter()
 const { goBack, hasHistory } = useNavigationHistory()
+const { copy, isCopied } = useClipboard()
 
 // Подпись называет то, что кнопка сделает. По истории она возвращает «туда, откуда пришли» — это
 // и есть «Назад», а обещать при этом список исследований нельзя: пришли-то могли из зоны. Имя
@@ -81,9 +86,21 @@ const appearanceOpen = ref(false)
 
     <!-- Линейка отделяет выход от инструментов чтения: одно уводит со страницы, другое работает
          внутри неё. Концы уходят под отбивку — она делит карточку, а не лежит в ней. -->
-    <template v-if="$slots.default">
+    <template v-if="$slots.default || code">
       <VDivider class="detail-nav__rule" />
       <slot />
+
+      <!-- Код объекта под рукой на всей длине чтения: та же кнопка есть и в шапке содержимого, но
+           шапка уезжает с первым же экраном, а колонка держится. Стоит она в ряду инструментов
+           чтения, под поиском, и занимает всю ширину — здесь у неё есть подпись, а значок сам по
+           себе не говорит, ЧТО копируется. -->
+      <VBtn v-if="code" block variant="tonal" @click="copy(code)">
+        <template #prepend>
+          <IconCheck v-if="isCopied(code)" :size="16" class="detail-nav__copied" />
+          <IconCopy v-else :size="16" />
+        </template>
+        {{ t('common.action.copy_code') }}
+      </VBtn>
     </template>
   </VCard>
 
@@ -135,6 +152,12 @@ const appearanceOpen = ref(false)
 
 .detail-nav__gear:hover {
   color: var(--text);
+}
+
+/* Тем же серым, что галочка копирования в шапке содержимого: об успехе говорит смена значка, а не
+   его цвет. */
+.detail-nav__copied {
+  color: var(--text-muted);
 }
 
 /* Сброс оформления кнопки: браузер рисует ей серую плашку с рамкой, а нужен ряд «фигура + текст». */

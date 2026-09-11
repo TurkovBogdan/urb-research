@@ -1,9 +1,17 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { RESEARCH_PAGE_SIZES } from '@/constants/lists'
+import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
+import { useUiStateStore } from '@/stores/ui-state'
 
-import { listResearches, type ResearchListRow, type ResearchSortBy, type SortDir } from '../api'
+import {
+  listResearches,
+  resolveResearchSortBy,
+  resolveSortDir,
+  type ResearchListRow,
+  type ResearchSortBy,
+  type SortDir,
+} from '../api'
 
 /** Слои поиска поверх основы — то, что переключают кнопки в поле запроса. */
 export interface SearchScopes {
@@ -13,7 +21,7 @@ export interface SearchScopes {
 }
 
 // Список исследований. Фильтры — отдельные ref'ы; load() собирает params, пропуская
-// пустые. Новые сверху (sortDir=desc по created_at).
+// пустые. Порядок стор не держит — он лежит в `ui-state` и переживает перезагрузку вкладки.
 //
 // Полка приходит с двух сторон, и это разные роли:
 //   groupCode  — контекст страницы, из адреса (/research/researches/GROUP@…). Не сбрасывается
@@ -22,17 +30,27 @@ export interface SearchScopes {
 // Одновременно они не встречаются (это разные страницы), а контекст сильнее выбора.
 export const useResearchesStore = defineStore('research-researches', () => {
   const query = ref('')
-  // Слои стога поверх основы (название + описание, они в поиске всегда). Материал источников
-  // выключен: он на порядок больше всего написанного руками, и включают его осознанно.
-  const inBody = ref(true)
-  const inAreasAndNotes = ref(true)
+  // Слои стога поверх основы (название + описание, они в поиске всегда). Все выключены: поиск по
+  // умолчанию отвечает на «как называлось», и это самый частый вопрос. Каждый слой добавляет к
+  // стогу материал, которого на экране не видно, — включают их осознанно, кнопками в самом поле.
+  const inBody = ref(false)
+  const inAreasAndNotes = ref(false)
   const inSources = ref(false)
   const groupCode = ref<string | null>(null)
   const groupFilter = ref<string | null>(null)
-  const sortBy = ref<ResearchSortBy>('created_at')
-  const sortDir = ref<SortDir>('desc')
+  // Порядок список не держит, а одалживает: он переживает перезагрузку вкладки, и его дом —
+  // хранилище состояния интерфейсов. Наружу стор отдаёт те же две ручки, что и раньше.
+  const ui = useUiStateStore()
+  const sortBy = computed<ResearchSortBy>({
+    get: () => resolveResearchSortBy(ui.researchSort.by),
+    set: (value) => { ui.researchSort.by = value },
+  })
+  const sortDir = computed<SortDir>({
+    get: () => resolveSortDir(ui.researchSort.dir),
+    set: (value) => { ui.researchSort.dir = value },
+  })
   const page = ref(1)
-  const pageSize = ref(RESEARCH_PAGE_SIZES[0])
+  const pageSize = ref(DEFAULT_PAGE_SIZE)
 
   const items = ref<ResearchListRow[]>([])
   const total = ref(0)

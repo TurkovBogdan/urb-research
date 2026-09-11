@@ -18,11 +18,11 @@ import { useI18n } from 'vue-i18n'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import TablePaginationBar from '@/components/TablePaginationBar.vue'
 import { errorText } from '@/api/errorText'
-import { RESEARCH_PAGE_SIZES } from '@/constants/lists'
 import { useSettingsStore } from '@/stores/settings'
-import { fmtDateTime } from '@/shared/utils/date'
+import { fmtDateTime, fmtRelative } from '@/shared/utils/date'
 
 import GroupHeading from './GroupHeading.vue'
+import ResearchShelfMark from './ResearchShelfMark.vue'
 import ResearchCard from './ResearchCard.vue'
 import ResearchGroupDialog from './ResearchGroupDialog.vue'
 import ResearchRenameDialog from './ResearchRenameDialog.vue'
@@ -30,7 +30,7 @@ import ResearchDeleteDialog from './ResearchDeleteDialog.vue'
 import ResearchRowActions from './ResearchRowActions.vue'
 import { useGroupsStore } from '../stores/groups.store'
 import { useResearchesStore } from '../stores/researches.store'
-import { setResearchGroup, type ResearchListRow } from '../api'
+import { resolveResearchSortBy, setResearchGroup, type ResearchListRow, type SortDir } from '../api'
 
 const props = defineProps<{ emptyText?: string }>()
 
@@ -45,18 +45,50 @@ const tiled = computed(() => settings.lists.researchView === 'grouped')
 const sectioned = computed(() => tiled.value && store.groupCode === null)
 const emptyText = computed(() => props.emptyText ?? t('research.research.list.empty'))
 
-const DESCRIPTION_MAX = 128
-const truncate = (s: string, n: number) => (s.length > n ? s.slice(0, n) + '…' : s)
+
+// Заголовки кликабельны, и порядок считает бэк: ключ колонки — это ключ его белого списка
+// (`RESEARCH_SORT_FIELDS`), а не поле строки. Раскладку плиток это не касается — там порядок
+// по-прежнему выбирают полем сортировки в панели фильтров.
+// Свободное место окна забирает название: остальные колонки — числа и дата, им сверх своего
+// содержимого прибавить нечего. При фиксированной раскладке (`table-layout: fixed`, см. стили)
+// `width: 100%` у одной колонки и значит «весь остаток сюда».
+const GREEDY_COLUMN_WIDTH = '100%'
+
+// Ниже этого названию с описанием тесно: обрезаться начинают уже короткие строки. Нижнюю границу
+// держит вся таблица целиком (её `min-width` ниже), а не колонка: жадная колонка отдаёт место
+// первой, и порог, объявленный на ней самой, ничего бы не значил.
+const TITLE_MIN_WIDTH = 340
 
 const headers = [
-  { title: '', key: 'actions', sortable: false, width: 84 },
-  { title: t('research.research.col.research'), key: 'title', sortable: false },
-  { title: t('research.research.col.areas'), key: 'area_count', sortable: false, width: 96, align: 'end' as const },
-  { title: t('research.research.col.queries'), key: 'query_count', sortable: false, width: 96, align: 'end' as const },
-  { title: t('research.research.col.kept'), key: 'document_kept', sortable: false, width: 104, align: 'end' as const },
-  { title: t('research.research.col.filtered'), key: 'document_filtered', sortable: false, width: 104, align: 'end' as const },
-  { title: t('research.research.col.updated_at'), key: 'updated_at', sortable: false, width: 170 },
+  { title: '', key: 'actions', sortable: false, width: 70 },
+  { title: t('research.research.col.research'), key: 'title', sortable: true, width: GREEDY_COLUMN_WIDTH },
+  { title: t('research.research.col.areas'), key: 'area_count', sortable: true, width: 96 },
+  { title: t('research.research.col.queries'), key: 'query_count', sortable: true, width: 104 },
+  { title: t('research.research.col.sources'), key: 'document_count', sortable: true, width: 150 },
+  { title: t('research.research.col.updated_at'), key: 'updated_at', sortable: true, width: 170 },
+  { title: t('research.research.col.created_at'), key: 'created_at', sortable: true, width: 170 },
 ]
+
+// Ширина, у́же которой таблица не сжимается, а начинает прокручиваться: сумма объявленных колонок,
+// где за жадную считается её порог. Считается по самим заголовкам, чтобы новая колонка не забыла
+// попасть в эту сумму.
+const tableMinWidth = `${headers.reduce(
+  (total, header) => total + (typeof header.width === 'number' ? header.width : TITLE_MIN_WIDTH),
+  0,
+)}px`
+
+interface SortItem { key: string; order: SortDir }
+
+const tableSortBy = computed(() => [{ key: store.sortBy, order: store.sortDir }])
+
+function onUpdateSortBy(value: SortItem[]) {
+  const first = value[0]
+  if (!first) return
+  store.sortBy = resolveResearchSortBy(first.key)
+  store.sortDir = first.order
+  store.resetPage()
+  store.load()
+}
 
 // Один сегмент на оба кода: RESEARCH@ открывает карточку исследования, GROUP@ — список группы
 // (маршруты разведены префиксом, см. routes.ts).
@@ -68,6 +100,14 @@ function openResearch(_: unknown, row: { item: ResearchListRow }) {
 
 function openCode(code: string) {
   router.push(researchesPath(code))
+}
+
+// Метка полки сужает выдачу до этой полки — тем же фильтром, что и выбор в панели: она попадает
+// в чипы активных фильтров, снимается оттуда же и складывается с уже набранным поиском.
+function filterByShelf(code: string) {
+  store.groupFilter = code
+  store.resetPage()
+  store.load()
 }
 
 // ── Разделы полок ─────────────────────────────────────────────────────────────
@@ -256,7 +296,6 @@ function afterChange() {
           :page-size="store.pageSize"
           :total="store.total"
           :page-count="store.pageCount"
-          :page-sizes="RESEARCH_PAGE_SIZES"
           :divider="false"
           @update:page="onPageChange"
           @update:page-size="onPageSizeChange"
@@ -276,12 +315,15 @@ function afterChange() {
         :items="store.items"
         :loading="store.loading"
         :items-per-page="store.pageSize"
+        :sort-by="tableSortBy"
+        must-sort
         item-value="code"
         density="comfortable"
         hover
         hide-default-footer
         :no-data-text="emptyText"
         @click:row="openResearch"
+        @update:sort-by="onUpdateSortBy"
       >
         <template #[`item.actions`]="{ item }">
           <ResearchRowActions
@@ -293,10 +335,24 @@ function afterChange() {
           />
         </template>
 
+        <!-- Полка стоит меткой в начале той же ячейки, а не своей колонкой: колонка отдавала
+             имени полки место, сравнимое с местом самого исследования, а различать их достаточно
+             по паре «иконка + цвет» — она и так узнаётся так везде. Имя полки остаётся во
+             всплывающей подписи, ссылка ведёт на её список. -->
         <template #[`item.title`]="{ item }">
-          <div class="topic-cell">{{ item.title }}</div>
-          <div v-if="item.description" class="desc-cell">
-            {{ truncate(item.description, DESCRIPTION_MAX) }}
+          <div class="topic">
+            <ResearchShelfMark
+              :research="item"
+              :filterable="store.groupCode === null"
+              @filter="filterByShelf"
+            />
+            <!-- Название — первая линия, описание — вторая, и каждое занимает РОВНО одну: что не
+                 поместилось по ширине, обрезается многоточием. Так у всех строк реестра одна
+                 высота, и список читается сверху вниз, а не разъезжается по длине названий. -->
+            <div class="topic__text" :title="item.title">
+              <div class="topic-cell">{{ item.title }}</div>
+              <div v-if="item.description" class="desc-cell">{{ item.description }}</div>
+            </div>
           </div>
         </template>
         <template #[`item.area_count`]="{ item }">
@@ -305,14 +361,33 @@ function afterChange() {
         <template #[`item.query_count`]="{ item }">
           <span class="count-cell">{{ item.query_count }}</span>
         </template>
-        <template #[`item.document_kept`]="{ item }">
-          <span class="count-cell count-cell--kept">{{ item.document_kept }}</span>
+        <!-- Источники одной колонкой: всего — то, по чему колонка сортируется, а за разделителем
+             разбор этого числа на принятые и отсеянные. Подписи разбора живут в подсказках:
+             в строке они соревновались бы за внимание с самим числом. -->
+        <template #[`item.document_count`]="{ item }">
+          <span class="sources-cell">
+            <span class="count-cell">{{ item.document_count }}</span>
+            <span class="sources-cell__divider" aria-hidden="true"></span>
+            <span class="count-cell count-cell--kept" :title="t('research.research.col.kept')">
+              {{ item.document_kept }}
+            </span>
+            <span class="count-cell count-cell--filtered" :title="t('research.research.col.filtered')">
+              {{ item.document_filtered }}
+            </span>
+            <span class="count-cell count-cell--error" :title="t('research.research.col.errored')">
+              {{ item.document_error }}
+            </span>
+          </span>
         </template>
-        <template #[`item.document_filtered`]="{ item }">
-          <span class="count-cell count-cell--filtered">{{ item.document_filtered }}</span>
-        </template>
+        <!-- Дата и давность парой, как в остальных таблицах проекта: точное время отвечает
+             «когда именно», подпись под ним — «давно ли», и второй ответ читается без счёта. -->
         <template #[`item.updated_at`]="{ item }">
-          <span class="date-cell">{{ fmtDateTime(item.updated_at) }}</span>
+          <div class="date-cell">{{ fmtDateTime(item.updated_at) }}</div>
+          <div class="date-rel">{{ fmtRelative(item.updated_at) }}</div>
+        </template>
+        <template #[`item.created_at`]="{ item }">
+          <div class="date-cell">{{ fmtDateTime(item.created_at) }}</div>
+          <div class="date-rel">{{ fmtRelative(item.created_at) }}</div>
         </template>
       </VDataTable>
 
@@ -321,7 +396,6 @@ function afterChange() {
         :page-size="store.pageSize"
         :total="store.total"
         :page-count="store.pageCount"
-        :page-sizes="RESEARCH_PAGE_SIZES"
         @update:page="onPageChange"
         @update:page-size="onPageSizeChange"
       />
@@ -417,6 +491,47 @@ function afterChange() {
 
 /* ── Таблица ────────────────────────────────────────────────────────────────── */
 
+/* Колонки берут объявленную ширину и НЕ растут под содержимым. Иначе `nowrap` у названия и
+   описания делал колонку шириной с самое длинное описание: на живых данных это 5000px и
+   прокрутка во весь экран — обрезать по многоточию было бы уже нечего. Нижняя граница — у
+   таблицы, а не у колонки: у́же неё таблица не сжимается, а прокручивается. */
+.researches :deep(.v-table__wrapper > table) {
+  table-layout: fixed;
+  min-width: v-bind(tableMinWidth);
+}
+
+/* Колонка действий — служебный жёлоб, а не данные: двух кнопок ей достаточно, и правая отбивка
+   ядра отрывала их от названия шириной с саму пару. Снять надо и её, и ширину в `headers`:
+   при `table-layout: auto` колонка считается по содержимому, но объявленная ширина работает
+   нижней границей — одной правки из двух колонка не замечает. */
+.researches :deep(thead th:first-child),
+.researches :deep(tbody td:first-child) {
+  padding-right: 0;
+}
+
+/* Метка полки открывает ячейку, текст идёт за ней. Растягивается она по всей высоте текста
+   (`stretch`), а не стоит значком у первой строки: полка — свойство всего исследования, и полем
+   во всю высоту она читается как поле строки, а не как приписка к названию. */
+.topic {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  min-width: 0;
+}
+
+.topic__text {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Обе линии не переносятся и обрезаются многоточием — отсюда и одинаковая высота у всех строк. */
+.topic-cell,
+.desc-cell {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .topic-cell {
   font-weight: 500;
   line-height: 1.4;
@@ -434,16 +549,41 @@ function afterChange() {
   color: var(--text-muted);
 }
 
+/* Разбор идёт после числа-итога и держится тише него: сначала читается «сколько всего». */
+.sources-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sources-cell__divider {
+  width: 1px;
+  height: 12px;
+  background: var(--border);
+}
+
 .count-cell--kept {
-  color: rgb(var(--v-theme-success));
+  color: var(--success);
+  opacity: 0.75;
 }
 
 .count-cell--filtered {
   color: var(--text-faint);
 }
 
+.count-cell--error {
+  color: var(--error);
+  opacity: 0.75;
+}
+
 .date-cell {
   white-space: nowrap;
   color: var(--text-muted);
+}
+
+.date-rel {
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--text-faint);
 }
 </style>

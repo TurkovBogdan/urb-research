@@ -6,7 +6,7 @@ import { fmtDateTime } from '@/shared/utils/date'
 
 import ResearchRowActions from './ResearchRowActions.vue'
 import { groupColorVars } from '../constants/groupColors'
-import { groupIcon } from '../constants/groupIcons'
+import { iconByName } from '@/shared/icons'
 import type { ResearchListRow } from '../api'
 
 const DESCRIPTION_MAX = 128
@@ -62,7 +62,7 @@ const truncate = (s: string, n: number) => (s.length > n ? s.slice(0, n) + '…'
     <footer class="card__foot">
       <span v-if="props.withGroup && props.research.group_code" class="card__group">
         <span class="card__group-icon">
-          <component :is="groupIcon(props.research.group_icon)" :size="14" :stroke-width="1.7" />
+          <component :is="iconByName(props.research.group_icon)" :size="14" :stroke-width="1.7" />
         </span>
         {{ props.research.group_name }}
       </span>

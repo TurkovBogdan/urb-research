@@ -23,11 +23,11 @@ mixes freely with relationships:
 
 ```mermaid
 classDiagram
-  ServiceGateway <|-- TavilyGateway
-  ServiceGateway <|-- XaiGateway
-  ServiceGateway: +String SERVICE
-  ServiceGateway: +balance() ConnectorBalance
-  XaiGateway: +responses() dict
+  Connector <|-- TavilyConnector
+  Connector <|-- XaiConnector
+  Connector: +String SERVICE
+  Connector: +balance() ConnectorBalance
+  XaiConnector: +responses() dict
 ```
 
 ## Visibility

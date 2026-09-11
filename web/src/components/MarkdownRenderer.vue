@@ -147,6 +147,9 @@ function onClick(event: MouseEvent) {
 
   font-family: var(--font-reading);
   font-size: var(--prose-size);
+  /* Насыщенность — тоже выбор человека (токен с <html>), но только у текста: заголовки и
+     выделения ниже держат свой вес, иначе выделять стало бы нечем. */
+  font-weight: var(--reading-weight, 300);
   line-height: 1.7;
   color: var(--text);
   /* Reset inherited white-space (chat bubbles set pre-wrap for plain-text bodies): the parser
@@ -199,7 +202,11 @@ function onClick(event: MouseEvent) {
 /* ── Headings ─────────────────────────────────────────────── */
 
 .md-body :deep(:is(h1, h2, h3, h4, h5, h6)) {
-  font-weight: 600;
+  /* Гарнитура заголовков — свой выбор; по умолчанию токен ссылается на шрифт текста, и тогда
+     заголовок набран тем же, чем абзац под ним. Правило стоит после общего `font-family: inherit`
+     для заголовков и абзацев — та же вескость, побеждает позднее. */
+  font-family: var(--font-heading, var(--font-reading));
+  font-weight: var(--heading-weight, 600);
   color: var(--text);
   /* Trims the half-leading the browser adds above and below a text box — without it the
      margins below are not the distances actually seen, and the gap depends on the chosen
@@ -313,7 +320,10 @@ function onClick(event: MouseEvent) {
 /* A fenced block is a mounted CodeBlock component; this only spaces it in the flow.
    A self-contained block gets more air than a paragraph — the more autonomous the
    element, the wider the gap that reads as "this is a separate thing". */
+/* Выбор человека доезжает до листинга здесь: сам `CodeBlock` читает `--code-size`, а знает о нём
+   только зона чтения — те же блоки в дизайн-системе и в панелях подсказок остаются своего кегля. */
 .md-body :deep(.md-code-slot) {
+  --code-size: var(--reading-code-size, 12px);
   margin: 1.5em 0;
 }
 .md-body :deep(.md-code-slot:last-child) {

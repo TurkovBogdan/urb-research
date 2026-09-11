@@ -18,6 +18,7 @@ import {
 
 import StatusBadge from '@/components/StatusBadge.vue'
 import TablePaginationBar from '@/components/TablePaginationBar.vue'
+import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { useClipboard } from '@/composables/useClipboard'
 import { fmtDateTime } from '@/shared/utils/date'
 
@@ -55,7 +56,7 @@ const query = ref('')
 const status = ref<SourceStatus | null>(null)
 const relevanceBand = ref<RelevanceBand | null>(null)
 const page = ref(1)
-const pageSize = ref(25)
+const pageSize = ref(DEFAULT_PAGE_SIZE)
 
 function clearFilters() {
   query.value = ''
@@ -330,7 +331,9 @@ function onPageSizeChange(size: number) {
 
 .doc-actions__btn:hover { color: var(--text); }
 
-.doc-actions__btn--done { color: var(--success); }
+/* Галочка подтверждает копирование формой, а не цветом: зелёный тут читался бы как статус
+   источника, хотя относится к нажатию. */
+.doc-actions__btn--done { color: var(--text-muted); }
 
 .doc-title {
   font-weight: 500;

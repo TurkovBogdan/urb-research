@@ -8,11 +8,11 @@ import IconColorPicker from '@/components/IconColorPicker.vue'
 // Демо идёт на настоящих наборах — палитре и иконках полок research: выдуманные списки
 // показывали бы раскладку на данных, которых в приложении нет.
 import { groupColorNames, groupColorVars } from '@/features/research/constants/groupColors'
-import { groupIcon, groupIconNames } from '@/features/research/constants/groupIcons'
+import { iconByName, iconNames } from '@/shared/icons'
 
 const { t } = useI18n()
 
-const icons = groupIconNames()
+const icons = iconNames()
 const colors = groupColorNames()
 
 const icon = ref<string | null>('flask')
@@ -48,7 +48,7 @@ function modelLiteral(value: string | null): string {
               v-model:color="color"
               :icons="icons"
               :colors="colors"
-              :resolve-icon="groupIcon"
+              :resolve-icon="iconByName"
               :resolve-color="groupColorVars"
             />
             <p class="ds-value">icon = {{ modelLiteral(icon) }} · color = {{ modelLiteral(color) }}</p>
@@ -64,7 +64,7 @@ function modelLiteral(value: string | null): string {
               v-model:color="optionalColor"
               :icons="icons"
               :colors="colors"
-              :resolve-icon="groupIcon"
+              :resolve-icon="iconByName"
               :resolve-color="groupColorVars"
               :height="140"
               clearable

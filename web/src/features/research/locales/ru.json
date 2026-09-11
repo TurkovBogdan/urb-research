@@ -37,8 +37,7 @@
       "title": "Название",
       "area_count": "Число зон",
       "query_count": "Число поисков",
-      "document_kept": "Принятых источников",
-      "document_filtered": "Отсеянных источников"
+      "document_count": "Число источников"
     }
   },
   "field": {
@@ -49,9 +48,12 @@
       "research": "Исследование",
       "areas": "Зоны",
       "queries": "Поиски",
+      "sources": "Источники",
       "kept": "Принято",
       "filtered": "Отсеяно",
-      "updated_at": "Обновлено"
+      "errored": "Не скачалось",
+      "updated_at": "Обновлено",
+      "created_at": "Создано"
     },
     "filter": {
       "query": "Поиск по исследованиям",

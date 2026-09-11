@@ -6,6 +6,7 @@ import PageHeader from '@/layout/components/PageHeader.vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import SettingsGroup from '@/components/settings/SettingsGroup.vue'
 import SwitchPanel from '@/components/SwitchPanel.vue'
+import VSelectStepper from '@/components/VSelectStepper.vue'
 import { useSettingsStore } from '@/stores/settings'
 import {
   DIAGRAM_ALIGNS,
@@ -14,13 +15,16 @@ import {
   type DiagramAlignOption,
 } from '@/constants/diagrams'
 import {
+  CODE_SIZES,
   DIAGRAM_FONTS,
+  HEADING_FONTS,
   INTERFACE_FONTS,
   MONO_FONTS,
   NO_MEASURE,
   READING_FONTS,
   READING_MEASURES,
   READING_SIZES,
+  READING_WEIGHTS,
   type FontOption,
 } from '@/constants/fonts'
 import { RESEARCH_LIST_VIEWS } from '@/constants/lists'
@@ -38,9 +42,9 @@ const { t } = useI18n()
 const settings = useSettingsStore()
 
 // The sample is markdown and goes through the real renderer, so the preview is the reading
-// zone itself rather than an imitation of it. It carries one of every construction a body
-// actually uses — that is what makes the choice above judgeable: a family that looks fine in
-// a paragraph can fall apart in a dense table or next to monospace.
+// zone itself rather than an imitation of it. It carries what the choices above are judged
+// by — headings, running text with its inline constructions, a list — and stops there:
+// tables, code, diagrams and the rest get preview zones of their own.
 const PREVIEW = `# Заголовок первого уровня
 
 Первый абзац идёт сразу под заголовком — по нему видно рисунок строчных, интерлиньяж и,
@@ -60,42 +64,35 @@ const PREVIEW = `# Заголовок первого уровня
 - маркированный список: первый пункт
 - второй пункт, заметно длиннее первого, чтобы стало видно, как ложится перенос внутри пункта
   - вложенный пункт
-- третий пункт
+`
 
-1. нумерованный список
-2. второй пункт
-
-- [x] выполненный пункт чек-листа
-- [ ] невыполненный пункт
-
-> Цитата отбивается линейкой и воздухом, без курсива: в этих телах она бывает длиной
-> в абзац, а курсив на такой длине читается заметно медленнее.
-
-| Параметр | Значение | Комментарий |
-|---|---|---|
-| Кегль текста | 16 px | нижняя граница для чтения подряд |
-| Интерлиньяж | 1.7 | абзацам нужно больше воздуха, чем строкам интерфейса |
-| Длина строки | 92ch | таблицы и код в это ограничение не входят |
+// Блок кода судят не сам по себе, а рядом с текстом: абзацы вокруг показывают, насколько
+// моноширинная гарнитура спорит с читательской по цвету и росту знака. Питон — потому что на
+// нём в этих телах пишут чаще всего, и подсветка здесь такая же, как в настоящем документе.
+//
+// Блока два, и это разные вещи: в многострочном видно шапку, номера строк и длину строки на
+// выбранном кегле, а однострочный рисуется командной плашкой — без шапки и с кнопкой копирования
+// по наведению. Судить их порознь нельзя, поэтому оба стоят в примере.
+const CODE_PREVIEW = `Короткий абзац перед блоком: по нему видно, как моноширинный набор стоит
+рядом с текстом — не спорит ли он с ним по росту знака и насыщенности. Внутри строки тоже
+встречается \`inline-код\`, и он набран той же гарнитурой, что и блок ниже.
 
 \`\`\`python
-def read(text: str, *, size: int = 16) -> str:
+def read(path: Path) -> str:
     """Блок кода: подсветка, номера строк и копирование."""
-    return text.strip()
+    text = path.read_text(encoding="utf-8")
+    if not text.strip():
+        raise ValueError(f"пустой файл: {path}")
+    lines = [line.rstrip() for line in text.splitlines()]
+    return "\\n".join(lines)
 \`\`\`
 
-Схема идёт в теле тем же блоком, что и код, и набрана своей гарнитурой — подписи внутри
-блоков живут в тесных коробках, и семья, хорошая в абзаце, там может не поместиться.
+Абзац между блоками — тот же текст, что и в теле документа: по нему видно, сколько воздуха
+остаётся вокруг листинга и не съедает ли блок отбивку соседних абзацев.
 
-\`\`\`mermaid
-graph LR
-  A[Запрос агента] --> B{Схема поддержана?}
-  B -->|да| C[Рендер SVG]
-  B -->|нет| D[Блок кода]
+\`\`\`bash
+uv run pytest --module=core_interface
 \`\`\`
-
----
-
-Последний абзац после разделителя — самый широкий интервал в теле.
 `
 
 // Each option previews itself: the row is set in the family it selects, which tells more
@@ -119,6 +116,15 @@ const diagramHeightOptions = DIAGRAM_HEIGHTS.map((height) => ({
 
 const sizeOptions = READING_SIZES.map((size) => ({ title: `${size} px`, value: size }))
 
+const codeSizeOptions = CODE_SIZES.map((size) => ({ title: `${size} px`, value: size }))
+
+// Каждый вариант набран своим весом: увидеть насыщенность важнее, чем прочитать её номер.
+const weightOptions = READING_WEIGHTS.map((weight) => ({
+  title: String(weight),
+  value: weight,
+  props: { style: { fontWeight: weight } },
+}))
+
 const measureOptions = READING_MEASURES.map((measure) => ({
   title: measure === NO_MEASURE ? t('settings.interface.measure.reading.unlimited') : `${measure}ch`,
   value: measure,
@@ -140,7 +146,7 @@ const researchViewOptions = RESEARCH_LIST_VIEWS.map((view) => ({
       :description="t('settings.interface.page.description')"
     />
 
-    <div class="settings-grid">
+    <div class="settings-list">
       <SettingsGroup
         :title="t('settings.interface.group.app.title')"
         :description="t('settings.interface.group.app.description')"
@@ -162,7 +168,7 @@ const researchViewOptions = RESEARCH_LIST_VIEWS.map((view) => ({
         </div>
 
         <div class="setting">
-          <VSelect
+          <VSelectStepper
             v-model="settings.typography.interfaceFont"
             :items="INTERFACE_FONTS"
             item-title="label"
@@ -202,7 +208,7 @@ const researchViewOptions = RESEARCH_LIST_VIEWS.map((view) => ({
         :description="t('settings.interface.group.document.description')"
       >
         <div class="setting">
-          <VSelect
+          <VSelectStepper
             v-model="settings.typography.readingFont"
             :items="READING_FONTS"
             item-title="label"
@@ -218,7 +224,7 @@ const researchViewOptions = RESEARCH_LIST_VIEWS.map((view) => ({
         </div>
 
         <div class="setting">
-          <VSelect
+          <VSelectStepper
             v-model="settings.typography.readingSize"
             :items="sizeOptions"
             :chips="false"
@@ -231,7 +237,79 @@ const researchViewOptions = RESEARCH_LIST_VIEWS.map((view) => ({
         </div>
 
         <div class="setting">
-          <VSelect
+          <VSelectStepper
+            v-model="settings.typography.readingWeight"
+            :items="weightOptions"
+            :chips="false"
+            :label="t('settings.interface.weight.reading.label')"
+            variant="outlined"
+            density="comfortable"
+            hide-details="auto"
+          />
+          <p class="setting__desc">{{ t('settings.interface.weight.reading.description') }}</p>
+        </div>
+
+        <div class="setting">
+          <VSelectStepper
+            v-model="settings.typography.headingFont"
+            :items="HEADING_FONTS"
+            item-title="label"
+            item-value="code"
+            :item-props="optionProps"
+            :chips="false"
+            :label="t('settings.interface.font.heading.label')"
+            variant="outlined"
+            density="comfortable"
+            hide-details="auto"
+          />
+          <p class="setting__desc">{{ t('settings.interface.font.heading.description') }}</p>
+        </div>
+
+        <div class="setting">
+          <VSelectStepper
+            v-model="settings.typography.headingWeight"
+            :items="weightOptions"
+            :chips="false"
+            :label="t('settings.interface.weight.heading.label')"
+            variant="outlined"
+            density="comfortable"
+            hide-details="auto"
+          />
+          <p class="setting__desc">{{ t('settings.interface.weight.heading.description') }}</p>
+        </div>
+
+        <div class="setting">
+          <VSelectStepper
+            v-model="settings.typography.readingMeasure"
+            :items="measureOptions"
+            :chips="false"
+            :label="t('settings.interface.measure.reading.label')"
+            variant="outlined"
+            density="comfortable"
+            hide-details="auto"
+          />
+          <p class="setting__desc">{{ t('settings.interface.measure.reading.description') }}</p>
+        </div>
+
+      </SettingsGroup>
+
+      <!-- Пример документа стоит сразу за настройками, которые на него ложатся: гарнитуру, кегль и
+           ширину колонки выбирают по тому, как они читаются, а не по названию в списке. Применяется
+           он на горячую — выбор уходит в зону чтения тем же мигом, что и во всё приложение. -->
+      <VCard variant="outlined" rounded="lg">
+        <VCardTitle class="text-h6">{{ t('settings.interface.preview.title') }}</VCardTitle>
+        <VDivider />
+        <VCardText>
+          <MarkdownRenderer :text="PREVIEW" />
+        </VCardText>
+      </VCard>
+
+      <SettingsGroup
+        :title="t('settings.interface.group.code.title')"
+        :description="t('settings.interface.group.code.description')"
+      >
+        <div class="setting">
+          <VSelectStepper
             v-model="settings.typography.monoFont"
             :items="MONO_FONTS"
             item-title="label"
@@ -247,19 +325,26 @@ const researchViewOptions = RESEARCH_LIST_VIEWS.map((view) => ({
         </div>
 
         <div class="setting">
-          <VSelect
-            v-model="settings.typography.readingMeasure"
-            :items="measureOptions"
+          <VSelectStepper
+            v-model="settings.typography.codeSize"
+            :items="codeSizeOptions"
             :chips="false"
-            :label="t('settings.interface.measure.reading.label')"
+            :label="t('settings.interface.size.code.label')"
             variant="outlined"
             density="comfortable"
             hide-details="auto"
           />
-          <p class="setting__desc">{{ t('settings.interface.measure.reading.description') }}</p>
+          <p class="setting__desc">{{ t('settings.interface.size.code.description') }}</p>
         </div>
-
       </SettingsGroup>
+
+      <VCard variant="outlined" rounded="lg">
+        <VCardTitle class="text-h6">{{ t('settings.interface.preview.title') }}</VCardTitle>
+        <VDivider />
+        <VCardText>
+          <MarkdownRenderer :text="CODE_PREVIEW" />
+        </VCardText>
+      </VCard>
 
       <SettingsGroup
         :title="t('settings.interface.group.diagram.title')"
@@ -311,34 +396,16 @@ const researchViewOptions = RESEARCH_LIST_VIEWS.map((view) => ({
         </div>
       </SettingsGroup>
     </div>
-
-    <!-- Предпросмотр вне сетки: он не настройка, а то, на что настройки применяются, и читать его
-         надо на полной ширине — колонка группы уже ограничения зоны чтения. -->
-    <VCard variant="outlined" rounded="lg" class="mt-4">
-      <VCardTitle class="text-h6">{{ t('settings.interface.preview.title') }}</VCardTitle>
-      <VDivider />
-      <VCardText>
-        <MarkdownRenderer :text="PREVIEW" />
-      </VCardText>
-    </VCard>
   </PageLayout>
 </template>
 
 <style scoped>
-/* Та же сетка, что у карточек модулей: колонки с потолком ширины и высотой по содержимому —
-   поле ввода шире ~440px читается хуже, а группы тут разной длины. */
-.settings-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 440px));
-  align-items: start;
-  justify-content: start;
+/* Та же раскладка, что у карточек модулей: карточка группы во всю ширину страницы, группы идут
+   стопкой, а в колонки разложены поля внутри (утилита `.settings-columns`). */
+.settings-list {
+  display: flex;
+  flex-direction: column;
   gap: 16px;
-}
-
-@media (max-width: 700px) {
-  .settings-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 /* Подпись под полем, а не подсказкой Vuetify: у настроек модулей описание живёт отдельной

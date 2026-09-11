@@ -1,7 +1,7 @@
 // Registry of the colours a research group may be painted with: name -> three steps of one hue.
 //
 // The names are the contract with the backend (a stored value is a name, never a hex), the same
-// way `groupIcons.ts` holds the icon half. Keeping the hexes here rather than in `main.scss` is
+// way `@/shared/icons.ts` holds the icon half. Keeping the hexes here rather than in `main.scss` is
 // deliberate: these are *data* — a set the user picks from, indexed by a name that travels to the
 // database — while `main.scss` holds the app's own tokens, which are referenced by role and never
 // enumerated. A name outside the registry is not an error: the value is not validated on the way

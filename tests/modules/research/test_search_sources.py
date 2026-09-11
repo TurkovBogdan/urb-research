@@ -201,7 +201,11 @@ async def test_sources_refetch_revives_the_same_page_in_another_research(call, u
 async def test_sources_refetch_refuses_a_disabled_fetch_engine(call, use_search, monkeypatch):
     """Движок контента выключен — отказ до сети, а не сотня страниц, разложенных в ``error``."""
     r, _, _, engine = await _seed_unfetched(call, use_search, pages={})
-    monkeypatch.setattr(engine, "available", lambda: False)
+
+    async def _not_ready() -> bool:
+        return False
+
+    monkeypatch.setattr(engine, "available", _not_ready)
 
     with pytest.raises(ToolError, match="fetch_engine_disabled"):
         await call("sources_refetch", codes=[r])

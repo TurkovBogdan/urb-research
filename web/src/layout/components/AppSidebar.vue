@@ -36,11 +36,11 @@ function navLabel(entry: { label: string; labelKey?: string }): string {
 }
 
 const nav: NavEntry[] = [
-  { kind: 'section', label: 'MCP' },
-  { path: '/mcp-servers', label: 'MCP-серверы', labelKey: 'core_mcp.nav', icon: IconServerBolt },
   { kind: 'section', label: 'Исследования' },
   { path: '/research/groups', label: 'Группы', labelKey: 'research.nav_groups', icon: IconCategory },
   { path: '/research/researches', label: 'Исследования', labelKey: 'research.nav', icon: IconTelescope },
+  { kind: 'section', label: 'MCP' },
+  { path: '/mcp-servers', label: 'MCP-серверы', labelKey: 'core_mcp.nav', icon: IconServerBolt },
   { kind: 'section', label: 'Данные' },
   {
     label: 'Веб-поиск',
@@ -51,8 +51,9 @@ const nav: NavEntry[] = [
       { path: '/web-search/pages', label: 'Страницы', labelKey: 'web_search.nav_pages', icon: IconFileText },
     ],
   },
+  { kind: 'section', label: 'Внешние сервисы' },
+  { path: '/integrations', label: 'Интеграции', labelKey: 'core_connectors.nav', icon: IconPlugConnected },
   { kind: 'section', label: 'Мониторинг' },
-  { path: '/connectors', label: 'Сервисы', labelKey: 'core_connectors.nav', icon: IconPlugConnected },
   { path: '/tasks', label: 'Задачи', labelKey: 'core_monitoring.nav', icon: IconClock },
   { kind: 'section', label: 'Настройки' },
   { path: '/settings/interface', label: 'Настройка интерфейса', icon: IconTypography },

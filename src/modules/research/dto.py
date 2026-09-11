@@ -341,6 +341,9 @@ class ResearchListRow(BaseModel):
     Вид группы (``group_icon``/``group_color``) едет вместе со строкой, а не добирается вторым
     запросом за списком групп: строка и так знает, к какой группе относится, и отдать её метку
     сразу дешевле, чем заставлять каждого потребителя списка держать ещё и справочник.
+
+    ``created_at`` есть только здесь, а не в общей ``ResearchRow``: реестр показывает обе даты
+    колонками и сортирует по каждой, а агенту дата заведения ни о чём не говорит.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -354,8 +357,11 @@ class ResearchListRow(BaseModel):
     group_color: str = ""
     area_count: int = 0
     query_count: int = 0
+    document_count: int = 0
     document_kept: int = 0
     document_filtered: int = 0
+    document_error: int = 0
+    created_at: DatetimeUTCStr
     updated_at: DatetimeUTCStr
 
 

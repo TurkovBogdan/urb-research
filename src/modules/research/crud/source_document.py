@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from sqlalchemy import func, select, update
 
-from src.core.database import session_scope
+from src.core.database import session_scope, write_scope
 from src.core.utils.hashing import random_hash
 from src.modules.research.constants import DOC_ERROR, DOC_PENDING
 from src.modules.research.models.source_document import ResearchSourceDocument
@@ -37,7 +37,7 @@ async def source_document_create(
     summary: str | None = None,
     status: str = DOC_PENDING,
 ) -> ResearchSourceDocument:
-    async with session_scope() as s:
+    async with write_scope() as s:
         row = ResearchSourceDocument(
             code=source_document_code(),
             research_code=research_code,
@@ -126,7 +126,7 @@ async def source_document_revive_by_pages(page_codes: list[str]) -> None:
         )
         .values(status=DOC_PENDING)
     )
-    async with session_scope() as s:
+    async with write_scope() as s:
         await s.execute(stmt)
 
 
@@ -143,7 +143,7 @@ async def source_document_reset_by_codes(codes: list[str]) -> None:
         return
     fetched = select(WebSearchPage.code).where(WebSearchPage.status == FETCH_STATUS_DONE)
     requested = ResearchSourceDocument.code.in_(codes)
-    async with session_scope() as s:
+    async with write_scope() as s:
         await s.execute(
             update(ResearchSourceDocument)
             .where(requested, ResearchSourceDocument.page_code.in_(fetched))
@@ -224,7 +224,7 @@ async def _set(code: str, values: dict) -> ResearchSourceDocument | None:
         .values(**values)
         .returning(ResearchSourceDocument)
     )
-    async with session_scope() as s:
+    async with write_scope() as s:
         return (await s.execute(stmt)).scalars().first()
 
 

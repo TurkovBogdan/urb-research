@@ -11,7 +11,7 @@ import pytest
 from sqlalchemy import update
 
 from src.core.config import Config
-from src.core.database import close_database, init_database, session_scope
+from src.core.database import close_database, init_database, write_scope
 from src.core.utils.date import utc_now
 from src.core.utils.hashing import text_hash
 from src.modules.web_search.constants import (
@@ -32,7 +32,7 @@ from src.modules.web_search.models.query import WebSearchQuery
 
 async def _backdate_updated_at(code: str, when) -> None:
     """Состарить ``updated_at`` строки запроса — имитация залипшего/старого ``processing``."""
-    async with session_scope() as s:
+    async with write_scope() as s:
         await s.execute(
             update(WebSearchQuery).where(WebSearchQuery.code == code).values(updated_at=when)
         )

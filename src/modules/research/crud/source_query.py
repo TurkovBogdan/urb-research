@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from sqlalchemy import delete, func, select
 
-from src.core.database import session_scope
+from src.core.database import session_scope, write_scope
 from src.core.utils.hashing import random_hash
 from src.modules.research.models.source_document import ResearchSourceDocument
 from src.modules.research.models.source_query import ResearchSourceQuery
@@ -25,7 +25,7 @@ def source_query_code() -> str:
 async def source_query_create(
     *, research_code: str, area_code: str, search_code: str, query: str
 ) -> ResearchSourceQuery:
-    async with session_scope() as s:
+    async with write_scope() as s:
         row = ResearchSourceQuery(
             code=source_query_code(),
             research_code=research_code,
@@ -67,7 +67,7 @@ async def source_query_list_by_area(area_code: str) -> list[ResearchSourceQuery]
 async def source_query_delete(code: str) -> bool:
     """Удалить прогон поиска. Каскад вручную: источники прогона → сам запрос.
     ``True`` — существовал и удалён."""
-    async with session_scope() as s:
+    async with write_scope() as s:
         row = await s.get(ResearchSourceQuery, code)
         if row is None:
             return False

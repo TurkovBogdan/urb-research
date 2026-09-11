@@ -4,10 +4,11 @@
 // `--font-reading` tokens. A family offered in `constants/fonts.ts` without a face
 // here would silently fall back to the system stack.
 //
-// The libre families are Google's own per-subset variable builds, served verbatim:
-// the binaries are not re-cut, so the OFL Reserved Font Name clause never comes into
-// play. One family = one directory `assets/fonts/<family>/`, holding every cut it
-// ships plus its licence as `OFL.txt`.
+// The libre families are Google's own per-subset builds, served verbatim: the binaries
+// are not re-cut, so the OFL Reserved Font Name clause never comes into play. One family
+// = one directory `assets/fonts/<family>/`, holding every cut it ships plus its licence
+// as `OFL.txt`. Whether a family is variable or static decides its file naming and which
+// of the two mixins below declares it.
 
 // Subsetting is what keeps the choice cheap: a family the user has not selected is
 // never requested, and a selected one downloads only the ranges its text actually
@@ -27,15 +28,35 @@ $font-subsets: (
   ),
 );
 
-@mixin subsetted-family($family, $slug, $weights) {
+// A variable family covers its whole weight range in one binary per subset, so the file
+// name is the subset alone and the face claims the range.
+@mixin variable-family($family, $slug, $weight-range) {
   @each $subset, $range in $font-subsets {
     @font-face {
       font-family: $family;
       font-style: normal;
-      font-weight: $weights;
+      font-weight: $weight-range;
       font-display: swap;
       src: url('../assets/fonts/#{$slug}/#{$subset}.woff2') format('woff2');
       unicode-range: $range;
+    }
+  }
+}
+
+// A static family has no weight axis: every weight is its own binary, named
+// `<subset>-<weight>`. Declaring a range over one file would leave the browser
+// synthesising the missing weights instead of loading the drawn ones.
+@mixin static-family($family, $slug, $weights) {
+  @each $weight in $weights {
+    @each $subset, $range in $font-subsets {
+      @font-face {
+        font-family: $family;
+        font-style: normal;
+        font-weight: $weight;
+        font-display: swap;
+        src: url('../assets/fonts/#{$slug}/#{$subset}-#{$weight}.woff2') format('woff2');
+        unicode-range: $range;
+      }
     }
   }
 }
@@ -70,11 +91,56 @@ $font-subsets: (
        url('../assets/fonts/jetbrains-mono/italic.woff')  format('woff');
 }
 
+// ── Grotesques ───────────────────────────────────────────────────────────────
+
 // Golos Text — Cyrillic-first grotesque drawn for reading rather than for interfaces.
-@include subsetted-family('Golos Text', 'golos-text', 400 900);
+// Its axis starts at 400: the family has no light weights, and it ships no italic at all.
+@include variable-family('Golos Text', 'golos-text', 400 900);
+
+// IBM Plex Sans — Cyrillic by Aleksandra Samulenkova; the only family bundled here that
+// carries Bulgarian localised forms (`locl BGR`).
+@include variable-family('IBM Plex Sans', 'ibm-plex-sans', 100 700);
+
+// Commissioner — humanist grotesque whose Cyrillic was drawn with Maria Doreuli. The
+// flare and volume axes are in the binary but not exposed: only `wght` is declared here.
+@include variable-family('Commissioner', 'commissioner', 100 900);
+
+// Geologica — wide stance and large apertures, the two parameters the low-vision
+// research rewards. Its `CRSV` axis is a real cursive rather than a slant.
+@include variable-family('Geologica', 'geologica', 100 900);
+
+// PT Sans — commissioned for the languages of Russia; the widest minority-language
+// Cyrillic of the bundled grotesques. Static, so Regular and Bold are separate files.
+@include static-family('PT Sans', 'pt-sans', 400 700);
+
+// ── Serifs ───────────────────────────────────────────────────────────────────
 
 // Literata — screen-first text serif (Google Play Books), for continuous reading.
-@include subsetted-family('Literata', 'literata', 400 700);
+@include variable-family('Literata', 'literata', 400 700);
 
-// Inter — dense-interface grotesque, the alternative to Onest in the UI role.
-@include subsetted-family('Inter', 'inter', 100 900);
+// Source Serif 4 — text serif with an optical-size axis; its Cyrillic is judged better
+// than that of the Source Sans it was drawn to pair with.
+@include variable-family('Source Serif', 'source-serif', 200 900);
+
+// Lora — calligraphic text serif carrying the widest set of localised Cyrillic forms
+// of anything bundled here: Bulgarian, Serbian, Bashkir and Chuvash.
+@include variable-family('Lora', 'lora', 400 700);
+
+// Piazzolla — optical sizes 8–30 pt; Cyrillic drawn with Bulgarian designer Krassen Krestev.
+@include variable-family('Piazzolla', 'piazzolla', 100 900);
+
+// PT Serif — the serif of the PT system, pairs with PT Sans and PT Mono.
+@include static-family('PT Serif', 'pt-serif', 400 700);
+
+// Spectral — the serif inside Google Docs; its Cyrillic was drawn by Ilya Ruderman and
+// Yury Ostromentsky, the same experts whose reviews decided this shortlist.
+@include static-family('Spectral', 'spectral', 400 700);
+
+// ── Monospace ────────────────────────────────────────────────────────────────
+
+// Martian Mono — the only monospace here with a width axis; note it carries no South
+// Slavic letters, so Serbian and Macedonian fall through to the fallback stack.
+@include variable-family('Martian Mono', 'martian-mono', 100 800);
+
+// IBM Plex Mono — the monospace sibling of IBM Plex Sans.
+@include static-family('IBM Plex Mono', 'ibm-plex-mono', 400 700);
