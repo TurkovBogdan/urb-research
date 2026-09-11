@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import subprocess
 import types
+from datetime import datetime
 
 import httpx
 import pytest
 
 from src.apps.app import mcp_stdio
+from src.core.maintenance import MaintenanceFlag
 
 
 def _cfg(**over):
@@ -18,6 +20,13 @@ def _cfg(**over):
         mcp_stdio_boot_timeout=30, mcp_stdio_open_browser=True,
     )
     return types.SimpleNamespace(**{**base, **over})
+
+
+@pytest.fixture(autouse=True)
+def no_maintenance_flag(monkeypatch):
+    """Шим читает флаг на живой машине — тесты не должны зависеть от того, идёт ли там
+    обновление; тест про сам гейт переопределяет это своим значением."""
+    monkeypatch.setattr(mcp_stdio.maintenance, "active", lambda: None)
 
 
 @pytest.mark.pure
@@ -43,12 +52,38 @@ def test_resolve_code_picks_sole_mounted_server():
     assert mcp_stdio._resolve_code(_cfg()) == "research"
 
 
+def _health_response(payload, status_code=200):
+    return types.SimpleNamespace(status_code=status_code, json=lambda: payload)
+
+
 @pytest.mark.pure
-def test_backend_alive_true_on_200(monkeypatch):
+def test_backend_alive_true_on_ok_payload(monkeypatch):
     monkeypatch.setattr(
-        mcp_stdio.httpx, "get", lambda *a, **k: types.SimpleNamespace(status_code=200)
+        mcp_stdio.httpx, "get", lambda *a, **k: _health_response({"status": "ok"})
     )
     assert mcp_stdio._backend_alive(_cfg()) is True
+
+
+@pytest.mark.pure
+def test_backend_alive_false_on_degraded_payload(monkeypatch):
+    """Деградировавший backend отвечает 200 — готовность решает `status`, а не код."""
+    monkeypatch.setattr(
+        mcp_stdio.httpx,
+        "get",
+        lambda *a, **k: _health_response({"status": "degraded", "pending": ["rem_005"]}),
+    )
+    assert mcp_stdio._backend_alive(_cfg()) is False
+
+
+@pytest.mark.pure
+def test_backend_alive_false_on_unparsable_body(monkeypatch):
+    def _not_json(*a, **k):
+        return types.SimpleNamespace(
+            status_code=200, json=lambda: (_ for _ in ()).throw(ValueError("not json"))
+        )
+
+    monkeypatch.setattr(mcp_stdio.httpx, "get", _not_json)
+    assert mcp_stdio._backend_alive(_cfg()) is False
 
 
 @pytest.mark.pure
@@ -58,6 +93,20 @@ def test_backend_alive_false_on_error(monkeypatch):
 
     monkeypatch.setattr(mcp_stdio.httpx, "get", _boom)
     assert mcp_stdio._backend_alive(_cfg()) is False
+
+
+@pytest.mark.pure
+def test_probe_health_carries_pending_revisions(monkeypatch):
+    monkeypatch.setattr(
+        mcp_stdio.httpx,
+        "get",
+        lambda *a, **k: _health_response({"status": "degraded", "pending": ["rem_005", "wsm_004"]}),
+    )
+    health = mcp_stdio._probe_health(_cfg())
+    assert health is not None
+    assert health.is_ready is False
+    assert health.pending == ("rem_005", "wsm_004")
+    assert "rem_005, wsm_004" in health.describe()
 
 
 @pytest.mark.pure
@@ -113,7 +162,7 @@ def test_wait_ready_false_on_timeout(monkeypatch):
 @pytest.mark.pure
 def test_ensure_backend_noop_when_alive(monkeypatch):
     calls = []
-    monkeypatch.setattr(mcp_stdio, "_backend_alive", lambda c: True)
+    monkeypatch.setattr(mcp_stdio, "_probe_health", lambda c: mcp_stdio.BackendHealth("ok"))
     monkeypatch.setattr(mcp_stdio, "_spawn_backend", lambda c: calls.append("spawn"))
     monkeypatch.setattr(mcp_stdio, "_open_home", lambda c: calls.append("browser"))
     mcp_stdio._ensure_backend(_cfg())
@@ -123,7 +172,7 @@ def test_ensure_backend_noop_when_alive(monkeypatch):
 @pytest.mark.pure
 def test_ensure_backend_boots_then_opens_browser(monkeypatch):
     calls = []
-    monkeypatch.setattr(mcp_stdio, "_backend_alive", lambda c: False)
+    monkeypatch.setattr(mcp_stdio, "_probe_health", lambda c: None)
     monkeypatch.setattr(mcp_stdio, "_spawn_backend", lambda c: calls.append("spawn"))
     monkeypatch.setattr(mcp_stdio, "_wait_ready", lambda c: True)
     monkeypatch.setattr(mcp_stdio, "_open_home", lambda c: calls.append("browser"))
@@ -134,13 +183,50 @@ def test_ensure_backend_boots_then_opens_browser(monkeypatch):
 @pytest.mark.pure
 def test_ensure_backend_raises_and_skips_browser_on_timeout(monkeypatch):
     calls = []
-    monkeypatch.setattr(mcp_stdio, "_backend_alive", lambda c: False)
+    monkeypatch.setattr(mcp_stdio, "_probe_health", lambda c: None)
     monkeypatch.setattr(mcp_stdio, "_spawn_backend", lambda c: calls.append("spawn"))
     monkeypatch.setattr(mcp_stdio, "_wait_ready", lambda c: False)
     monkeypatch.setattr(mcp_stdio, "_open_home", lambda c: calls.append("browser"))
     with pytest.raises(RuntimeError):
         mcp_stdio._ensure_backend(_cfg())
     assert calls == ["spawn"]
+
+
+@pytest.mark.pure
+def test_ensure_backend_fails_fast_on_degraded_backend(monkeypatch):
+    """Деградировавший backend жив — второй не спавним, а называем причину и ревизии."""
+    calls = []
+    degraded = mcp_stdio.BackendHealth("degraded", ("rem_005",))
+    monkeypatch.setattr(mcp_stdio, "_probe_health", lambda c: degraded)
+    monkeypatch.setattr(mcp_stdio, "_spawn_backend", lambda c: calls.append("spawn"))
+    monkeypatch.setattr(mcp_stdio, "_wait_ready", lambda c: calls.append("wait"))
+    monkeypatch.setattr(mcp_stdio, "_open_home", lambda c: calls.append("browser"))
+
+    with pytest.raises(RuntimeError) as refusal:
+        mcp_stdio._ensure_backend(_cfg())
+
+    assert "degraded" in str(refusal.value)
+    assert "rem_005" in str(refusal.value)
+    assert calls == []
+
+
+@pytest.mark.pure
+def test_ensure_backend_refuses_while_an_update_holds_the_flag(monkeypatch):
+    calls = []
+    held = MaintenanceFlag(
+        pid=4242, started_at=datetime(2026, 9, 11, 10, 0), reason="update to head"
+    )
+    monkeypatch.setattr(mcp_stdio.maintenance, "active", lambda: held)
+    monkeypatch.setattr(mcp_stdio, "_probe_health", lambda c: calls.append("probe"))
+    monkeypatch.setattr(mcp_stdio, "_spawn_backend", lambda c: calls.append("spawn"))
+
+    with pytest.raises(RuntimeError) as refusal:
+        mcp_stdio._ensure_backend(_cfg())
+
+    assert "обновление" in str(refusal.value)
+    assert "4242" in str(refusal.value)
+    assert "update to head" in str(refusal.value)
+    assert calls == []
 
 
 @pytest.mark.pure

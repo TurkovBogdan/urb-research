@@ -77,15 +77,15 @@ app = create_app(modules=[headhunter.SPEC, <name>.SPEC], settings=settings)
 
 **4. Создание ревизии.** Сейчас вручную через alembic CLI с явным `script_location` и `version_locations`; обёртка-скрипт `scripts/db_revision.py` пока не написана (TODO).
 
-**5. Применение.** Автоматически при старте приложения — `AlembicRunner(modules=modules).upgrade_head(engine)` собирает `version_locations` из `m.migrations_dir` всех модулей.
+**5. Применение.** Явной командой — `uv run python src/app.py migrate upgrade` (`AlembicRunner(modules=modules).upgrade_head(engine)` собирает `version_locations` из `m.migrations_dir` всех модулей). Старт приложения миграции НЕ накатывает.
 
-### Флаг `DB_AUTO_MIGRATE`
+### Гейт отставшей цепочки (вместо флага авто-миграции)
 
-Авто-применение миграций при старте управляется env-флагом `DB_AUTO_MIGRATE` (конфиг `Config.db_auto_migrate`, по умолчанию `true`). При `false` lifespan пропускает `upgrade_head` и пишет warning — миграции нужно накатить вручную.
+Применение миграций всегда явное и всегда снаружи приложения: у пользователя — обновление установки, у разработчика — `AGENTS/tools/migrate-dev.sh` / `src/app.py migrate upgrade`. Ключа, включающего авто-накат на старте, больше нет.
 
-**Зачем:** dev-конфиги (`.run/run-server*`, `run-worker`) запускают `src/app.py --hot-reload`. Без флага каждый перезапуск по сохранению файла гонит `upgrade heads` и может накатить **недописанную** миграцию на dev-базу (реальный инцидент: reload применил `ci01_init` с `depends_on` на чужую head и заклинил Alembic). Поэтому dev-конфиги выставляют `DB_AUTO_MIGRATE=false`.
+**Зачем:** dev-конфиги (`.run/run-server*`, `run-worker`) запускают `src/app.py --hot-reload`, и сохранение файла ревизии перезапускало процесс, который уносил **недописанную** миграцию в живую базу (реальные инциденты: reload применил `ci01_init` с `depends_on` на чужую head и заклинил Alembic; 2026-09-11 то же повторилось на dev-базе).
 
-**Как тогда накатывать миграции в dev:** явной командой `uv run python src/app.py migrate upgrade` — она применяет миграции до head тем же `AlembicRunner` и сразу выходит (без подъёма сервера, `DB_AUTO_MIGRATE` игнорируется). Сначала можно свериться `src/app.py migrate check` (dry-run: список pending, БД не трогает, exit 1 при drift). Запускать осознанно, когда миграция дописана. Для prod/test флаг не задаётся → миграции накатываются на старте как обычно.
+**Что делает старт вместо наката** (`app_factory.lifespan` → `_apply_chain_or_degrade`): снимает `AlembicRunner.status`. Пустая база (нет ни одной применённой head) — свежая установка: цепочка накатывается молча. База со схемой, но отставшая, — приложение поднимается в режиме заглушки (`src/core/router/degraded.py`): любой запрос → 503 (HTML браузеру, JSON зонам `/api`, `/mcp`, `/storage`), `/internal/health` отвечает 200 и `{"status": "degraded", "pending": [...]}`, планировщик не стартует. Свериться заранее — `src/app.py migrate check` (dry-run: список pending, БД не трогает, exit 1 при drift).
 
 ## Файлы
 

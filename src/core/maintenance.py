@@ -64,6 +64,10 @@ class MaintenanceFlag:
         within_age_bound = self.age_seconds(now) < MAX_AGE_SECONDS
         return within_age_bound and process_is_updater(self.pid)
 
+    def describe(self) -> str:
+        started = self.started_at.strftime(_TIMESTAMP_FORMAT)
+        return f"pid {self.pid}, since {started}: {self.reason}"
+
 
 def flag_path() -> Path:
     return project_root() / "runtime" / "maintenance.json"
@@ -86,9 +90,15 @@ def read() -> MaintenanceFlag | None:
         return None
 
 
-def is_active() -> bool:
+def active() -> MaintenanceFlag | None:
+    """The flag while a live updater holds it, else None — `is_active()` keeping the details,
+    so a refusing caller can name who holds it and why."""
     flag = read()
-    return flag is not None and flag.is_live()
+    return flag if flag is not None and flag.is_live() else None
+
+
+def is_active() -> bool:
+    return active() is not None
 
 
 def begin(reason: str) -> MaintenanceFlag:
@@ -149,6 +159,7 @@ __all__ = [
     "MAX_AGE_SECONDS",
     "MaintenanceFlag",
     "MaintenanceHeld",
+    "active",
     "begin",
     "end",
     "flag_path",

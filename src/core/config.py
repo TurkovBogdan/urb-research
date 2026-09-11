@@ -176,14 +176,6 @@ class Config(BaseSettings):
     # значение > (db_pool_size + db_max_overflow) упрётся в db_pool_timeout.
     worker_max_concurrent_runs: int = 10
 
-    # Накатывать Alembic-миграции при старте. Умолчание — НЕ накатывать: под
-    # `uvicorn --reload` сохранение файла ревизии перезапускает процесс, и
-    # недописанная миграция уезжает в боевую базу (случилось дважды 2026-09-11).
-    # Применение миграций явное — `app.py update` у пользователя,
-    # `AGENTS/tools/migrate-dev.sh` у разработчика. Ключ уходит целиком вместе с
-    # гейтом отставшей цепочки, см. AGENTS/plans/2026-09-11-update-command.md.
-    db_auto_migrate: bool = False
-
     @property
     def worker_modules_set(self) -> frozenset[str] | None:
         """``worker_modules`` (CSV) → frozenset; пусто → None (все модули)."""

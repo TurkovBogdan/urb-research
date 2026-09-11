@@ -17,10 +17,11 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable, Sequence
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from src.core.settings.api import router as settings_router
 from src.core.module import Module
+from src.core.router.degraded import health_payload
 from src.core.router.guards import guard
 
 # Префикс монтажа зоны и её умолчательные виды guard'ов (default-on).
@@ -28,6 +29,10 @@ from src.core.router.guards import guard
 # Когда добавится провайдер auth (свой ``Module.guards`` с видом ``auth``), вернуть сюда ``["auth"]``.
 INTERNAL_PREFIX = "/internal"
 INTERNAL_DEFAULT_GUARDS = ["allow_all"]
+
+HEALTH_ROUTE = "/health"
+# Полный путь нужен снаружи: гейт отставшей цепочки освобождает ровно его (router/degraded.py).
+HEALTH_PATH = INTERNAL_PREFIX + HEALTH_ROUTE
 
 
 def make_request_delay(ms: int) -> Callable[[], Awaitable[None]]:
@@ -46,16 +51,19 @@ def make_request_delay(ms: int) -> Callable[[], Awaitable[None]]:
 
 
 @guard("allow_all")
-async def _health() -> dict[str, str]:
+async def _health(request: Request) -> dict[str, object]:
     """Публичный liveness зоны internal (без auth). Доступен только при
-    смонтированной зоне ⇒ отражает, что API реально поднят (SERVER_ENABLED)."""
-    return {"status": "ok"}
+    смонтированной зоне ⇒ отражает, что API реально поднят (SERVER_ENABLED).
+
+    Отставшая цепочка миграций отвечает 200 и ``degraded`` — не-200 MCP-шим счёл бы смертью
+    backend'а и полез бы поднимать второй (см. ``router/degraded.py``)."""
+    return health_payload(request.app)
 
 
 def build_internal_zone(modules: Sequence[Module]) -> APIRouter:
     """Свежий агрегатор зоны internal: health + ядро + под-роутеры модулей."""
     zone = APIRouter()
-    zone.add_api_route("/health", _health, methods=["GET"], tags=["core"])
+    zone.add_api_route(HEALTH_ROUTE, _health, methods=["GET"], tags=["core"])
     zone.include_router(settings_router, prefix="/core/settings", tags=["core"])
     for m in modules:
         if m.internal_router is not None:
@@ -66,6 +74,8 @@ def build_internal_zone(modules: Sequence[Module]) -> APIRouter:
 
 
 __all__ = [
+    "HEALTH_PATH",
+    "HEALTH_ROUTE",
     "INTERNAL_DEFAULT_GUARDS",
     "INTERNAL_PREFIX",
     "build_internal_zone",

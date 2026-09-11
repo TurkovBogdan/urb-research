@@ -6,7 +6,9 @@
 1. Проверяет, поднят ли backend (HTTP ``/internal/health``). Если нет — спавнит
    ``src/app.py --backend`` отдельной сессией (``start_new_session`` — процесс
    переживает смерть шима: MCP-сессия закончилась, а сервер остаётся; гасят
-   вручную) и ждёт готовности.
+   вручную) и ждёт готовности. Готовность — ``status="ok"`` в теле, а не сам код 200:
+   backend с отставшей схемой отвечает 200 и ``degraded``, и шим отказывает,
+   назвав неприменённые ревизии. Под флагом обновления не спавнит вовсе.
 2. Открывает системный браузер на главной SPA — только когда backend реально
    подняли (если сервер уже был жив, страница и так открыта, второй вкладкой не
    спамим).
@@ -27,10 +29,12 @@ import subprocess
 import sys
 import time
 import webbrowser
+from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
 
+from src.core import maintenance
 from src.core.config import Config
 from src.core.loggers import get_logger
 
@@ -39,6 +43,7 @@ _LOG = get_logger("mcp")
 _APP_ENTRY = Path(__file__).resolve().parents[2] / "app.py"
 _HEALTH_PATH = "/internal/health"
 _READY_POLL_SECONDS = 0.3
+_HEALTH_STATUS_OK = "ok"
 
 
 def _use_file_only_logging(config: Config) -> None:
@@ -90,12 +95,45 @@ def _health_url(config: Config) -> str:
     return _base_url(config) + _HEALTH_PATH
 
 
-def _backend_alive(config: Config) -> bool:
+@dataclass(frozen=True)
+class BackendHealth:
+    """Разбор ответа `/internal/health`.
+
+    Код 200 сам по себе готовности не означает: backend с отставшей схемой отвечает 200 и
+    `status="degraded"` (не-200 шим счёл бы смертью и полез спавнить второй сервер).
+    """
+
+    status: str
+    pending: tuple[str, ...] = ()
+
+    @property
+    def is_ready(self) -> bool:
+        return self.status == _HEALTH_STATUS_OK
+
+    def describe(self) -> str:
+        if not self.pending:
+            return f"статус «{self.status}»"
+        return f"статус «{self.status}», не применены ревизии: {', '.join(self.pending)}"
+
+
+def _probe_health(config: Config) -> BackendHealth | None:
+    """Состояние backend; None — недоступен, ответил не 200 или телом не JSON-объектом."""
     try:
         response = httpx.get(_health_url(config), timeout=1.0)
-    except httpx.HTTPError:
-        return False
-    return response.status_code == 200
+        payload = response.json() if response.status_code == 200 else None
+    except (httpx.HTTPError, ValueError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return BackendHealth(
+        status=str(payload.get("status", "")),
+        pending=tuple(str(revision) for revision in payload.get("pending") or ()),
+    )
+
+
+def _backend_alive(config: Config) -> bool:
+    health = _probe_health(config)
+    return health is not None and health.is_ready
 
 
 def _backend_log_path(config: Config) -> Path:
@@ -141,11 +179,32 @@ def _open_home(config: Config) -> None:
         webbrowser.open(_base_url(config) + "/")
 
 
-def _ensure_backend(config: Config) -> None:
-    """Backend жив → ничего. Иначе спавним, ждём готовности и открываем браузер."""
-    if _backend_alive(config):
-        _LOG.info("mcp-stdio: backend already up at %s", _base_url(config))
+def _refuse_during_update() -> None:
+    """Под поднятым флагом backend не спавним: апдейтер переписывает дерево под нами.
+
+    Запуск шима гейтит и `app.py::main`, но флаг может подняться между той проверкой и
+    этой — гонка закрывается здесь.
+    """
+    held = maintenance.active()
+    if held is None:
         return
+    raise RuntimeError(
+        f"mcp-stdio: идёт обновление установки ({held.describe()}) — backend не поднимаем; "
+        "переподключитесь после завершения обновления"
+    )
+
+
+def _ensure_backend(config: Config) -> None:
+    """Backend готов → ничего. Деградировал → отказ с причиной. Иначе спавним и ждём."""
+    _refuse_during_update()
+    health = _probe_health(config)
+    if health is not None:
+        if health.is_ready:
+            _LOG.info("mcp-stdio: backend already up at %s", _base_url(config))
+            return
+        raise RuntimeError(
+            f"mcp-stdio: backend на {_base_url(config)} не готов — {health.describe()}"
+        )
     _spawn_backend(config)
     if not _wait_ready(config):
         raise RuntimeError(

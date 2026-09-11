@@ -16,6 +16,11 @@
     uv run python src/app.py migrate check
     uv run python src/app.py migrate upgrade    — накатить ядро + модули до head
 
+Пока флаг обслуживания держит живой апдейтер (`runtime/maintenance.json`), ЗАПУСК
+процесса отклоняется с кодом 1 — иначе MCP-шим поднял бы backend на полупереписанном
+дереве. Подкоманды не гейтятся: обновление накатывает `migrate upgrade` как раз под
+поднятым флагом.
+
 `--backend`/`--worker` (и `--no-backend`/`--no-worker`) перекрывают env-тогглы
 `SERVER_ENABLED`/`WORKER_ENABLED`. Флаги выставляются в env ДО `Config()`, поэтому
 их наследуют reload/processes-подпроцессы uvicorn.
@@ -35,10 +40,11 @@
 `WORKER_ENABLED` (так dev держит и веб, и задачи). Чистый worker (без SERVER)
 форсит тикер через `scheduler.configure_worker`.
 
-`migrate` использует тот же `AlembicRunner`, что и lifespan; `DB_AUTO_MIGRATE`
-для него не действует — это явная операция. На prod-web держат `DB_AUTO_MIGRATE=false`
-и накатывают `src/app.py migrate upgrade` отдельным шагом деплоя. Статику фронта
-раздаёт nginx (prod) / Vite (dev).
+Миграции накатывает ТОЛЬКО `migrate upgrade` (и обновление установки, которое его
+зовёт) — старт процесса не мигрирует базу, у которой уже есть схема: отставшая
+цепочка поднимает приложение в режиме заглушки (`src/core/router/degraded.py`).
+Исключение — пустая база: свежая установка накатывает цепочку сама. Статику фронта
+раздаёт тот же backend из `web/dist` (в dev — Vite).
 """
 
 import argparse
@@ -262,11 +268,40 @@ async def _run_migrate(action: str) -> int:
     return 0
 
 
+def _launches_a_process(args: argparse.Namespace) -> bool:
+    """Нет подкоманды — значит запускаем процесс (в том числе `--mcp-stdio`).
+
+    Подкоманды (`migrate`, а позже `update`) освобождены от гейта намеренно: сам апдейтер
+    гоняет `migrate upgrade` при поднятом флаге, а упавшая миграция флаг не опускает —
+    гейт на подкомандах запер бы обновление изнутри и лишил бы повтора.
+    """
+    return args.command is None
+
+
+def _maintenance_refusal() -> str | None:
+    """Текст отказа, когда флаг обслуживания держит живой апдейтер; иначе None."""
+    from src.core import maintenance
+
+    held = maintenance.active()
+    if held is None:
+        return None
+    return (
+        f"идёт обновление установки ({held.describe()}) — запуск процесса запрещён.\n"
+        f"дождитесь завершения обновления; флаг: {maintenance.flag_path()}"
+    )
+
+
 def main(argv: list[str] | None = None) -> int | None:
     args = _parse_args(argv)
 
     if args.command == "migrate":
         return asyncio.run(_run_migrate(args.action))
+
+    if _launches_a_process(args):
+        refusal = _maintenance_refusal()
+        if refusal is not None:
+            print(refusal, file=sys.stderr)
+            return 1
 
     if args.mcp_stdio:
         # Шим сам поднимает backend отдельным процессом — role-env этого процесса

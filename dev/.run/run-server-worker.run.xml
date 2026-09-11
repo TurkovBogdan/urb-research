@@ -12,7 +12,6 @@
     <option name="env">
       <map>
         <entry key="APP_ENV" value="dev" />
-        <entry key="DB_AUTO_MIGRATE" value="false" />
       </map>
     </option>
     <option name="runType" value="SCRIPT" />
