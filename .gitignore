@@ -5,6 +5,9 @@
 /AGENTS.md
 /CLAUDE.md
 
+# local postgres for migration rehearsals — compose file, volumes and dumps stay on the machine
+/docker/
+
 # env / secrets — real .env never committed; example templates are tracked
 .env
 .env.*
