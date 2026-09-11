@@ -5,8 +5,12 @@
 /AGENTS.md
 /CLAUDE.md
 
-# local postgres for migration rehearsals — compose file, volumes and dumps stay on the machine
+# local postgres for migration rehearsals — compose files, volumes, dumps and a copy of the live
+# database stay on the machine. Both names are ignored: the stand was renamed docker/ →
+# tests-migration/ on 2026-09-11 and that alone would have exposed credentials and a 38 MB database
+# copy to the next "commit everything".
 /docker/
+/tests-migration/
 
 # env / secrets — real .env never committed; example templates are tracked
 .env

@@ -10,11 +10,13 @@
 from __future__ import annotations
 
 import importlib.util
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select, text
+from sqlalchemy.exc import IntegrityError
 
 from src.core.database import get_engine, session_scope, write_scope
 from src.core.database.sqlite import WRITE_EXECUTION_OPTIONS, foreign_keys_disabled
@@ -58,7 +60,8 @@ PAGE = retired("dead01")
 SEARCH = retired("dead02")
 BODY_HASH = "9f9f9f9f9f9f9f9f9f9f9f"
 
-SEEDED_AT = datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
+# Naive UTC — так хранит проект; tz-aware значение PostgreSQL в ``timestamp`` не примет.
+SEEDED_AT = datetime(2026, 1, 2, 3, 4, 5)
 
 RESEARCH_BODY = f"""# Обзор
 
@@ -133,6 +136,12 @@ def test_foreign_hex_in_a_fenced_block_survives():
     assert rem_011.shorten_references(body, _live_codes())[0] == body
 
 
+@pytest.mark.pure
+def test_downgrade_refuses_because_the_discarded_tail_is_stored_nowhere():
+    with pytest.raises(RuntimeError, match="irreversible"):
+        rem_011.downgrade()
+
+
 # ── db: фазы на засеянной базе ───────────────────────────────────────────────
 
 def _run_phase(connection, work):
@@ -142,9 +151,26 @@ def _run_phase(connection, work):
 
 
 async def _apply(work):
-    """Прогнать фазу на боевом соединении — как это делает ``AlembicRunner._do_upgrade``."""
+    """Прогнать фазу на боевом соединении — как это делает ``AlembicRunner._do_upgrade``.
+
+    На SQLite транзакцию закрывает сама ``foreign_keys_disabled`` (прагму можно вернуть только
+    вне неё); на PostgreSQL блок — no-op, и без явного ``commit`` закрытие соединения откатило бы
+    всё сделанное.
+    """
     async with get_engine().connect() as connection:
-        return await connection.run_sync(_run_phase, work)
+        result = await connection.run_sync(_run_phase, work)
+        await connection.commit()
+        return result
+
+
+def _upgrade_entry_point(monkeypatch):
+    """``upgrade()`` как её зовёт alembic: ``op.get_bind()`` отдаёт соединение прогона."""
+
+    def run(connection):
+        monkeypatch.setattr(rem_011, "op", SimpleNamespace(get_bind=lambda: connection))
+        rem_011.upgrade()
+
+    return run
 
 
 async def _convert():
@@ -331,6 +357,73 @@ async def test_empty_base_converts_to_nothing(db):
     assert rewrite.replaced == {}
 
 
+@pytest.mark.db
+async def test_report_lists_columns_counts_and_dead_references(seeded, capsys):
+    rem_011.print_report(await _convert())
+
+    report = capsys.readouterr().out.splitlines()
+
+    assert report[0] == f"{rem_011.revision}: rewrote 4 rows"
+    assert "  research_index.body: 3" in report
+    assert "  research_area.body: 1" in report
+    assert "  research_note.description: 1" in report
+    assert "  research_source_document.note: 1" in report
+    assert f"{rem_011.revision}: references resolving to nothing (1):" in report
+    assert (
+        f"  research_index.body {rem_011.shorten(RESEARCH)}: {rem_011.shorten(DEAD_NOTE)}"
+        in report
+    )
+
+
+@pytest.mark.db
+async def test_collisions_come_back_per_table_with_every_code_involved(db):
+    twin = RESEARCH[: rem_011.CODE_LEN] + "ffffffffffff"
+    async with write_scope() as s:
+        s.add_all(
+            [
+                Research(code=RESEARCH, title="Первое"),
+                Research(code=twin, title="Второе"),
+                ResearchGroup(code=GROUP, title="Одна, без пары"),
+            ]
+        )
+
+    collisions = await _apply(rem_011.colliding_codes)
+
+    assert collisions == {"research_index": sorted([RESEARCH, twin])}
+
+
+@pytest.mark.db
+async def test_a_base_without_collisions_reports_none(seeded):
+    assert await _apply(rem_011.colliding_codes) == {}
+
+
+@pytest.mark.db
+async def test_upgrade_entry_point_runs_every_phase_and_prints_the_report(
+    seeded, monkeypatch, capsys
+):
+    await _apply(_upgrade_entry_point(monkeypatch))
+
+    research = (await _rows(Research))[0]
+    document = (await _rows(ResearchSourceDocument))[0]
+    assert research.code == rem_011.shorten(RESEARCH)
+    assert f"AREA@{rem_011.shorten(AREA)}" in research.body
+    assert document.query_code == rem_011.shorten(QUERY)
+    assert document.page_code == PAGE
+    assert f"{rem_011.revision}: rewrote 4 rows" in capsys.readouterr().out
+
+
+@pytest.mark.db
+async def test_upgrade_entry_point_stops_at_the_preflight(db, monkeypatch):
+    twin = RESEARCH[: rem_011.CODE_LEN] + "ffffffffffff"
+    async with write_scope() as s:
+        s.add_all([Research(code=RESEARCH, title="Первое"), Research(code=twin, title="Второе")])
+
+    with pytest.raises(RuntimeError, match="research_index"):
+        await _apply(_upgrade_entry_point(monkeypatch))
+
+    assert {row.code for row in await _rows(Research)} == {RESEARCH, twin}
+
+
 @pytest.mark.heavy
 async def test_phase_one_rewrites_a_parent_key_under_enforced_foreign_keys(db):
     """Ключи переписываются и там, где проверку ссылок никто не снимал, — то есть на PostgreSQL.
@@ -350,10 +443,8 @@ async def test_phase_one_rewrites_a_parent_key_under_enforced_foreign_keys(db):
     assert adopted == rem_011.shorten(RESEARCH)
 
 
-def _shorten_a_seeded_parent(connection) -> str:
-    # Колонка времени — без зоны (портируемый ``timestamp()``), а сырой SQL идёт мимо ORM,
-    # которая обычно и снимает зону.
-    seeded = {"research": RESEARCH, "area": AREA, "at": SEEDED_AT.replace(tzinfo=None)}
+def _seed_a_parent_and_its_child(connection) -> dict[str, object]:
+    seeded = {"research": RESEARCH, "area": AREA, "at": SEEDED_AT}
     connection.execute(
         text(
             "INSERT INTO research_index (code, title, created_at, updated_at)"
@@ -368,11 +459,99 @@ def _shorten_a_seeded_parent(connection) -> str:
         ),
         seeded,
     )
+    return seeded
+
+
+def _shorten_a_seeded_parent(connection) -> str:
+    _seed_a_parent_and_its_child(connection)
     rem_011.shorten_code_columns(connection)
     return connection.execute(
         text("SELECT research_code FROM research_area WHERE code = :area"),
         {"area": rem_011.shorten(AREA)},
     ).scalar_one()
+
+
+def _deferrable_research_foreign_keys(connection) -> int:
+    """Сколько ключей, смотрящих на таблицы research, объявлены ``DEFERRABLE`` прямо сейчас."""
+    parents = ", ".join(f"'{table}'" for table in rem_011.CODE_COLUMNS)
+    return connection.execute(
+        text(
+            "SELECT count(*) FROM pg_constraint AS c"
+            " JOIN pg_class AS parent ON parent.oid = c.confrelid"
+            f" WHERE c.contype = 'f' AND c.condeferrable AND parent.relname IN ({parents})"
+        )
+    ).scalar_one()
+
+
+def _rewrite_both_sides_inside_the_deferred_block(connection) -> tuple[int, int]:
+    """(ключей отложено внутри блока, ключей отложено после него) при согласованной фазе."""
+    seeded = _seed_a_parent_and_its_child(connection)
+    moved = {**seeded, "moved": rem_011.shorten(RESEARCH)}
+    with rem_011.foreign_keys_deferred(connection):
+        deferred_inside = _deferrable_research_foreign_keys(connection)
+        connection.execute(
+            text("UPDATE research_index SET code = :moved WHERE code = :research"), moved
+        )
+        connection.execute(
+            text("UPDATE research_area SET research_code = :moved WHERE code = :area"), moved
+        )
+    return deferred_inside, _deferrable_research_foreign_keys(connection)
+
+
+def _orphan_the_child_inside_the_deferred_block(connection) -> None:
+    seeded = _seed_a_parent_and_its_child(connection)
+    with rem_011.foreign_keys_deferred(connection):
+        connection.execute(
+            text("UPDATE research_index SET code = :moved WHERE code = :research"),
+            {**seeded, "moved": rem_011.shorten(RESEARCH)},
+        )
+
+
+@pytest.mark.heavy
+async def test_deferral_is_lifted_at_the_end_of_a_consistent_phase(db):
+    """Внутри блока ключи отложены, после него — снова ``NOT DEFERRABLE``, ещё до коммита:
+    восстановление делает сам блок, а не откат транзакции."""
+    async with get_engine().connect() as connection:
+        transaction = await connection.begin()
+        try:
+            deferred_inside, deferred_after = await connection.run_sync(
+                _rewrite_both_sides_inside_the_deferred_block
+            )
+        finally:
+            await transaction.rollback()
+
+    assert deferred_inside > 0
+    assert deferred_after == 0
+
+
+@pytest.mark.heavy
+async def test_an_orphan_left_inside_the_block_is_refused_when_the_deferral_ends(db):
+    """Отложить — не значит снять: ``SET CONSTRAINTS ALL IMMEDIATE`` в конце блока ловит
+    висящего ребёнка, транзакция откатывается, и ни один ключ не остаётся ``DEFERRABLE``."""
+    async with get_engine().connect() as connection:
+        transaction = await connection.begin()
+        try:
+            with pytest.raises(IntegrityError, match="research_area"):
+                await connection.run_sync(_orphan_the_child_inside_the_deferred_block)
+        finally:
+            await transaction.rollback()
+
+    async with get_engine().connect() as connection:
+        assert await connection.run_sync(_deferrable_research_foreign_keys) == 0
+
+
+@pytest.mark.heavy
+async def test_upgrade_entry_point_runs_under_enforced_foreign_keys(seeded, monkeypatch, capsys):
+    """Весь ``upgrade()`` на PostgreSQL: фаза 1 идёт через отложенные ключи на засеянных
+    связанных строках, фаза 2 переписывает тексты, отчёт печатается."""
+    await _apply(_upgrade_entry_point(monkeypatch))
+
+    area = (await _rows(ResearchArea))[0]
+    query = (await _rows(ResearchSourceQuery))[0]
+    assert area.research_code == rem_011.shorten(RESEARCH)
+    assert query.area_code == rem_011.shorten(AREA)
+    assert query.search_code == SEARCH
+    assert f"{rem_011.revision}: rewrote 4 rows" in capsys.readouterr().out
 
 
 @pytest.mark.db
