@@ -71,6 +71,12 @@ def test_reading_weight_takes_the_css_ladder_by_hundreds():
     assert registry.rejection("interface_font_reading_weight", 350) == "значение вне набора допустимых"
 
 
+def test_diagram_theme_keeps_the_app_palette_as_default():
+    assert registry.SETTINGS["interface_diagram_theme"].default == "system"
+    assert registry.rejection("interface_diagram_theme", "dracula") is None
+    assert registry.rejection("interface_diagram_theme", "monokai") == "значение вне набора допустимых"
+
+
 def test_code_variant_offers_the_three_chooseable_looks():
     assert registry.SETTINGS["interface_code_variant"].default == "minimal"
     assert registry.rejection("interface_code_variant", "minimal") is None

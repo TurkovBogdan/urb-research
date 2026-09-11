@@ -29,6 +29,8 @@ import {
 import {
   DEFAULT_DIAGRAM_ALIGN,
   DEFAULT_DIAGRAM_HEIGHT,
+  DEFAULT_DIAGRAM_THEME,
+  diagramTheme,
   type DiagramAlign,
 } from '@/constants/diagrams'
 import {
@@ -134,6 +136,10 @@ export const useSettingsStore = defineStore('settings', () => {
   // сам компонент схемы. Гарнитура тоже здесь, чтобы у настроек схем был один дом; в CSS она не
   // уходит — рендерер подставляет имя семьи внутрь SVG и по нему же считает ширину подписей.
   const diagrams = reactive({
+    theme: synced('interface_diagram_theme', DEFAULT_DIAGRAM_THEME, {
+      parse: diagramTheme,
+      serialize: (v) => v,
+    }),
     font: synced('interface_font_diagram', DEFAULT_DIAGRAM_FONT, strCodec),
     align: synced('interface_diagram_align', DEFAULT_DIAGRAM_ALIGN, strCodec as Codec<DiagramAlign>),
     maxHeight: synced('interface_diagram_max_height', DEFAULT_DIAGRAM_HEIGHT, intCodec),

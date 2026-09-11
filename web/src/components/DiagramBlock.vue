@@ -9,6 +9,8 @@ import {
   IconZoomReset,
 } from '@tabler/icons-vue'
 
+import type { DiagramColors } from 'beautiful-mermaid'
+
 import { NO_DIAGRAM_HEIGHT, diagramAlign } from '@/constants/diagrams'
 import { DEFAULT_DIAGRAM_FONT, DIAGRAM_FONTS, fontFamilyName } from '@/constants/fonts'
 import { useSettingsStore } from '@/stores/settings'
@@ -63,6 +65,26 @@ const THEME_COLORS = {
   border: 'var(--border)',
 }
 
+// Готовая палитра движка задаёт только часть ролей, а остальные он выводит из `bg`+`fg` запасным
+// значением внутри `var(--surface, …)`. Токены приложения зовутся ровно так же и объявлены на
+// корне документа — до схемы запасное значение не доходит, вместо него подставляется цвет
+// приложения, и на тёмной палитре плашки выходят белыми. Поэтому роли заполняются целиком; доли
+// взяты те же, что у движка в его собственных выводах.
+const PALETTE_BLEND = { line: 50, accent: 85, muted: 40, surface: 3, border: 20 }
+
+function wholePalette(palette: DiagramColors): DiagramColors {
+  const blend = (share: number) => `color-mix(in srgb, ${palette.fg} ${share}%, ${palette.bg})`
+  return {
+    bg: palette.bg,
+    fg: palette.fg,
+    line: palette.line ?? blend(PALETTE_BLEND.line),
+    accent: palette.accent ?? blend(PALETTE_BLEND.accent),
+    muted: palette.muted ?? blend(PALETTE_BLEND.muted),
+    surface: palette.surface ?? blend(PALETTE_BLEND.surface),
+    border: palette.border ?? blend(PALETTE_BLEND.border),
+  }
+}
+
 // Рендерер вписывает в <style> схемы @import шрифтов с Google Fonts. Приложение локальное, а
 // гарнитуры у него свои (styles/fonts.scss) — запрос наружу и не нужен, и не дойдёт при работе
 // без сети.
@@ -103,11 +125,15 @@ async function draw() {
     return
   }
   try {
-    const [{ renderMermaidSVG }] = await Promise.all([loadEngine(), loadFontFaces(family.value)])
+    const [{ renderMermaidSVG, THEMES }] = await Promise.all([loadEngine(), loadFontFaces(family.value)])
+    // Готовая палитра приносит собственный фон, поэтому прозрачность снимается вместе с ней:
+    // иначе схема осталась бы на фоне карточки и половина палитры пропала бы. Неизвестный код
+    // (палитра исчезла из движка) — это системные цвета, а не пустая схема.
+    const palette = THEMES[settings.diagrams.theme]
     svg.value = renderMermaidSVG(props.code, {
-      ...THEME_COLORS,
+      ...(palette ? wholePalette(palette) : THEME_COLORS),
       font: family.value,
-      transparent: true,
+      transparent: palette === undefined,
       padding: 8,
     }).replace(FONT_IMPORT, '')
   } catch {
@@ -117,9 +143,10 @@ async function draw() {
 }
 
 onMounted(draw)
-// Гарнитура запекается в разметку схемы и участвует в раскладке, поэтому её смена — перерисовка,
-// в отличие от смены темы, которая доезжает каскадом.
-watch([() => props.code, family], draw)
+// Гарнитура и палитра запекаются в разметку схемы, поэтому их смена — перерисовка. Исключение
+// одно: системная палитра уезжает в SVG ссылками на токены приложения, и смена ночной/дневной
+// темы доезжает до неё каскадом, без повторной раскладки.
+watch([() => props.code, family, () => settings.diagrams.theme], draw)
 
 // ── Полноэкранный режим: зум к курсору, панорама перетаскиванием ──────────────
 const ZOOM_LIMITS = { min: 0.2, max: 8 }

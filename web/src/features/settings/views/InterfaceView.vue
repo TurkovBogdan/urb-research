@@ -12,8 +12,10 @@ import { CODE_VARIANTS, type CodeVariantOption } from '@/constants/code'
 import {
   DIAGRAM_ALIGNS,
   DIAGRAM_HEIGHTS,
+  DIAGRAM_THEMES,
   NO_DIAGRAM_HEIGHT,
   type DiagramAlignOption,
+  type DiagramThemeOption,
 } from '@/constants/diagrams'
 import {
   CODE_SIZES,
@@ -128,6 +130,10 @@ function alignProps(option: DiagramAlignOption) {
 }
 
 function variantProps(option: CodeVariantOption) {
+  return { subtitle: option.note }
+}
+
+function themeNoteProps(option: DiagramThemeOption) {
   return { subtitle: option.note }
 }
 
@@ -394,6 +400,22 @@ const researchViewOptions = RESEARCH_LIST_VIEWS.map((view) => ({
         :title="t('settings.interface.group.diagram.title')"
         :description="t('settings.interface.group.diagram.description')"
       >
+        <div class="setting">
+          <VSelect
+            v-model="settings.diagrams.theme"
+            :items="DIAGRAM_THEMES"
+            item-title="label"
+            item-value="code"
+            :item-props="themeNoteProps"
+            :chips="false"
+            :label="t('settings.interface.diagram.theme.label')"
+            variant="outlined"
+            density="comfortable"
+            hide-details="auto"
+          />
+          <p class="setting__desc">{{ t('settings.interface.diagram.theme.description') }}</p>
+        </div>
+
         <div class="setting">
           <VSelect
             v-model="settings.diagrams.font"
