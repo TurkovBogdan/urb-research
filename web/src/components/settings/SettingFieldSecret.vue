@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { StrFieldDescriptor } from '@/features/settings/api'
+import type { StrFieldDescriptor } from '@/shared/settings-fields'
 
 // Секрет наружу не отдаётся: бэк присылает сентинел `NOT_CHANGED` (заданный токен)
 // либо `""` (не задан). Поле держит присланное значение как есть — маскированное

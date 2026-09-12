@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { IntFieldDescriptor } from '@/features/settings/api'
+import type { IntFieldDescriptor } from '@/shared/settings-fields'
 
 defineProps<{
   field: IntFieldDescriptor

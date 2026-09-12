@@ -31,7 +31,7 @@ export interface ResearchListRow {
   description: string
   group_code: string | null
   group_name: string
-  // Вид группы едет со строкой: имена из реестров `shared/icons.ts` / `groupColors.ts`, пустые —
+  // Вид группы едет со строкой: имена из реестров `shared/icons.ts` / `shared/colors.ts`, пустые —
   // когда группы нет. Иначе списку пришлось бы держать ещё и справочник групп ради метки.
   group_icon: string
   group_color: string
@@ -86,7 +86,7 @@ export interface ResearchDetail {
   description: string
   group_code: string | null
   group_name: string
-  // Вид группы, как и у строки списка: имена из реестров `shared/icons.ts` / `groupColors.ts`,
+  // Вид группы, как и у строки списка: имена из реестров `shared/icons.ts` / `shared/colors.ts`,
   // пустые — когда группы нет.
   group_icon: string
   group_color: string
@@ -229,7 +229,7 @@ export interface GroupRow {
   description: string
   // Имя иконки из палитры бэка; рисуется через shared/icons.ts.
   icon: string
-  // Имя цвета из палитры бэка; ступени тона — в constants/groupColors.ts.
+  // Имя цвета из палитры бэка; ступени тона — в shared/colors.ts.
   color: string
   // Больший sort — выше в списке.
   sort: number

@@ -1,7 +1,9 @@
-// Registry of the colours a research group may be painted with: name -> three steps of one hue.
+// Registry of the colours the backend may name: name -> three steps of one hue.
 //
-// The names are the contract with the backend (a stored value is a name, never a hex), the same
-// way `@/shared/icons.ts` holds the icon half. Keeping the hexes here rather than in `main.scss` is
+// One backend names colours from this set: research groups (`research/colors.py::GROUP_COLORS`, a
+// palette the user picks from, served by the `group_colors` MCP tool). The names are the contract
+// with it (a stored value is a name, never a hex), the same way `@/shared/icons.ts` holds the icon
+// half — this file is the other half. Keeping the hexes here rather than in `main.scss` is
 // deliberate: these are *data* — a set the user picks from, indexed by a name that travels to the
 // database — while `main.scss` holds the app's own tokens, which are referenced by role and never
 // enumerated. A name outside the registry is not an error: the value is not validated on the way
@@ -23,7 +25,7 @@
 
 import { colorToneVars, type ColorSteps, type ColorToneVars } from '@/shared/colorTones'
 
-const GROUP_COLORS: Record<string, ColorSteps> = {
+const COLORS: Record<string, ColorSteps> = {
   red:     { light: '#FFA098', mid: '#E64343', deep: '#AC011A' },
   orange:  { light: '#FFA746', mid: '#BE7204', deep: '#824C00' },
   yellow:  { light: '#CFC20C', mid: '#928A07', deep: '#645D00' },
@@ -36,18 +38,18 @@ const GROUP_COLORS: Record<string, ColorSteps> = {
   slate:   { light: '#B1C0D0', mid: '#7A8897', deep: '#4F5C6A' },
 }
 
-/** Steps for a stored colour name; unknown or empty -> `null` (the accent). */
-export function groupColor(name: string | null | undefined): ColorSteps | null {
+/** Steps for a backend-named colour; unknown or empty -> `null` (the accent). */
+export function colorByName(name: string | null | undefined): ColorSteps | null {
   if (!name) return null
-  return GROUP_COLORS[name] ?? null
+  return COLORS[name] ?? null
 }
 
 /** Every name the picker may offer, in the order the backend lists them. */
-export function groupColorNames(): string[] {
-  return Object.keys(GROUP_COLORS)
+export function colorNames(): string[] {
+  return Object.keys(COLORS)
 }
 
-/** Vars for a stored colour name — bind to `:style` on an element classed `color-tones`. */
-export function groupColorVars(name: string | null | undefined): ColorToneVars {
-  return colorToneVars(groupColor(name))
+/** Vars for a backend-named colour — bind to `:style` on an element classed `color-tones`. */
+export function colorVarsByName(name: string | null | undefined): ColorToneVars {
+  return colorToneVars(colorByName(name))
 }

@@ -13,7 +13,7 @@ import AppDialog from '@/components/AppDialog.vue'
 import SettingField from '@/components/settings/SettingField.vue'
 import SwitchPanel from '@/components/SwitchPanel.vue'
 import { errorText } from '@/api/errorText'
-import type { FieldDescriptor, StrFieldDescriptor } from '@/features/settings/api'
+import type { FieldDescriptor, StrFieldDescriptor } from '@/shared/settings-fields'
 import {
   createAccess,
   deleteAccess,

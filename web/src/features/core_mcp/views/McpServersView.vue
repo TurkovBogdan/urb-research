@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { IconRefresh, IconServerBolt } from '@tabler/icons-vue'
 import PageLayout from '@/layout/templates/PageLayout.vue'
 import PageHeader from '@/layout/components/PageHeader.vue'
-import McpInfoPanel from '@/components/McpInfoPanel.vue'
+import McpInfoPanel from '../components/McpInfoPanel.vue'
 import { serverIcon } from '@/shared/mcp_tool_icons'
 import {
   listMcpServers,

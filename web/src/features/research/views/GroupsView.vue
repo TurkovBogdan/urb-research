@@ -19,7 +19,7 @@ import SectionError from '@/components/SectionError.vue'
 import SearchField from '@/components/SearchField.vue'
 import { useClipboard } from '@/composables/useClipboard'
 import { deeperScope, deeperScopeModel } from '../search'
-import { groupColorVars } from '../constants/groupColors'
+import { colorVarsByName } from '@/shared/colors'
 import { ICON_FALLBACK, iconByName } from '@/shared/icons'
 import GroupFormDialog from '../components/GroupFormDialog.vue'
 import GroupDeleteDialog from '../components/GroupDeleteDialog.vue'
@@ -174,7 +174,7 @@ function remove(group: GroupListRow) {
         :key="group.code"
         variant="flat"
         class="group-card color-tones"
-        :style="groupColorVars(group.color)"
+        :style="colorVarsByName(group.color)"
         :to="groupPath(group.code)"
       >
         <header class="group-card__header">

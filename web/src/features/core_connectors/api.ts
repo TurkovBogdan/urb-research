@@ -8,7 +8,7 @@
  */
 
 import { internalApi } from '@/api/client/internal'
-import type { FieldDescriptor } from '@/features/settings/api'
+import type { FieldDescriptor } from '@/shared/settings-fields'
 
 const CONNECTORS = '/connectors'
 const ACCESSES = '/accesses'

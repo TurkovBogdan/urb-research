@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { DateFieldDescriptor } from '@/features/settings/api'
+import type { DateFieldDescriptor } from '@/shared/settings-fields'
 
 const props = defineProps<{
   field: DateFieldDescriptor

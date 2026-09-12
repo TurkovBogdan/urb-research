@@ -5,7 +5,7 @@
 import { fmtDateTime } from '@/shared/utils/date'
 
 import ResearchRowActions from './ResearchRowActions.vue'
-import { groupColorVars } from '../constants/groupColors'
+import { colorVarsByName } from '@/shared/colors'
 import { iconByName } from '@/shared/icons'
 import type { ResearchListRow } from '../api'
 
@@ -38,7 +38,7 @@ const truncate = (s: string, n: number) => (s.length > n ? s.slice(0, n) + '…'
     variant="outlined"
     rounded="lg"
     class="card color-tones"
-    :style="groupColorVars(props.research.group_color)"
+    :style="colorVarsByName(props.research.group_color)"
     @click="emit('open')"
   >
     <div class="card__head">

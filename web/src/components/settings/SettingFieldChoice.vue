@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ChoiceFieldDescriptor } from '@/features/settings/api'
+import type { ChoiceFieldDescriptor } from '@/shared/settings-fields'
 
 const props = defineProps<{
   field: ChoiceFieldDescriptor

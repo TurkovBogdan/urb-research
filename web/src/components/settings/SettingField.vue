@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { FieldDescriptor } from '@/features/settings/api'
+import type { FieldDescriptor } from '@/shared/settings-fields'
 
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import SettingFieldInt from './SettingFieldInt.vue'

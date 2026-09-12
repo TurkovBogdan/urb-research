@@ -1,5 +1,5 @@
 import { useI18n } from 'vue-i18n'
-import type { FieldDescriptor, ChoiceOption } from './api'
+import type { FieldDescriptor, ChoiceOption } from '@/shared/settings-fields'
 
 // Field label/description and choice-option labels live on the backend (the `Field`
 // metadata in `core._settings`). Same policy as task name/description (see
@@ -11,7 +11,7 @@ import type { FieldDescriptor, ChoiceOption } from './api'
 //   2. `settings.catalog.<module>.<key>.<field>` — catch-all for modules without a
 //      frontend feature namespace (none currently)
 //   3. the backend literal — keeps untranslated fields rendering instead of a raw key
-export function useSettingText() {
+export function useSettingLabels() {
   const { t, te } = useI18n()
 
   function pick(module: string, key: string, leaf: string, fallback: string): string {

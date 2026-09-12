@@ -5,15 +5,15 @@ import { useI18n } from 'vue-i18n'
 import PageLayout from '@/layout/templates/PageLayout.vue'
 import PageHeader from '@/layout/components/PageHeader.vue'
 import IconColorPicker from '@/components/IconColorPicker.vue'
-// Демо идёт на настоящих наборах — палитре и иконках полок research: выдуманные списки
+// Демо идёт на настоящих наборах — палитре и иконках приложения: выдуманные списки
 // показывали бы раскладку на данных, которых в приложении нет.
-import { groupColorNames, groupColorVars } from '@/features/research/constants/groupColors'
+import { colorNames, colorVarsByName } from '@/shared/colors'
 import { iconByName, iconNames } from '@/shared/icons'
 
 const { t } = useI18n()
 
 const icons = iconNames()
-const colors = groupColorNames()
+const colors = colorNames()
 
 const icon = ref<string | null>('flask')
 const color = ref<string | null>('teal')
@@ -49,7 +49,7 @@ function modelLiteral(value: string | null): string {
               :icons="icons"
               :colors="colors"
               :resolve-icon="iconByName"
-              :resolve-color="groupColorVars"
+              :resolve-color="colorVarsByName"
             />
             <p class="ds-value">icon = {{ modelLiteral(icon) }} · color = {{ modelLiteral(color) }}</p>
           </div>
@@ -65,7 +65,7 @@ function modelLiteral(value: string | null): string {
               :icons="icons"
               :colors="colors"
               :resolve-icon="iconByName"
-              :resolve-color="groupColorVars"
+              :resolve-color="colorVarsByName"
               :height="140"
               clearable
             />

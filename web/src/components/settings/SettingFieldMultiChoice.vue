@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MultiChoiceFieldDescriptor } from '@/features/settings/api'
+import type { MultiChoiceFieldDescriptor } from '@/shared/settings-fields'
 
 const props = defineProps<{
   field: MultiChoiceFieldDescriptor

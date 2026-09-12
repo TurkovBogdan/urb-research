@@ -3,7 +3,7 @@
 // tools + a ready-to-paste stdio connection config. Backend: src/modules/core_mcp.
 
 import { internalApi } from '@/api/client/internal'
-import type { McpToolInfo } from '@/components/McpInfoPanel.vue'
+import type { McpToolInfo } from './components/McpInfoPanel.vue'
 
 const BASE = '/core-mcp'
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { StrFieldDescriptor } from '@/features/settings/api'
+import type { StrFieldDescriptor } from '@/shared/settings-fields'
 
 const props = defineProps<{
   field: StrFieldDescriptor
