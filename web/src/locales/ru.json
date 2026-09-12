@@ -53,8 +53,12 @@
     }
   },
   "nav": {
-    "development": "Разработка",
-    "server_setup": "Настройка сервера"
+    "mcp": "MCP",
+    "research": "Исследования",
+    "data": "Данные",
+    "settings": "Настройки",
+    "about": "О приложении",
+    "development": "Разработка"
   },
   "action": {
     "add": "Добавить",
@@ -153,9 +157,6 @@
     "yesterday": "вчера",
     "days_ago": "{n} дн. назад",
     "in_days": "через {n} дн."
-  },
-  "source": {
-    "thread_updated": "Тред #{number} · обновлён {date}"
   },
   "mcp": {
     "connection": "Подключение",

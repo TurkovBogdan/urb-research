@@ -7,7 +7,7 @@ import { IconChevronRight, IconChevronLeft } from '@tabler/icons-vue'
 
 import { useLayoutStore } from '../store'
 import { useSettingsStore } from '@/stores/settings'
-import { isGroup, isSection, type NavEntry, type NavLink } from '@/shared/nav'
+import { isGroup, isSection, type NavEntry, type NavLink, type NavSection, type NavSectionEntry } from '@/shared/nav'
 import { IconPalette, IconServerCog, IconAdjustments, IconWorldSearch, IconListSearch, IconFileText, IconClock, IconServerBolt, IconTelescope, IconPlugConnected, IconTypography, IconCategory, IconInfoCircle } from '@tabler/icons-vue'
 
 const layout = useLayoutStore()
@@ -35,14 +35,22 @@ function navLabel(entry: { label: string; labelKey?: string }): string {
   return entry.labelKey ? t(entry.labelKey) : entry.label
 }
 
-const nav: NavEntry[] = [
-  { kind: 'section', label: 'MCP' },
-  { path: '/mcp-servers', label: 'MCP-серверы', labelKey: 'core_mcp.nav', icon: IconServerBolt },
-  { kind: 'section', label: 'Исследования' },
-  { path: '/research/groups', label: 'Группы', labelKey: 'research.nav_groups', icon: IconCategory },
-  { path: '/research/researches', label: 'Исследования', labelKey: 'research.nav', icon: IconTelescope },
-  { kind: 'section', label: 'Данные' },
+const navSections: NavSection[] = [
+  { kind: 'section', code: 'mcp', labelKey: 'common.nav.mcp', order: 10 },
+  { kind: 'section', code: 'research', labelKey: 'common.nav.research', order: 20 },
+  { kind: 'section', code: 'data', labelKey: 'common.nav.data', order: 30 },
+  { kind: 'section', code: 'settings', labelKey: 'common.nav.settings', order: 40 },
+  { kind: 'section', code: 'about', labelKey: 'common.nav.about', order: 50 },
+  { kind: 'section', code: 'development', labelKey: 'common.nav.development', order: 60 },
+]
+
+const navEntries: NavSectionEntry[] = [
+  { section: 'mcp', order: 10, path: '/mcp-servers', label: 'MCP-серверы', labelKey: 'core_mcp.nav', icon: IconServerBolt },
+  { section: 'research', order: 10, path: '/research/groups', label: 'Группы', labelKey: 'research.nav_groups', icon: IconCategory },
+  { section: 'research', order: 20, path: '/research/researches', label: 'Исследования', labelKey: 'research.nav', icon: IconTelescope },
   {
+    section: 'data',
+    order: 10,
     label: 'Веб-поиск',
     labelKey: 'web_search.nav',
     icon: IconWorldSearch,
@@ -51,28 +59,25 @@ const nav: NavEntry[] = [
       { path: '/web-search/pages', label: 'Страницы', labelKey: 'web_search.nav_pages', icon: IconFileText },
     ],
   },
-  { kind: 'section', label: 'Настройки' },
-  { path: '/settings/interface', label: 'Интерфейс', icon: IconTypography },
-  { path: '/integrations', label: 'Интеграции', labelKey: 'core_connectors.nav', icon: IconPlugConnected },
-  { path: '/settings/modules', label: 'Модули', icon: IconAdjustments },
-  { path: '/tasks', label: 'Задачи', labelKey: 'core_monitoring.nav', icon: IconClock },
-  { path: '/settings/core', label: 'Сервер', icon: IconServerCog },
-  { kind: 'section', label: 'О приложении' },
-  { path: '/about', label: 'Версия и обновление', labelKey: 'about.nav', icon: IconInfoCircle },
-  // design-system is template chrome (not a feature) — link inlined.
-  { kind: 'section', label: 'Разработка', labelKey: 'common.nav.development' },
-  { path: '/design-system', label: 'Дизайн-система', labelKey: 'design-system.nav', icon: IconPalette },
+  { section: 'settings', order: 10, path: '/settings/interface', label: 'Интерфейс', icon: IconTypography },
+  { section: 'settings', order: 20, path: '/integrations', label: 'Интеграции', labelKey: 'core_connectors.nav', icon: IconPlugConnected },
+  { section: 'settings', order: 30, path: '/settings/modules', label: 'Модули', icon: IconAdjustments },
+  { section: 'settings', order: 40, path: '/tasks', label: 'Задачи', labelKey: 'core_monitoring.nav', icon: IconClock },
+  { section: 'settings', order: 50, path: '/settings/core', label: 'Сервер', labelKey: 'setup.nav', icon: IconServerCog },
+  { section: 'about', order: 10, path: '/about', label: 'Версия и обновление', labelKey: 'about.nav', icon: IconInfoCircle },
+  // design-system is template chrome (not a module) — link inlined.
+  { section: 'development', order: 10, path: '/design-system', label: 'Дизайн-система', labelKey: 'design-system.nav', icon: IconPalette },
 ]
 
 const navBottom: NavLink[] = []
 
-// Drop orphan section headers: keep a section only if a non-section entry
-// immediately follows it (an empty trailing section would otherwise leave a
-// dangling divider/label).
+const byOrder = (a: { order: number }, b: { order: number }) => a.order - b.order
+
+// Раздел без записей не показывается: остался бы висячий заголовок с разделителем.
 const visibleNav = computed<NavEntry[]>(() =>
-  nav.filter((entry, i) => {
-    const next = nav[i + 1]
-    return !isSection(entry) || (next !== undefined && !isSection(next))
+  [...navSections].sort(byOrder).flatMap(section => {
+    const sectionEntries = navEntries.filter(entry => entry.section === section.code).sort(byOrder)
+    return sectionEntries.length ? [section, ...sectionEntries] : []
   }),
 )
 
@@ -90,7 +95,7 @@ function isGroupActive(group: NavEntry): boolean {
 
 const openGroups = ref<Record<string, boolean>>(
   Object.fromEntries(
-    nav.filter(isGroup).map(g => [g.label, isGroupActive(g)]),
+    navEntries.filter(isGroup).map(g => [g.label, isGroupActive(g)]),
   ),
 )
 
@@ -210,7 +215,7 @@ const drawerWidth = computed(() => (mobile.value ? 280 : collapsed.value ? 56 : 
             v-if="isSection(entry)"
             class="nav-section"
           >
-            {{ navLabel(entry) }}
+            {{ t(entry.labelKey) }}
           </div>
 
           <VListGroup

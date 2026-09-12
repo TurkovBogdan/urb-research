@@ -2,6 +2,11 @@ import type { FunctionalComponent, SVGAttributes } from 'vue'
 
 export type TablerIcon = FunctionalComponent<SVGAttributes>
 
+export type NavPlacement = {
+  section: string
+  order: number
+}
+
 export type NavLink = {
   path: string
   label: string
@@ -9,7 +14,9 @@ export type NavLink = {
   icon: TablerIcon
 }
 
-export type NavGroup = {
+export type NavSectionLink = NavLink & NavPlacement
+
+export type NavGroup = NavPlacement & {
   label: string
   labelKey?: string
   icon: TablerIcon
@@ -18,11 +25,14 @@ export type NavGroup = {
 
 export type NavSection = {
   kind: 'section'
-  label: string
-  labelKey?: string
+  code: string
+  labelKey: string
+  order: number
 }
 
-export type NavEntry = NavLink | NavGroup | NavSection
+export type NavSectionEntry = NavSectionLink | NavGroup
+
+export type NavEntry = NavSectionEntry | NavSection
 
 export function isGroup(entry: NavEntry): entry is NavGroup {
   return 'children' in entry

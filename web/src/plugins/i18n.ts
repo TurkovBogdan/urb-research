@@ -2,7 +2,7 @@ import { createI18n } from 'vue-i18n'
 import { ru as vuetifyRu } from 'vuetify/locale'
 
 import commonRu from '@/locales/ru.json'
-// Root-level dictionary (not under features/). design-system is template chrome, not a
+// Root-level dictionary (not a module one). design-system is template chrome, not a
 // domain module, but keeps its own namespace so t('design-system.*') stays stable.
 import designSystemRu from '@/locales/design-system/ru.json'
 
@@ -12,19 +12,20 @@ export type AppLocale = 'ru'
 
 type Messages = Record<string, unknown>
 
-// Per-feature dictionaries live at web/src/features/<feature>/locales/ru.json
-// They are merged into the global messages tree under a namespace = feature dir name.
-const featureModules = import.meta.glob<{ default: Messages }>(
-  '@/features/*/locales/ru.json',
+// Оба корня перечислены явно: `import.meta.glob` принимает только литерал, а словарь, не
+// попавший под шаблон, теряется молча — интерфейс начинает рисовать пути ключей вместо
+// текста. Шаблон, не нашедший ничего, безвреден.
+const moduleDictionaries = import.meta.glob<{ default: Messages }>(
+  ['@/features/*/locales/ru.json', '@/modules/*/locales/ru.json'],
   { eager: true },
 )
 
-function collectFeatureMessages(): Messages {
+function collectModuleMessages(): Messages {
   const out: Messages = {}
-  for (const path in featureModules) {
-    const match = path.match(/\/features\/([^/]+)\/locales\/ru\.json$/)
+  for (const path in moduleDictionaries) {
+    const match = path.match(/\/(?:features|modules)\/([^/]+)\/locales\/ru\.json$/)
     if (!match) continue
-    out[match[1]] = featureModules[path].default
+    out[match[1]] = moduleDictionaries[path].default
   }
   return out
 }
@@ -36,7 +37,7 @@ const messages = {
     $vuetify: vuetifyRu,
     common: commonRu,
     'design-system': designSystemRu,
-    ...collectFeatureMessages(),
+    ...collectModuleMessages(),
   },
 }
 
