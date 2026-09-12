@@ -8,7 +8,7 @@ import { IconChevronRight, IconChevronLeft } from '@tabler/icons-vue'
 import { useLayoutStore } from '../store'
 import { useSettingsStore } from '@/stores/settings'
 import { isGroup, isSection, type NavEntry, type NavLink } from '@/shared/nav'
-import { IconPalette, IconServerCog, IconAdjustments, IconWorldSearch, IconListSearch, IconFileText, IconClock, IconServerBolt, IconTelescope, IconPlugConnected, IconTypography, IconCategory } from '@tabler/icons-vue'
+import { IconPalette, IconServerCog, IconAdjustments, IconWorldSearch, IconListSearch, IconFileText, IconClock, IconServerBolt, IconTelescope, IconPlugConnected, IconTypography, IconCategory, IconInfoCircle } from '@tabler/icons-vue'
 
 const layout = useLayoutStore()
 const settings = useSettingsStore()
@@ -36,11 +36,11 @@ function navLabel(entry: { label: string; labelKey?: string }): string {
 }
 
 const nav: NavEntry[] = [
+  { kind: 'section', label: 'MCP' },
+  { path: '/mcp-servers', label: 'MCP-серверы', labelKey: 'core_mcp.nav', icon: IconServerBolt },
   { kind: 'section', label: 'Исследования' },
   { path: '/research/groups', label: 'Группы', labelKey: 'research.nav_groups', icon: IconCategory },
   { path: '/research/researches', label: 'Исследования', labelKey: 'research.nav', icon: IconTelescope },
-  { kind: 'section', label: 'MCP' },
-  { path: '/mcp-servers', label: 'MCP-серверы', labelKey: 'core_mcp.nav', icon: IconServerBolt },
   { kind: 'section', label: 'Данные' },
   {
     label: 'Веб-поиск',
@@ -51,14 +51,14 @@ const nav: NavEntry[] = [
       { path: '/web-search/pages', label: 'Страницы', labelKey: 'web_search.nav_pages', icon: IconFileText },
     ],
   },
-  { kind: 'section', label: 'Внешние сервисы' },
-  { path: '/integrations', label: 'Интеграции', labelKey: 'core_connectors.nav', icon: IconPlugConnected },
-  { kind: 'section', label: 'Мониторинг' },
-  { path: '/tasks', label: 'Задачи', labelKey: 'core_monitoring.nav', icon: IconClock },
   { kind: 'section', label: 'Настройки' },
-  { path: '/settings/interface', label: 'Настройка интерфейса', icon: IconTypography },
-  { path: '/settings/modules', label: 'Настройка модулей', icon: IconAdjustments },
-  { path: '/settings/core', label: 'Настройка сервера', icon: IconServerCog },
+  { path: '/settings/interface', label: 'Интерфейс', icon: IconTypography },
+  { path: '/integrations', label: 'Интеграции', labelKey: 'core_connectors.nav', icon: IconPlugConnected },
+  { path: '/settings/modules', label: 'Модули', icon: IconAdjustments },
+  { path: '/tasks', label: 'Задачи', labelKey: 'core_monitoring.nav', icon: IconClock },
+  { path: '/settings/core', label: 'Сервер', icon: IconServerCog },
+  { kind: 'section', label: 'О приложении' },
+  { path: '/about', label: 'Версия и обновление', labelKey: 'about.nav', icon: IconInfoCircle },
   // design-system is template chrome (not a feature) — link inlined.
   { kind: 'section', label: 'Разработка', labelKey: 'common.nav.development' },
   { path: '/design-system', label: 'Дизайн-система', labelKey: 'design-system.nav', icon: IconPalette },
