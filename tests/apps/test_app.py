@@ -65,6 +65,16 @@ def test_parse_mcp_stdio_flag():
 
 
 @pytest.mark.pure
+def test_update_flags_default_to_the_safe_side():
+    """Ни сигналов по косвенным уликам, ни изменений: и `--dry-run`, и `--stop-unregistered`
+    (гашение процессов без записи в реестре) включаются только явно."""
+    plain = app._parse_args(["update"])
+    assert (plain.dry_run, plain.stop_unregistered) == (False, False)
+    assert app._parse_args(["update", "--stop-unregistered"]).stop_unregistered is True
+    assert app._parse_args(["update", "--dry-run"]).dry_run is True
+
+
+@pytest.mark.pure
 def test_worker_module_is_repeatable():
     a = app._parse_args(["--worker-module", "alpha", "--worker-module", "beta"])
     assert a.worker_module == ["alpha", "beta"]
