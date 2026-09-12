@@ -28,12 +28,12 @@ from src.modules.research.dto import (
     AgentResearchCreated,
     AgentResearchRow,
     AgentResearchScan,
-    ResearchSourceDocumentRow,
-    ResearchSourceQueryRow,
+    AgentSourceDocumentScan,
+    AgentSourceQueryScan,
     AgentResearchDetail,
     group_fields,
     agent_research_row,
-    source_document_row,
+    agent_source_document_scan,
 )
 from src.modules.web_search.constants import FETCH_STATUS_ERROR
 from src.modules.web_search.crud import query_result as query_result_crud
@@ -81,12 +81,12 @@ def register(mcp: "FastMCP") -> None:
         """Start a research (knowledge artifact) and register it. Returns only its code.
 
         Args:
-            title: The research title / name (up to 128 chars).
+            title: The research title / name (up to 96 chars).
             description: Optional short description / abstract (up to 512 chars).
             body: Optional main body in markdown (fill in as the research progresses).
                 Markup rules — skill_get('body-markup'); a diagram in it — skill_get('mermaid').
-            group_code: Optional GROUP@ code to file this research under (see group_list).
-                Grouping is cosmetic shelving — skip it unless the user asked for it.
+            group_code: Optional GROUP@ code to file this research under (see group_list);
+                skip it unless the user asked for grouping.
         """
         group_code = bare_code(group_code)
         await _resolve_group(group_code)
@@ -99,7 +99,7 @@ def register(mcp: "FastMCP") -> None:
     async def research_get(research_code: str) -> AgentResearchDetail:
         """Return one research in full — its fields and body, plus its areas and notes.
 
-        Areas and notes are the scan layer (code, title, description, updated_at),
+        Areas and notes are the scan layer (code, title, description — a note also its kind),
         ordered by update time oldest first. group_code / group_name say which group the
         research is filed in (empty when it is not filed anywhere); group_name is derived
         from the group, so rename a group with group_update, never here.
@@ -157,16 +157,16 @@ def register(mcp: "FastMCP") -> None:
         """Update a research's title / description / body / group (omit a field to keep it).
 
         Returns the updated scan (code, title, description, group). For incremental body edits
-        use body_edit.
+        use body_replace / body_set_section / body_add.
 
         Args:
             research_code: The research to update.
-            title: New title (up to 128 chars), or omit to keep the current one.
+            title: New title (up to 96 chars), or omit to keep the current one.
             description: New short description (up to 512 chars), or omit to keep.
             body: New main body in markdown, or omit to keep the current one.
                 Markup rules — skill_get('body-markup'); a diagram in it — skill_get('mermaid').
             group_code: GROUP@ code to file this research in, or an empty string to take it out
-                of its group; omit to keep. Optional — grouping is for the user's convenience.
+                of its group; omit to keep.
         """
         research_code = bare_code(research_code)
         group_code = bare_code(group_code)
@@ -190,18 +190,7 @@ def register(mcp: "FastMCP") -> None:
         )
 
     @mcp.tool()
-    async def research_delete(research_code: str) -> bool:
-        """Delete a research entirely. Returns true if it existed.
-
-        CASCADE: also removes all of its areas, notes, searches and sources.
-
-        Args:
-            research_code: The research to delete.
-        """
-        return await research_crud.research_delete(bare_code(research_code))
-
-    @mcp.tool()
-    async def query_search_run(area_code: str, query: str) -> list[ResearchSourceDocumentRow]:
+    async def query_search_run(area_code: str, query: str) -> list[AgentSourceDocumentScan]:
         """Run a web search for an area and return the sources it found (blocking).
 
         Runs web_search to completion, records the run as a source-query under the area's
@@ -216,8 +205,8 @@ def register(mcp: "FastMCP") -> None:
         FETCHING IS SEPARATE FROM SEARCHING and can fail on its own: a source whose page did
         not download comes back `error` instead of `pending`, and has no body to read. Nothing
         is loading in the background — the run is already finished, so never wait or poll for a
-        body to appear. Do NOT review an `error` source and do NOT judge it from its `summary`:
-        that text is the search engine's snippet, not the material.
+        body to appear. Do NOT review an `error` source: there is nothing to judge it by until
+        sources_refetch brings its material in.
 
         Args:
             area_code: The area to search sources for (its research is taken from the area).
@@ -234,7 +223,7 @@ def register(mcp: "FastMCP") -> None:
             search_code=run.code,
             query=query,
         )
-        sources: list[ResearchSourceDocumentRow] = []
+        sources: list[AgentSourceDocumentScan] = []
         for result, page in await query_result_crud.results_with_page_for_query(run.code):
             doc = await source_document_crud.source_document_create(
                 research_code=area.research_code,
@@ -244,11 +233,11 @@ def register(mcp: "FastMCP") -> None:
                 summary=result.summary,
                 status=_initial_source_status(page),
             )
-            sources.append(source_document_row(doc, page))
+            sources.append(agent_source_document_scan(doc, page))
         return sources
 
     @mcp.tool()
-    async def query_search_list(code: str) -> list[ResearchSourceQueryRow]:
+    async def query_search_list(code: str) -> list[AgentSourceQueryScan]:
         """List the searches (source-queries) under an area or a research.
 
         Args:
@@ -262,15 +251,4 @@ def register(mcp: "FastMCP") -> None:
             rows = await source_query_crud.source_query_list_by_research(bare)
         else:
             raise ValueError("code must be an AREA@ or RESEARCH@ code.")
-        return [ResearchSourceQueryRow.model_validate(r) for r in rows]
-
-    @mcp.tool()
-    async def query_search_delete(query_code: str) -> bool:
-        """Delete a search run. Returns true if it existed.
-
-        CASCADE: also removes the sources found by that run.
-
-        Args:
-            query_code: The search (source-query) to delete.
-        """
-        return await source_query_crud.source_query_delete(bare_code(query_code))
+        return [AgentSourceQueryScan.model_validate(r) for r in rows]

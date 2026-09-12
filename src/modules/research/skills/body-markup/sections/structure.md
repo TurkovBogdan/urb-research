@@ -14,8 +14,8 @@ research body: the answers per area, each pointing at the area by code, then the
 Headings are extracted and drive the page's navigation, so they are not decoration:
 
 - keep them short and descriptive — they are read out of context, in a list;
-- keep them **unique within a body** — `body_edit(action='replace_block', heading='## X')`
-  targets a heading, and two identical headings make that edit ambiguous;
+- keep them **unique within a body** — `body_set_section(heading='## X')` targets a heading, and
+  two identical headings make that edit ambiguous (it refuses until you name one by path);
 - one `#` at the top is unnecessary — the entity's title is already displayed above the body;
   start at `##`.
 
@@ -37,13 +37,18 @@ A body grows across many calls, and the editing tools work on anchors:
 
 - `body_add(code, text, position='after', anchor='## Section')` — insert relative to a unique
   string, usually a heading;
-- `body_edit(code, action='replace', find=…)` — the `find` must occur exactly **once**, or the
-  call fails;
-- `body_edit(code, action='replace_block', heading='## Section')` — replaces the whole block up
-  to the next heading of the same or higher level.
+- `body_replace(code, find=…, text=…)` — the `find` must occur exactly **once**, or the call
+  fails; `mode='all'` swaps every occurrence and reports how many;
+- `body_set_section(code, heading='## Section', text=…)` — replaces the whole section up to the
+  next heading of the same or higher level, and hands back a preview and the length of the block
+  it removed, so you can see how far the cut reached.
 
 So a body built from named, unique sections stays cheap to amend, while one long undivided
 stream forces you to rewrite it whole with `*_update`.
+
+None of these hand the body back. An edit returns its **seam** — 128 characters either side of
+the splice with `<text>` where your text went — which is what tells you whether it landed against
+the paragraph you meant. Read the seam; re-read the whole body only when you need to re-read it.
 
 ## Length
 

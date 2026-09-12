@@ -97,7 +97,7 @@ async function save() {
         :label="t('research.group.form.name')"
         variant="outlined"
         density="comfortable"
-        :maxlength="128"
+        :maxlength="96"
         hide-details
         autofocus
       />

@@ -39,7 +39,7 @@ async def test_delete_unshelves_every_research_of_the_group(call):
         for i in range(3)
     ]
 
-    await call("group_delete", group_code=group)
+    await call("delete", code=group)
 
     for code in codes:
         assert (await call("research_get", research_code=code))["group_code"] is None
@@ -50,7 +50,7 @@ async def test_group_survives_deleting_a_research_it_holds(call):
     doomed = (await call("research_create", title="R1", group_code=group))["code"]
     kept = (await call("research_create", title="R2", group_code=group))["code"]
 
-    await call("research_delete", research_code=doomed)
+    await call("delete", code=doomed)
 
     assert (await call("group_get", group_code=group))["title"] == "Полка"
     assert (await call("research_get", research_code=kept))["group_name"] == "Полка"
@@ -95,7 +95,7 @@ async def test_overlong_fields_are_trimmed_not_rejected(call):
 
     row = await call("group_get", group_code=code)
 
-    assert len(row["title"]) == 128 and len(row["description"]) == 512
+    assert len(row["title"]) == 96 and len(row["description"]) == 512
 
 
 async def test_reordering_shelves_in_the_interface_changes_the_agents_list(call):
@@ -139,7 +139,7 @@ async def test_free_form_session_stays_consistent(call):
     await call("group_update", group_code=science, title="Естественные науки")
     await call("research_update", research_code=second, group_code=misc)
     await call("research_update", research_code=first, group_code="")
-    await call("group_delete", group_code=misc)
+    await call("delete", code=misc)
 
     rows = {row["title"]: row for row in (await call("research_list"))["result"]}
     assert rows["Парки"]["group_code"] is None
@@ -153,7 +153,7 @@ async def test_free_form_session_stays_consistent(call):
 
 async def test_stale_group_code_is_rejected_after_the_shelf_is_gone(call):
     group = (await call("group_create", title="Полка"))["code"]
-    await call("group_delete", group_code=group)
+    await call("delete", code=group)
     research = (await call("research_create", title="R"))["code"]
 
     with pytest.raises(ToolError, match="Group .* not found"):

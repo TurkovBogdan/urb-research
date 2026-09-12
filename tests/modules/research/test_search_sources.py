@@ -10,16 +10,12 @@ from fastmcp.exceptions import ToolError
 
 pytestmark = pytest.mark.db
 
-_SOURCE_KEYS = {
-    "code",
-    "status",
-    "url",
-    "title",
-    "summary",
-    "note",
-    "relevance",
-    "updated_at",
-}
+# Три агентские формы источника, по слоям: найденный (ещё без разбора) → строка списка (скан +
+# вердикт) → деталь с материалом. Набор полей каждой — контракт: лишнее в нём агент оплачивает
+# в каждой сессии, недостающее ломает разбор.
+_FOUND_KEYS = {"code", "status", "url", "title"}
+_SOURCE_KEYS = _FOUND_KEYS | {"note", "relevance"}
+_DETAIL_KEYS = _SOURCE_KEYS | {"summary", "body", "updated_at"}
 
 
 async def _seed(call, use_search, n: int = 2):
@@ -41,11 +37,10 @@ async def test_query_search_run_creates_and_returns_sources(call, use_search):
     _, _, _, sources = await _seed(call, use_search, n=2)
     assert len(sources) == 2
     s = sources[0]
-    assert set(s) == _SOURCE_KEYS
+    assert set(s) == _FOUND_KEYS
     assert s["code"].startswith("SOURCE@")
     assert s["status"] == "pending"
-    assert s["url"] == "https://ex.com/0" and s["summary"] == "snip0"
-    assert s["relevance"] is None
+    assert s["url"] == "https://ex.com/0"
 
 
 async def _seed_unfetched(call, use_search, **stub):
@@ -100,6 +95,7 @@ async def test_sources_refetch_revives_a_source_once_the_material_arrives(call, 
 
     assert len(report["sources"]) == 1 and report["skipped"] == []
     revived = report["sources"][0]
+    assert set(revived) == _FOUND_KEYS
     assert revived["code"] == sources[0]["code"] and revived["status"] == "pending"
     assert (await call("source_get", source_code=sources[0]["code"]))["body"] == "# body 0"
 
@@ -243,12 +239,12 @@ async def test_query_search_list_bad_code(call):
 
 async def test_query_search_delete_cascades_sources(call, use_search):
     r, _, q, sources = await _seed(call, use_search, n=2)
-    assert (await call("query_search_delete", query_code=q))["result"] is True
+    assert (await call("delete", code=q))["result"] is True
     assert (await call("sources_list", code=r))["result"] == []
 
 
 async def test_query_search_delete_missing_false(call):
-    assert (await call("query_search_delete", query_code="QUERY@missing00000000000"))["result"] is False
+    assert (await call("delete", code="QUERY@missing00000000000"))["result"] is False
 
 
 async def test_sources_list_by_levels_and_status_filter(call, use_search):
@@ -283,7 +279,7 @@ async def test_source_get_hides_the_way_up(call, use_search):
 
     g = await call("source_get", source_code=sources[0]["code"])
 
-    assert set(g) == _SOURCE_KEYS | {"body"}
+    assert set(g) == _DETAIL_KEYS
 
 
 async def test_source_get_not_found(call):
@@ -295,12 +291,29 @@ async def test_source_review_keep_and_filter(call, use_search):
     _, _, _, sources = await _seed(call, use_search, n=2)
 
     kept = await call("source_review", source_code=sources[0]["code"], decision="keep", relevance=9)
-    assert kept["status"] == "kept" and kept["relevance"] == 9
+    assert kept["status"] == "kept" and kept["code"] == sources[0]["code"]
+    assert set(kept) == {"code", "status"}
 
     filtered = await call(
         "source_review", source_code=sources[1]["code"], decision="filter", relevance=2, note="dup"
     )
-    assert filtered["status"] == "filtered" and filtered["note"] == "dup"
+    assert filtered["status"] == "filtered"
+
+
+async def test_source_review_verdict_comes_back_with_the_list(call, use_search):
+    """Оценка и причина отказа возвращаются не эхом самого разбора, а списком источников: по ним
+    агент, вернувшийся в область, отличает ключевой источник от отсеянного, не перечитывая
+    материал."""
+    r, _, _, sources = await _seed(call, use_search, n=2)
+    await call("source_review", source_code=sources[0]["code"], decision="keep", relevance=9)
+    await call(
+        "source_review", source_code=sources[1]["code"], decision="filter", relevance=2, note="dup"
+    )
+
+    rows = {row["code"]: row for row in (await call("sources_list", code=r))["result"]}
+
+    assert rows[sources[0]["code"]]["relevance"] == 9
+    assert rows[sources[1]["code"]]["note"] == "dup"
 
 
 async def test_source_review_bad_decision(call, use_search):

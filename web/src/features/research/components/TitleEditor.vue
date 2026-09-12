@@ -10,7 +10,7 @@ import { useI18n } from 'vue-i18n'
 import InlineEdit from '@/components/InlineEdit.vue'
 
 /** Столько принимает бэкенд (`TitleBody`): длиннее не отправляем вовсе. */
-const MAX_LENGTH = 128
+const MAX_LENGTH = 96
 
 const props = withDefaults(defineProps<{
   title: string

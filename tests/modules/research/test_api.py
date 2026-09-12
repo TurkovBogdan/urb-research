@@ -1188,7 +1188,7 @@ async def test_rename_research_trims_the_title(client):
     assert body["title"] == "Стало"
 
 
-@pytest.mark.parametrize("title", ["", "   ", "я" * 129])
+@pytest.mark.parametrize("title", ["", "   ", "я" * 97])
 async def test_rename_research_rejects_an_unusable_title(client, title):
     """Пусто, одни пробелы (срезаются ДО проверки длины) и длиннее колонки — все 422."""
     research = await research_crud.research_create(title="Было")
@@ -1284,7 +1284,7 @@ async def test_edit_research_description_rejects_one_longer_than_the_column(clie
 
     r = await client.put(
         f"/internal/research/researches/{research.code}/description",
-        json={"description": "я" * 2049},
+        json={"description": "я" * 513},
     )
 
     assert r.status_code == 422

@@ -16,7 +16,8 @@ Three things decide that, and each has a section here:
 - `markdown` — what the renderer supports and what it silently drops. Read it before using
   anything beyond headings, paragraphs and lists — tables, code fences, images, raw HTML.
 - `structure` — how to shape a body so it reads: what goes first, how headings drive the page
-  outline, where explanations belong, and how to keep it editable with `body_add` / `body_edit`.
+  outline, where explanations belong, and how to keep it editable with `body_add` /
+  `body_replace` / `body_set_section`.
 
 Read a section with `skill_get('body-markup', section='references')`.
 

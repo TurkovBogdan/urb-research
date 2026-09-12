@@ -43,12 +43,14 @@ GROUP_RESEARCHES_ACTIONS = (
     GROUP_RESEARCHES_DELETE,
 )
 
-RESEARCH_TITLE_MAX = 128
-# Шире, чем у области и заметки (512): описание исследования пишет агент, и в базе уже лежат
-# тексты длиннее — потолок подтянут под факт с запасом (см. миграцию rem_009).
-RESEARCH_DESCRIPTION_MAX = 2048
+# Заголовок и описание у исследования, группы, области и заметки — одной ширины: это строки,
+# по которым человек и агент просматривают список, а не текст (он живёт в ``body`` без лимита).
+# Прежние 128/2048 описывали не замысел, а накопившиеся данные; лишнее срезала миграция
+# rem_012_title_desc_length.
+RESEARCH_TITLE_MAX = 96
+RESEARCH_DESCRIPTION_MAX = 512
 
-GROUP_TITLE_MAX = 128
+GROUP_TITLE_MAX = 96
 GROUP_DESCRIPTION_MAX = 512
 GROUP_ICON_MAX = 64
 GROUP_COLOR_MAX = 32
@@ -56,7 +58,7 @@ GROUP_COLOR_MAX = 32
 # и вниз, не перенумеровывая соседей: больший sort = выше в списке.
 GROUP_SORT_DEFAULT = 500
 
-AREA_TITLE_MAX = 128
+AREA_TITLE_MAX = 96
 AREA_DESCRIPTION_MAX = 512
 AREA_BRIEF_MAX = 1024  # objective / scope / expectations
 
@@ -66,7 +68,7 @@ DOC_KEPT = "kept"
 DOC_FILTERED = "filtered"
 DOC_STATUSES = (DOC_ERROR, DOC_PENDING, DOC_KEPT, DOC_FILTERED)
 
-NOTE_TITLE_MAX = 128
+NOTE_TITLE_MAX = 96
 NOTE_DESCRIPTION_MAX = 512
 
 NOTE_RESULT = "result"

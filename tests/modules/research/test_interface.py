@@ -48,6 +48,19 @@ async def test_interface_open_maps_every_code_type_to_its_page(call, opened, cod
     assert opened == [url]
 
 
+async def test_interface_open_builds_the_address_without_looking_the_entity_up(call, opened):
+    """Тул — отображение «код → адрес», а не проверка существования: страница сама скажет
+    человеку, что сущности нет, а поход в БД за каждым из восьми типов стоил бы ровно ничего
+    сверх этого. Код удалённого исследования открывается так же, как живого."""
+    research = (await call("research_create", title="R"))["code"]
+    await call("delete", code=research)
+
+    url = (await call("interface_open", code=research))["result"]
+
+    assert url.endswith(f"/research/researches/{research}")
+    assert opened == [url]
+
+
 async def test_interface_open_reports_a_host_with_no_browser(call, monkeypatch):
     """Открыть нечем — отказ с адресом в тексте, а не молчаливое «сделано»."""
     monkeypatch.setattr(interface.webbrowser, "open", lambda url: False)

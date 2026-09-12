@@ -1,4 +1,4 @@
-"""research MCP: note_create / notes_list (+kind) / note_get / note_update / note_delete."""
+"""research MCP: note_create / notes_list (+kind) / note_get / note_update / delete of a NOTE@."""
 
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ async def test_notes_list_all_and_kind_filter(call):
 
     assert len(all_rows) == 2
     assert [x["title"] for x in ideas] == ["I"]
-    assert set(all_rows[0]) == {"code", "kind", "title", "description", "updated_at"}
+    assert set(all_rows[0]) == {"code", "kind", "title", "description"}
 
 
 async def test_notes_list_bad_kind_errors(call):
@@ -100,5 +100,19 @@ async def test_note_update_not_found(call):
 async def test_note_delete_true_then_false(call):
     r = await _research(call)
     n = (await call("note_create", research_code=r, kind="idea", title="N"))["code"]
-    assert (await call("note_delete", note_code=n))["result"] is True
-    assert (await call("note_delete", note_code=n))["result"] is False
+    assert (await call("delete", code=n))["result"] is True
+    assert (await call("delete", code=n))["result"] is False
+
+
+async def test_overlong_fields_are_trimmed_not_rejected(call):
+    r = await _research(call)
+    n = (
+        await call(
+            "note_create", research_code=r, kind="idea", title="я" * 150, description="ю" * 600
+        )
+    )["code"]
+
+    row = await call("note_get", note_code=n)
+
+    assert len(row["title"]) == 96 and row["title"][-1] == "я"
+    assert len(row["description"]) == 512

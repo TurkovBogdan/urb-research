@@ -1,4 +1,4 @@
-"""research MCP: group_create / group_list / group_get / group_update / group_delete."""
+"""research MCP: group_create / group_list / group_get / group_update / delete of a GROUP@."""
 
 from __future__ import annotations
 
@@ -59,8 +59,8 @@ async def test_update_keeps_omitted_fields(call):
 async def test_delete_reports_whether_it_existed(call):
     code = (await call("group_create", title="G"))["code"]
 
-    assert (await call("group_delete", group_code=code))["result"] is True
-    assert (await call("group_delete", group_code=code))["result"] is False
+    assert (await call("delete", code=code))["result"] is True
+    assert (await call("delete", code=code))["result"] is False
 
 
 async def test_get_missing_raises(call):
@@ -81,7 +81,6 @@ async def test_group_tools_are_registered(mcp):
         "group_list",
         "group_get",
         "group_update",
-        "group_delete",
     } <= names
     assert "group_icons" not in names
 
@@ -187,7 +186,7 @@ async def test_deleting_a_group_unshelves_its_researches(call):
     group = (await call("group_create", title="Полка"))["code"]
     research = (await call("research_create", title="R", group_code=group))["code"]
 
-    await call("group_delete", group_code=group)
+    await call("delete", code=group)
 
     view = await call("research_get", research_code=research)
     assert view["group_code"] is None and view["group_name"] == ""

@@ -4,8 +4,8 @@
 ``ResearchModule.mcp_servers["research"]``. Импорт ``make_mcp_server``
 (→ ``fastmcp``) ОТЛОЖЕН в тело функции: объявление словаря в ``module.py`` ссылается
 на функцию, не вызывая её, → ``build_modules()`` не тянет форк. Регистрирующие
-модули (group/research/area/source_document/note/body/skill/interface) держат ``FastMCP`` только
-под TYPE_CHECKING.
+модули (group/research/area/source_document/note/body/delete/skill/interface) держат ``FastMCP``
+только под TYPE_CHECKING.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from src.modules.research.mcp.area import register as _register_area
 from src.modules.research.mcp.body import register as _register_body
+from src.modules.research.mcp.delete import register as _register_delete
 from src.modules.research.mcp.group import register as _register_group
 from src.modules.research.mcp.interface import register as _register_interface
 from src.modules.research.mcp.note import register as _register_note
@@ -45,8 +46,7 @@ _INSTRUCTIONS = (
     "renders as a real diagram, but only for the types and the syntax that skill lists; anything "
     "else silently degrades to a block of code, and you will not be told. Give every diagram its "
     "own unique heading right above the fence: that is what lets you redraw exactly that one "
-    "diagram later with body_edit(action='replace_block', heading=…) instead of rewriting the "
-    "body.\n\n"
+    "diagram later with body_set_section(code, heading, text) instead of rewriting the body.\n\n"
     "─── THE PIPELINE (follow it in order) ───\n"
     "1. research_create(title, description?) — open the research. Keep the body for the final synthesis.\n"
     "2. area_create(research_code, title, description?, objective?, scope?, expectations?) — break the "
@@ -100,14 +100,12 @@ _INSTRUCTIONS = (
     "research_get(research_code) — the research with its body, areas and notes; "
     "research_list(group_code?) — researches, recently updated first, optionally only those in one "
     "group (empty string = only the ungrouped ones); "
-    "research_update(research_code, title?, description?, body?, group_code?) — edit fields (omit to keep); "
-    "research_delete(research_code) — remove it and everything under it (cascade).\n"
+    "research_update(research_code, title?, description?, body?, group_code?) — edit fields (omit to keep).\n"
     "Areas: area_create(...) (above) → its code; areas_list(research_code) — the scan list; "
     "area_get(area_code) — the area with its brief and body; area_update(area_code, title?, description?, "
-    "objective?, scope?, expectations?, body?) — edit; area_delete(area_code) — remove the area with its "
-    "searches and sources (cascade).\n"
+    "objective?, scope?, expectations?, body?) — edit.\n"
     "Searches & sources: query_search_run(area_code, query) (above); query_search_list(code) — the "
-    "searches of an AREA@ or RESEARCH@; query_search_delete(query_code) — remove a run and its sources; "
+    "searches of an AREA@ or RESEARCH@; "
     "sources_list(code, status?) — sources of a RESEARCH@ / AREA@ / QUERY@ (optional status filter: "
     "pending / kept / filtered / error); source_get(source_code) — one source with the page body; "
     "sources_refetch(codes) — re-download the material for the `error` sources under up to 6 "
@@ -120,12 +118,25 @@ _INSTRUCTIONS = (
     "code; kind is required — `result` (an established finding), `idea` (a hypothesis), `question` (an "
     "open gap), `memory` (a raw observation to keep), `decision` (your methodological choice), "
     "`clarification` (a constraint the user gave). notes_list(research_code, kind?); "
-    "note_get / note_update / note_delete.\n"
+    "note_get / note_update.\n"
     "Body editor (RESEARCH@ / AREA@ / NOTE@ — searches and sources have no editable body): "
-    "body_edit(code, action, text, find?, heading?) with action set / replace (unique find) / "
-    "replace_block (a `#`/`##` heading block); body_add(code, text, position, anchor?) with position "
-    "start / end / before / after (relative to anchor). Both return the updated body. Use these for "
-    "incremental edits instead of rewriting the whole body with *_update.\n"
+    "body_set(code, text) — the whole body, returns only its new length; "
+    "body_replace(code, find, text, mode) — mode `single` (find must occur exactly once) or "
+    "`all` (every occurrence); "
+    "body_set_section(code, heading, text) — one heading section, down to the next heading of "
+    "equal or higher level, returning a preview and the length of the block it removed (a "
+    "heading that repeats in the body is refused — name it by path, `## Section > ### "
+    "Subsection`); "
+    "body_add(code, text, position, anchor?) with position start / end / before / after "
+    "(relative to anchor). None of them echo the body back: an edit returns its SEAM — 128 "
+    "characters of the body on each side of the edit with `<text>` in place of the text you "
+    "sent, `…` where that window was cut short. Read the seam instead of re-reading the body: "
+    "it is where a splice goes wrong. Use these for incremental edits instead of rewriting the "
+    "whole body with *_update.\n"
+    "Deleting: delete(code) — one tool for every type, and the code decides what goes with it: "
+    "RESEARCH@ (its areas, notes, searches and sources go too), AREA@ (its searches and sources), "
+    "QUERY@ (its sources), NOTE@ (the note alone), GROUP@ (the group alone — see Groups below). "
+    "A source is not deletable: review it or refetch it.\n"
     "Skills (the server's own reference material): skills_list() — what it can teach you, one line "
     "each; skill_get(skill_name, section?) — the guide, or one section of it. `body-markup` covers "
     "writing a body: codes as links, the markdown that renders, how to shape a section. `mermaid` "
@@ -142,7 +153,7 @@ _INSTRUCTIONS = (
     "derived from the group and is not editable on the research. Grouping is cosmetic filing, not "
     "part of the research pipeline: leave a research ungrouped unless the user asked for groups. "
     "group_create(title, description?) → its code; group_list(); group_get; group_update; "
-    "group_delete — deleting a group KEEPS its researches, they just become ungrouped. How a "
+    "delete(group_code) — deleting a group KEEPS its researches, they just become ungrouped. How a "
     "group looks and where it sits in the list is the user's to set in the interface — you only "
     "name it and file researches into it."
 )
@@ -159,6 +170,7 @@ def mcp_server(ctx: "McpServerContext") -> "FastMCP":
     _register_source_document(mcp)
     _register_note(mcp)
     _register_body(mcp)
+    _register_delete(mcp)
     _register_skill(mcp)
     _register_interface(mcp)
     return mcp
