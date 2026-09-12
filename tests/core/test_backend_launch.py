@@ -8,6 +8,7 @@ Nothing here starts a process: `Popen` is replaced, the probe answers from a stu
 from __future__ import annotations
 
 import subprocess
+import sys
 import types
 
 import httpx
@@ -21,6 +22,7 @@ from src.core.backend_launch import (
     base_url,
     connect_host,
     health_url,
+    preload_health_client,
     probe_health,
     spawn_backend,
     wait_until_ready,
@@ -201,3 +203,13 @@ def test_wait_stops_on_a_degraded_backend_instead_of_sitting_out_the_timeout(mon
 
     assert wait_until_ready(_cfg(), timeout=600) is degraded
     assert len(probes) == 1
+
+
+@pytest.mark.pure
+def test_the_health_probe_is_preloaded_in_one_call():
+    """The updater must not import anything after `uv sync` has replaced the venv under it, and
+    `httpx` builds its transport on first use — so the transport is built once, up front.
+    Rehearsed 2026-09-13: without this the update imported 70+ modules after the sync."""
+    preload_health_client()
+
+    assert {"httpcore", "h11", "anyio", "certifi", "encodings.idna"} <= set(sys.modules)

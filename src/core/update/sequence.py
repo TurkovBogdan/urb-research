@@ -25,6 +25,7 @@ from src.core.backend_launch import (
     UV_RUN_PYTHON,
     backend_command,
     base_url,
+    preload_health_client,
     spawn_backend,
     wait_until_ready,
 )
@@ -194,6 +195,9 @@ class UpdateHost:
         self.report(plan.describe())
         execute_stop(plan, report=self.report)
         self._stop_latecomers()
+
+    def preload_probe_imports(self) -> None:
+        preload_health_client()
 
     def freeze_imports(self) -> None:
         self._modules_before_sync = frozenset(sys.modules)
@@ -512,6 +516,7 @@ def _stop_and_fast_forward(host: UpdateHost, start: StartingPoint) -> str:
     )
     target = _resolve_fetched_commit(host, start.branch)
     _must_succeed(host.execute(["git", "merge", "--ff-only", target]))
+    host.preload_probe_imports()
     host.freeze_imports()
     _must_succeed(host.execute(SYNC_COMMAND, timeout=SYNC_TIMEOUT_SECONDS))
     return target
