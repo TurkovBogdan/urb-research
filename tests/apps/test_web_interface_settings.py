@@ -24,6 +24,22 @@ pytestmark = pytest.mark.pure
 WEB_SRC = Path(__file__).resolve().parents[2] / "web" / "src"
 CONSTANTS = WEB_SRC / "constants"
 
+INTERFACE_PAGE = WEB_SRC / "features" / "settings" / "views" / "InterfaceView.vue"
+DOCUMENT_COLUMN = WEB_SRC / "layout" / "components" / "DocumentAppearance.vue"
+
+# Группы страницы настроек, которые повторяет колонка деталки. Четвёртой, «Интерфейс», там нет:
+# тема, шрифт интерфейса и раскладка списков к показанному документу отношения не имеют.
+DOCUMENT_COLUMN_GROUPS = ("document", "code", "diagram")
+
+# Группа начинается со своей подписи, а поля идут за ней — и на странице (`<SettingsGroup :title>`),
+# и в колонке (плашка-заголовок). Поэтому обе поверхности читаются одним разбором. У поля читается
+# не только привязка, но и ручка: список с шагом влево-вправо и простой список — разные ручки, и
+# выбор между ними принадлежит настройке, а не месту показа.
+_GROUP_OR_FIELD = re.compile(
+    r"settings\.interface\.group\.(\w+)\.title"
+    r"|<(\w+)[^>]*?v-model=\"settings\.([\w.]+)\""
+)
+
 
 def _source(path: Path) -> str:
     return path.read_text(encoding="utf-8")
@@ -51,6 +67,19 @@ def _font_code(source: str, name: str) -> str:
     """``DEFAULT_MONO_FONT = JETBRAINS_MONO.code`` — разворачиваем ссылку до самого кода."""
     option = re.search(rf"{name} = (\w+)\.code", source).group(1)
     return re.search(rf"const {option}: FontOption = \{{\s*code: '([^']*)'", source).group(1)
+
+
+def _fields_by_group(path: Path) -> dict[str, list[tuple[str, str]]]:
+    """Поля «ручка + привязка к стору», разложенные по группам в порядке появления."""
+    groups: dict[str, list[tuple[str, str]]] = {}
+    current: list[tuple[str, str]] = []
+    for match in _GROUP_OR_FIELD.finditer(_source(path)):
+        group, control, binding = match.groups()
+        if group is not None:
+            current = groups.setdefault(group, [])
+        else:
+            current.append((control, binding))
+    return groups
 
 
 def _options(key: str) -> list:
@@ -83,6 +112,23 @@ def test_switch_defaults_in_the_store_match_the_registry():
         key: setting.default
         for key, setting in SETTINGS.items()
         if isinstance(setting.default, bool)
+    }
+
+
+def test_document_column_repeats_the_page_groups_field_for_field():
+    """Колонка деталки и страница настроек показывают одни и те же поля одними и теми же ручками.
+
+    Настройка здесь одна на два места (общий стор), поэтому разъехавшиеся наборы означают либо
+    поле, которое правится только на странице настроек, либо — что хуже — поле, приписанное в
+    колонке к чужой группе: так шрифт кода однажды оказался «оформлением документа». Сверяются и
+    порядок (по одной и той же колонке полей глаз ищет знакомое место, а не читает подписи), и
+    ручка: список с шагом влево-вправо, подменённый простым списком, отнимает перебор соседних
+    вариантов — то самое движение, ради которого настройку и открывают рядом с текстом.
+    """
+    page = _fields_by_group(INTERFACE_PAGE)
+
+    assert _fields_by_group(DOCUMENT_COLUMN) == {
+        group: page[group] for group in DOCUMENT_COLUMN_GROUPS
     }
 
 

@@ -69,13 +69,14 @@ graph LR
 ```
 `````
 
-This is not decoration. `body_edit(code, action='replace_block', heading='## Пайплайн ресёрча')`
-replaces that whole block — heading, diagram and all — in one call, so a diagram under its own
+This is not decoration. `body_set_section(code, heading='## Пайплайн ресёрча', text=…)`
+replaces that whole section — heading, diagram and all — in one call, so a diagram under its own
 heading can be redrawn without touching anything else and without rewriting the body. A diagram
-dropped into the middle of a section can only be edited by `replace` on a unique fragment of its
-source, which breaks as soon as two diagrams share a line like `A --> B`.
+dropped into the middle of a section can only be edited by `body_replace` on a unique fragment of
+its source, which breaks as soon as two diagrams share a line like `A --> B`.
 
-Same reason to keep headings unique: `replace_block` needs exactly one match.
+Same reason to keep headings unique: `body_set_section` needs exactly one match, and a heading
+that repeats is refused until you name one of them by its path down from an enclosing heading.
 
 ## Colours come from the app theme
 

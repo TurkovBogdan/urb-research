@@ -54,10 +54,42 @@ def test_skill_name_cannot_escape_the_catalogue():
 
 
 @pytest.mark.pure
+def test_an_empty_skill_name_lists_the_available_ones():
+    """Пустое имя — такой же промах, как любое другое: отказ перечисляет каталог, а не молчит."""
+    with pytest.raises(ValueError, match="Unknown skill ''"):
+        read_skill("")
+
+
+@pytest.mark.pure
+def test_an_empty_section_returns_the_whole_guide():
+    """``""`` = «не задано» во всём модуле, и раздел не исключение: пустая строка — это навык
+    целиком, а не поиск раздела с пустым именем."""
+    whole = read_skill(BODY_MARKUP, "")
+
+    assert whole.section == ""
+    assert whole.text == read_skill(BODY_MARKUP).text
+
+
+@pytest.mark.pure
+@pytest.mark.parametrize("name", ["/etc/passwd", "body-markup/", "./body-markup"])
+def test_a_path_shaped_name_is_not_a_skill(name):
+    """Имя приходит от агента, и путь из него не склеивается — открываются только папки, которые
+    загрузчик нашёл сам."""
+    with pytest.raises(ValueError, match="Unknown skill"):
+        read_skill(name)
+
+
+@pytest.mark.pure
+def test_a_section_name_cannot_escape_the_skill():
+    with pytest.raises(ValueError, match="has no section"):
+        read_skill(BODY_MARKUP, "../SKILL")
+
+
+@pytest.mark.pure
 def test_mermaid_skill_covers_every_renderable_type():
     mermaid = read_skill("mermaid")
     assert set(mermaid.sections) == {"chart", "class", "er", "flowchart", "sequence", "state"}
-    assert "replace_block" in mermaid.text
+    assert "body_set_section" in mermaid.text
 
 
 @pytest.mark.db
@@ -97,8 +129,8 @@ async def test_every_tool_that_writes_a_body_points_at_the_skills(mcp):
 
 @pytest.mark.db
 async def test_body_editor_points_at_the_skills(mcp):
-    editors = [tool for tool in await mcp.list_tools() if tool.name in ("body_add", "body_edit")]
-    assert len(editors) == 2
+    editors = [tool for tool in await mcp.list_tools() if tool.name.startswith("body_")]
+    assert len(editors) == 4
     for tool in editors:
         assert "skill_get('body-markup')" in tool.description
         assert "skill_get('mermaid')" in tool.description

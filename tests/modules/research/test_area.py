@@ -1,4 +1,4 @@
-"""research MCP: area_create / areas_list / area_get / area_update / area_delete."""
+"""research MCP: area_create / areas_list / area_get / area_update / delete of an AREA@."""
 
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ async def test_areas_list_scan(call):
     rows = (await call("areas_list", research_code=r))["result"]
 
     assert {x["title"] for x in rows} == {"One", "Two"}
-    assert set(rows[0]) == {"code", "title", "description", "updated_at"}
+    assert set(rows[0]) == {"code", "title", "description"}
 
 
 async def test_areas_list_research_not_found(call):
@@ -101,9 +101,21 @@ async def test_area_update_not_found(call):
 async def test_area_delete_true_then_gone(call):
     r = await _research(call)
     a = (await call("area_create", research_code=r, title="A"))["code"]
-    assert (await call("area_delete", area_code=a))["result"] is True
+    assert (await call("delete", code=a))["result"] is True
     assert (await call("areas_list", research_code=r))["result"] == []
 
 
 async def test_area_delete_missing_returns_false(call):
-    assert (await call("area_delete", area_code="AREA@missing0000000000000"))["result"] is False
+    assert (await call("delete", code="AREA@missing0000000000000"))["result"] is False
+
+
+async def test_overlong_fields_are_trimmed_not_rejected(call):
+    r = await _research(call)
+    a = (
+        await call("area_create", research_code=r, title="я" * 150, description="ю" * 600)
+    )["code"]
+
+    row = await call("area_get", area_code=a)
+
+    assert len(row["title"]) == 96 and row["title"][-1] == "я"
+    assert len(row["description"]) == 512

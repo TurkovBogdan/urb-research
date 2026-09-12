@@ -11,7 +11,7 @@ import { errorText } from '@/api/errorText'
 import { renameResearch, type ResearchListRow } from '../api'
 
 /** Столько принимает бэкенд (`TitleBody`): длиннее не отправляем вовсе. */
-const MAX_LENGTH = 128
+const MAX_LENGTH = 96
 
 const open = defineModel<boolean>({ required: true })
 

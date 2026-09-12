@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from src.modules.research.codes import bare_code
 from src.modules.research.crud import area as area_crud
 from src.modules.research.crud import research as research_crud
-from src.modules.research.dto import AgentAreaCreated, AgentAreaDetail, AreaRow
+from src.modules.research.dto import AgentAreaCreated, AgentAreaDetail, AgentAreaScan
 
 if TYPE_CHECKING:  # fork fastmcp — только backend (через mcp_server(ctx))
     from fastmcp import FastMCP
@@ -39,7 +39,7 @@ def register(mcp: "FastMCP") -> None:
 
         Args:
             research_code: The research this area belongs to.
-            title: Short area name (≤128 chars).
+            title: Short area name (≤96 chars).
             description: One-line "what this area is" for scanning the list (≤512).
             objective: What to achieve in this area and why (≤1024).
             scope: The boundaries — what is covered and what is explicitly excluded (≤1024).
@@ -59,7 +59,7 @@ def register(mcp: "FastMCP") -> None:
         return AgentAreaCreated.model_validate(row)
 
     @mcp.tool()
-    async def areas_list(research_code: str) -> list[AreaRow]:
+    async def areas_list(research_code: str) -> list[AgentAreaScan]:
         """List a research's areas (scan layer: code, title, description), oldest first.
 
         Args:
@@ -69,11 +69,14 @@ def register(mcp: "FastMCP") -> None:
         if await research_crud.research_get(research_code) is None:
             raise ValueError(f"Research {research_code} not found.")
         rows = await area_crud.area_list_by_research(research_code)
-        return [AreaRow.model_validate(r) for r in rows]
+        return [AgentAreaScan.model_validate(r) for r in rows]
 
     @mcp.tool()
     async def area_get(area_code: str) -> AgentAreaDetail:
-        """Return one area in full — scan layer (title/description) + body.
+        """Return one area in full — title/description, the brief, and the body.
+
+        The brief is what the area is for: `objective` (the question it answers), `scope`
+        (what is in and out) and `expectations` (what a finished area looks like).
 
         Args:
             area_code: The area code returned by area_create.
@@ -93,14 +96,14 @@ def register(mcp: "FastMCP") -> None:
         scope: str | None = None,
         expectations: str | None = None,
         body: str | None = None,
-    ) -> AreaRow:
+    ) -> AgentAreaScan:
         """Update an area's fields (omit a field to keep it). Write the section synthesis into body.
 
         title/description/brief are trimmed to their limits; body is unlimited markdown.
 
         Args:
             area_code: The area to update.
-            title: New title (≤128), or omit to keep.
+            title: New title (≤96), or omit to keep.
             description: New one-line description (≤512), or omit.
             objective: New objective (≤1024), or omit.
             scope: New scope / boundaries (≤1024), or omit.
@@ -120,15 +123,4 @@ def register(mcp: "FastMCP") -> None:
         )
         if row is None:
             raise ValueError(f"Area {area_code} not found.")
-        return AreaRow.model_validate(row)
-
-    @mcp.tool()
-    async def area_delete(area_code: str) -> bool:
-        """Delete an area. Returns true if it existed.
-
-        CASCADE: also removes the area's searches and sources.
-
-        Args:
-            area_code: The area to delete.
-        """
-        return await area_crud.area_delete(bare_code(area_code))
+        return AgentAreaScan.model_validate(row)

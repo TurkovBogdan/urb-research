@@ -3,8 +3,13 @@
 **Префикс ``Agent`` = поверхность агента.** Что видит агент, в этом модуле управляется жёстко,
 поэтому граница проведена именем: класс с префиксом ``Agent`` возвращается тулами MCP и больше
 никем, всё остальное — контракты web-вьюера. Поиск по ``Agent`` в ``mcp/`` даёт всю агентскую
-поверхность целиком. Где вопрос у обеих сторон один (строки списков), контракт общий и префикса
-не несёт.
+поверхность целиком. Граница сплошная: общих контрактов у поверхностей нет, даже там, где
+наборы полей совпадают. Общий контракт разъезжается в одну сторону — поле,
+добавленное ради колонки в таблице, молча начинает стоить агенту контекста в каждой сессии.
+
+Докстринг агентского класса туда же: pydantic кладёт его в JSON-схему тула описанием, и агент
+оплачивает его при каждом подключении. Поэтому пояснения агентских контрактов живут в
+комментариях НАД классом, а не в докстринге.
 
 Интерфейсная деталь наследует агентскую и добавляет то, что нужно только человеку, — например
 путь наверх (``research_code``/``research_title``): страница обязана вернуть его в родителя и при
@@ -42,21 +47,14 @@ SourceDocumentCode = prefixed(SOURCE_DOCUMENT_CODE_PREFIX)
 
 
 class AgentGroupCreated(BaseModel):
-    """Возврат создания группы — только код."""
-
     model_config = ConfigDict(from_attributes=True)
 
     code: GroupCode
 
 
+# Оформление (``icon``/``color``) и позиция в списке (``sort``) — выбор человека в интерфейсе,
+# поэтому поверхности разведены: MCP отдаёт этот набор, web-вьюер — ``GroupRow``.
 class AgentGroupScan(BaseModel):
-    """Группа для MCP: одна карточка — ни оформления, ни позиции в списке.
-
-    Как группа выглядит (``icon``/``color``) и где стоит (``sort``) — выбор человека в интерфейсе;
-    для агента это лишние поля, поэтому поверхности разведены: MCP отдаёт этот набор,
-    web-вьюер — ``GroupRow``.
-    """
-
     model_config = ConfigDict(from_attributes=True)
 
     code: GroupCode
@@ -95,20 +93,17 @@ class GroupListRow(GroupRow):
 
 
 class AgentResearchCreated(BaseModel):
-    """Возврат создания исследования — только код (агент прислал остальное сам)."""
-
     model_config = ConfigDict(from_attributes=True)
 
     code: ResearchCode
 
 
+# ``group_name`` берётся join'ом, а не хранится в исследовании: хранимая копия разъезжалась бы
+# с группой при переименовании.
 class AgentResearchScan(BaseModel):
-    """Скан research — код/заголовок/описание + группа (без дат/тела). Возврат research_update.
-
-    ``group_code`` — ссылка (``None`` = не разложено), ``group_name`` — **вычисляемое** имя группы
-    из join'а с ``research_group``: в самом исследовании названия группы нет и хранить его там
-    было бы копией, разъезжающейся при переименовании. Пустая строка = группы нет.
-    """
+    """Скан research. ``group_code`` = ``None`` — не разложено; ``group_name`` производно от
+    него (пустая строка = группы нет) и своей правки не имеет: переименовать группу можно
+    только ``group_update``."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -120,8 +115,6 @@ class AgentResearchScan(BaseModel):
 
 
 class AgentResearchRow(BaseModel):
-    """Строка research_list — скан-поля + группа + ``updated_at`` (без ``created_at``)."""
-
     model_config = ConfigDict(from_attributes=True)
 
     code: ResearchCode
@@ -132,31 +125,29 @@ class AgentResearchRow(BaseModel):
     updated_at: DatetimeUTCStr
 
 
+# Даты правки в агентских сканах нет: списки приходят уже упорядоченными по ней, а сама она
+# ничего не говорит — у заведённой и ни разу не тронутой области она равна дате заведения, так
+# что отличить сделанное от несделанного по ней нельзя. Колонку с датой читает интерфейс.
 class AgentAreaScan(BaseModel):
-    """Вложенная проекция области в research_get: код/заголовок/описание/updated_at."""
-
     model_config = ConfigDict(from_attributes=True)
 
     code: AreaCode
     title: str
     description: str = ""
-    updated_at: DatetimeUTCStr
 
 
+# ``kind`` стоит наравне с названием: тип — это то, чем заметка является (вывод / гипотеза /
+# открытый вопрос / …), и по нему агент решает, что с ней делать.
 class AgentNoteScan(BaseModel):
-    """Вложенная проекция заметки в research_get: код/заголовок/описание/updated_at."""
-
     model_config = ConfigDict(from_attributes=True)
 
     code: NoteCode
+    kind: str
     title: str
     description: str = ""
-    updated_at: DatetimeUTCStr
 
 
 class AgentResearchDetail(AgentResearchScan):
-    """research_get: скан + тело + области и заметки (updated_at ↑) + даты (в конце)."""
-
     body: str = ""
     areas: list[AgentAreaScan] = []
     notes: list[AgentNoteScan] = []
@@ -172,9 +163,11 @@ class ResearchRow(BaseModel):
     updated_at: DatetimeUTCStr
 
 
-class ResearchSourceQueryRow(BaseModel):
-    """Строка поиска (query_search_list): код + к какой области + текст запроса."""
-
+# Прогон поиска для агента: код, текст запроса и область, в которой он запущен. ``area_code``
+# тут не путь наверх, а ключ группировки: ``query_search_list`` принимает и код исследования, и
+# тогда в одном списке лежат прогоны разных областей — без него не увидеть, какая область
+# обыскана слабее прочих, и пришлось бы звать список на каждую область отдельно.
+class AgentSourceQueryScan(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     code: SourceQueryCode
@@ -182,13 +175,53 @@ class ResearchSourceQueryRow(BaseModel):
     query: str
 
 
-class ResearchSourceDocumentRow(BaseModel):
-    """Источник (скан): код + оценка + url/title из join'а страницы; ``updated_at`` последним.
+class ResearchSourceQueryRow(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
 
-    Связочные коды (area/query/page) и domain не отдаём — агент в контексте, страницу видит по url.
-    Код причины сбоя (``web_search_page.error``) тоже не отдаём: решение о повторе не агентское,
-    ему достаточно ``status`` — материала нет. Причина видна человеку в разделе страниц.
-    """
+    code: SourceQueryCode
+    area_code: AreaCode
+    query: str
+
+
+# Источник, как его только что нашли или перекачали. ``status`` — весь его итог: ``pending``
+# значит материал на месте и пора разбирать, ``error`` — качать снова (``sources_refetch``).
+# Разбора у такого источника ещё нет, поэтому вердикта тут нет — его добавляет строка списка.
+# ``title`` не украшение: код источника, вписанный в тело, читатель видит заголовком страницы,
+# и текст вокруг ссылки агент пишет так, будто заголовок стоит на её месте.
+class AgentSourceDocumentScan(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    code: SourceDocumentCode
+    status: str
+    url: str | None = None
+    title: str | None = None
+
+
+# Строка списка источников: скан + вердикт разбора, вынесенный раньше. ``note``/``relevance`` —
+# чем разбор помнит себя: вернувшись в область (или приняв её от другого агента), по ним видно,
+# какой из оставленных источников ключевой, а какой отсеян и почему. Снипета поисковика
+# (``summary``) тут нет намеренно: судить по нему запрещено, материал читается ``source_get``.
+class AgentSourceDocumentRow(AgentSourceDocumentScan):
+    note: str = ""
+    relevance: int | None = None
+
+
+# Итог ``source_review``: код источника и статус, в который его перевело решение. Оценка и
+# заметка — вход того же вызова, а страница в разборе не участвует вовсе (``url``/``title``
+# возвращались тут пустыми всегда). Эхо собственного ввода агент оплачивал бы на каждом
+# разобранном источнике, а их в области десятки.
+class AgentSourceDocumentReviewed(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    code: SourceDocumentCode
+    status: str
+
+
+# Связочные коды (area/query/page), domain и код причины сбоя (``web_search_page.error``) сюда
+# не идут: агент в контексте, страницу опознаёт по url, а решение о повторе принимает по
+# ``status``. Причину сбоя человек смотрит в разделе страниц.
+class ResearchSourceDocumentRow(BaseModel):
+    """Источник без тела материала: статус, разбор и url/title страницы (тело — ``source_get``)."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -203,7 +236,7 @@ class ResearchSourceDocumentRow(BaseModel):
 
 
 class AgentSourceDocumentDetail(BaseModel):
-    """Источник + тело материала (``web_search_page.body`` через join); ``updated_at`` последним."""
+    """Источник + тело материала (``body``; ``None`` — страница не скачана)."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -232,35 +265,27 @@ class ResearchSourceDocumentDetail(AgentSourceDocumentDetail):
 
 
 class AgentSkippedCode(BaseModel):
-    """Код, по которому качать оказалось нечего, и почему именно — как его передали."""
+    """Код, по которому качать оказалось нечего — любого из принятых типов, как его передали,
+    — и причина."""
 
     code: str
     reason: str
 
 
+# Два списка, а не один: у агента и вопроса два — что теперь читать и почему часть кодов
+# ничего не дала. Склеенные, они заставляли бы отличать одно от другого по пустым полям.
 class AgentSourcesRefetched(BaseModel):
-    """Итог повтора получения по нескольким кодам: что перекачано и что пропущено.
-
-    Два списка вместо одного, потому что вопросов у агента тоже два: «что теперь читать»
-    (``sources`` со свежим статусом) и «почему часть кодов ничего не дала» (``skipped``) —
-    склеенные в один список, они заставляли бы отличать одно от другого по пустым полям.
-    """
-
-    sources: list["ResearchSourceDocumentRow"] = []
+    sources: list[AgentSourceDocumentScan] = []
     skipped: list[AgentSkippedCode] = []
 
 
 class AgentAreaCreated(BaseModel):
-    """Возврат создания области — только код."""
-
     model_config = ConfigDict(from_attributes=True)
 
     code: AreaCode
 
 
 class AreaRow(BaseModel):
-    """Скан-слой области: код + заголовок + краткое «что это» (для списка N областей)."""
-
     model_config = ConfigDict(from_attributes=True)
 
     code: AreaCode
@@ -270,8 +295,6 @@ class AreaRow(BaseModel):
 
 
 class AgentAreaDetail(BaseModel):
-    """Область целиком: скан-слой + бриф (objective/scope/expectations) + body; ``updated_at`` последним."""
-
     model_config = ConfigDict(from_attributes=True)
 
     code: AreaCode
@@ -296,16 +319,12 @@ class AreaDetail(AgentAreaDetail):
 
 
 class AgentNoteCreated(BaseModel):
-    """Возврат создания заметки — только код."""
-
     model_config = ConfigDict(from_attributes=True)
 
     code: NoteCode
 
 
 class NoteRow(BaseModel):
-    """Скан-слой заметки: код + тип + заголовок + краткое «что это» (для списка)."""
-
     model_config = ConfigDict(from_attributes=True)
 
     code: NoteCode
@@ -316,8 +335,6 @@ class NoteRow(BaseModel):
 
 
 class AgentNoteDetail(BaseModel):
-    """Заметка целиком: скан-слой + основное тело (markdown); ``updated_at`` последним."""
-
     model_config = ConfigDict(from_attributes=True)
 
     code: NoteCode
@@ -399,18 +416,47 @@ class SourceQueryDetail(ResearchSourceQueryRow):
     documents: list[ResearchSourceDocumentRow] = []
 
 
-class AgentBodyView(BaseModel):
-    """Возврат body-редактора: код (с префиксом, эхо входа) + новое тело; ``updated_at`` последним."""
+# Код в возвратах body-редактора — эхо входа, а не поле строки: тело правят у трёх типов сразу,
+# и одного ``prefixed`` на все три нет; вернуть его голым значило бы отдать агенту код, который
+# он не может передать обратно.
 
-    model_config = ConfigDict(from_attributes=True)
-
+# Расписка ``body_set``: тело целиком написал сам агент, и эхо его же текста — чистая трата
+# контекста. Длина же говорит то, чего агент не знает, — что сохранилось ровно написанное.
+class AgentBodySet(BaseModel):
     code: str
-    body: str = ""
-    updated_at: DatetimeUTCStr
+    length: int
+
+
+# Одна форма на оба режима ``body_replace``, а не объединение двух: агент должен знать, что ему
+# вернут, до вызова. ``edits`` — по шву на каждое вхождение, в порядке документа; в режиме
+# ``single`` это список из одного. Вхождения теснее окна отдают общий текст дважды: склейка
+# стоила бы соответствия «шов на вхождение», по которому и сверяют ``replaced``.
+class AgentBodyReplaced(BaseModel):
+    code: str
+    replaced: int
+    edits: list[str] = []
+
+
+# Возврат ``body_set_section`` — вырезанное, а не вписанное: границу раздела считает сервер по
+# уровню заголовка, и непредсказуем для агента ровно размах выреза. Хвост блока и его полная
+# длина отвечают на это прямо; шов вокруг нового текста выглядел бы одинаково и при вырезе вдвое
+# шире нужного. ``stopped_at`` — заголовок, оборвавший блок (``None`` = тело кончилось).
+class AgentBodySectionSet(BaseModel):
+    code: str
+    removed: str
+    removed_length: int
+    stopped_at: str | None = None
+
+
+# Возврат ``body_add``: шов — единственное, что тут может пойти не так, ведь текст вклеивается
+# дословно, без разделителя.
+class AgentBodyAdded(BaseModel):
+    code: str
+    edit: str
 
 
 class AgentSkillRow(BaseModel):
-    """Строка каталога навыков — имя, условие вызова, разделы; текста тут нет по замыслу."""
+    """Строка каталога навыков: имя, условие вызова и разделы — без текста (его даёт ``skill_get``)."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -419,12 +465,10 @@ class AgentSkillRow(BaseModel):
     sections: list[str] = []
 
 
+# ``sections`` едет и с телом одного раздела: иначе агент, ушедший вглубь, теряет список
+# соседних веток и не знает, куда идти дальше.
 class AgentSkill(BaseModel):
-    """Прочитанный навык: текст целиком или один раздел (``section`` пуст у целого).
-
-    ``sections`` едет и с телом раздела — иначе агент, ушедший вглубь, теряет список соседних
-    веток и не знает, куда идти дальше.
-    """
+    """Навык: текст целиком или один его раздел (``section`` пуст у целого)."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -508,14 +552,23 @@ def agent_research_row(
     )
 
 
-def _source_document_fields(
+def _source_scan_fields(
     doc: "ResearchSourceDocument", page: "WebSearchPage | None"
 ) -> dict:
+    """Опознание источника: свой код и статус + чем он является — url/title из join'а страницы."""
     return dict(
         code=doc.code,
         status=doc.status,
         url=page.url if page else None,
         title=page.title if page else None,
+    )
+
+
+def _source_document_fields(
+    doc: "ResearchSourceDocument", page: "WebSearchPage | None"
+) -> dict:
+    return dict(
+        **_source_scan_fields(doc, page),
         summary=doc.summary,
         note=doc.note,
         relevance=doc.relevance,
@@ -523,10 +576,26 @@ def _source_document_fields(
     )
 
 
+def agent_source_document_scan(
+    doc: "ResearchSourceDocument", page: "WebSearchPage | None"
+) -> AgentSourceDocumentScan:
+    """Только что найденный (или перекачанный) источник для агента — без вердикта разбора."""
+    return AgentSourceDocumentScan(**_source_scan_fields(doc, page))
+
+
+def agent_source_document_row(
+    doc: "ResearchSourceDocument", page: "WebSearchPage | None"
+) -> AgentSourceDocumentRow:
+    """Строка списка источников для агента: скан + вердикт разбора."""
+    return AgentSourceDocumentRow(
+        **_source_scan_fields(doc, page), note=doc.note, relevance=doc.relevance
+    )
+
+
 def source_document_row(
     doc: "ResearchSourceDocument", page: "WebSearchPage | None"
 ) -> ResearchSourceDocumentRow:
-    """Собрать строку источника: свои поля + url/domain/title из join'а страницы."""
+    """Собрать строку источника: свои поля + url/title из join'а страницы."""
     return ResearchSourceDocumentRow(**_source_document_fields(doc, page))
 
 
@@ -574,10 +643,17 @@ __all__ = [
     "AgentAreaDetail",
     "AgentNoteCreated",
     "AgentNoteDetail",
+    "AgentSourceQueryScan",
+    "AgentSourceDocumentScan",
+    "AgentSourceDocumentRow",
+    "AgentSourceDocumentReviewed",
     "AgentSourceDocumentDetail",
     "AgentSkippedCode",
     "AgentSourcesRefetched",
-    "AgentBodyView",
+    "AgentBodySet",
+    "AgentBodyReplaced",
+    "AgentBodySectionSet",
+    "AgentBodyAdded",
     "AgentSkill",
     "AgentSkillRow",
     "GroupRow",
@@ -598,6 +674,8 @@ __all__ = [
     "group_fields",
     "group_style_fields",
     "agent_research_row",
+    "agent_source_document_scan",
+    "agent_source_document_row",
     "source_document_row",
     "agent_source_document_detail",
     "source_document_detail",

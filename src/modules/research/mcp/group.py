@@ -32,7 +32,7 @@ def register(mcp: "FastMCP") -> None:
         fields are trimmed (no error on overflow).
 
         Args:
-            title: Short group name (≤128 chars).
+            title: Short group name (≤96 chars).
             description: One-line "what lives here" for scanning the list (≤512).
         """
         row = await group_crud.group_create(title=title, description=description)
@@ -71,7 +71,7 @@ def register(mcp: "FastMCP") -> None:
 
         Args:
             group_code: The group to update.
-            title: New title (≤128), or omit to keep.
+            title: New title (≤96), or omit to keep.
             description: New one-line description (≤512), or omit.
         """
         group_code = bare_code(group_code)
@@ -79,14 +79,3 @@ def register(mcp: "FastMCP") -> None:
         if row is None:
             raise ValueError(f"Group {group_code} not found.")
         return AgentGroupScan.model_validate(row)
-
-    @mcp.tool()
-    async def group_delete(group_code: str) -> bool:
-        """Delete a group. Returns true if it existed.
-
-        NO CASCADE: the researches filed under it are kept and simply become ungrouped.
-
-        Args:
-            group_code: The group to delete.
-        """
-        return await group_crud.group_delete(bare_code(group_code))

@@ -30,11 +30,13 @@ from src.modules.research.crud import source_document as source_document_crud
 from src.modules.research.crud.source_document import SourceDocumentWithPage
 from src.modules.research.dto import (
     AgentSourceDocumentDetail,
-    ResearchSourceDocumentRow,
+    AgentSourceDocumentReviewed,
+    AgentSourceDocumentRow,
     AgentSkippedCode,
     AgentSourcesRefetched,
     agent_source_document_detail,
-    source_document_row,
+    agent_source_document_row,
+    agent_source_document_scan,
 )
 from src.modules.research.services.refetch import refetch_sources
 
@@ -105,7 +107,7 @@ def register(mcp: "FastMCP") -> None:
     @mcp.tool()
     async def sources_list(
         code: str, status: str | None = None
-    ) -> list[ResearchSourceDocumentRow]:
+    ) -> list[AgentSourceDocumentRow]:
         """List sources under a research / area / query, in search-launch order.
 
         The level is the kind of code you pass (RESEARCH@ / AREA@ / QUERY@); url/title come
@@ -119,7 +121,7 @@ def register(mcp: "FastMCP") -> None:
         if level is None:
             raise ValueError("code must be a RESEARCH@ / AREA@ / QUERY@ code.")
         rows = await level(bare_code(code), status=status)
-        return [source_document_row(doc, page) for doc, page in rows]
+        return [agent_source_document_row(doc, page) for doc, page in rows]
 
     @mcp.tool()
     async def sources_refetch(codes: list[str]) -> AgentSourcesRefetched:
@@ -153,7 +155,7 @@ def register(mcp: "FastMCP") -> None:
         except RuntimeError as exc:
             raise ValueError(f"Cannot refetch: {exc}.") from exc
         return AgentSourcesRefetched(
-            sources=[source_document_row(doc, page) for doc, page in rows],
+            sources=[agent_source_document_scan(doc, page) for doc, page in rows],
             skipped=skipped,
         )
 
@@ -179,11 +181,12 @@ def register(mcp: "FastMCP") -> None:
     @mcp.tool()
     async def source_review(
         source_code: str, decision: str, relevance: int, note: str | None = None
-    ) -> ResearchSourceDocumentRow:
+    ) -> AgentSourceDocumentReviewed:
         """Review a source in one call — decision + rating. Sets the source's status.
 
         Every source starts `pending` and must be reviewed; review them all before writing the
         area/research synthesis. A `keep` source is one you will cite in a body by its code.
+        Returns the source's code and the status your decision put it in (`kept` / `filtered`).
 
         Args:
             source_code: The source to review.
@@ -203,4 +206,4 @@ def register(mcp: "FastMCP") -> None:
         )
         if row is None:
             raise ValueError(f"Source {source_code} not found.")
-        return source_document_row(row, None)
+        return AgentSourceDocumentReviewed.model_validate(row)

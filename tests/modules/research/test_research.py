@@ -25,7 +25,8 @@ async def test_research_get_fields_areas_notes_updated_at_last(call):
     assert "created_at" not in g
     assert list(g.keys())[-1] == "updated_at"
     assert len(g["areas"]) == 1 and len(g["notes"]) == 1
-    assert set(g["areas"][0]) == {"code", "title", "description", "updated_at"}
+    assert set(g["areas"][0]) == {"code", "title", "description"}
+    assert set(g["notes"][0]) == {"code", "kind", "title", "description"}
 
 
 async def test_research_get_not_found(call):
@@ -72,11 +73,20 @@ async def test_research_delete_cascades(call):
     area = (await call("area_create", research_code=code, title="A"))["code"]
     await call("note_create", research_code=code, kind="idea", title="N")
 
-    assert (await call("research_delete", research_code=code))["result"] is True
+    assert (await call("delete", code=code))["result"] is True
     assert (await call("research_list"))["result"] == []
     with pytest.raises(ToolError, match="Area .* not found"):
         await call("area_get", area_code=area)
 
 
 async def test_research_delete_missing_returns_false(call):
-    assert (await call("research_delete", research_code="RESEARCH@missing000000000000"))["result"] is False
+    assert (await call("delete", code="RESEARCH@missing000000000000"))["result"] is False
+
+
+async def test_overlong_fields_are_trimmed_not_rejected(call):
+    code = (await call("research_create", title="я" * 150, description="ю" * 600))["code"]
+
+    row = await call("research_get", research_code=code)
+
+    assert len(row["title"]) == 96 and row["title"][-1] == "я"
+    assert len(row["description"]) == 512

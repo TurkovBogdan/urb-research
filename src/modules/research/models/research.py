@@ -1,6 +1,6 @@
 """ORM ``research_index`` — исследование (корень реестра).
 
-Исследование — знаниевый артефакт: ``title`` (заголовок/название, до 128),
+Исследование — знаниевый артефакт: ``title`` (заголовок/название, до 96),
 ``description`` (краткое описание, до 512) и ``body`` (основное тело, без лимита,
 markdown). Статуса нет — это не прогон, а документ; машина состояний живёт на уровне
 запроса (``research_source_query``). Владеет запросами.
@@ -27,7 +27,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from src.core.database.runtime import Base
 from src.core.database.types import timestamp
 from src.core.utils.date import utc_now
-from src.modules.research.constants import RESEARCH_DESCRIPTION_MAX
+from src.modules.research.constants import RESEARCH_DESCRIPTION_MAX, RESEARCH_TITLE_MAX
 
 
 class Research(Base):
@@ -42,7 +42,7 @@ class Research(Base):
         ),
         nullable=True,
     )
-    title: Mapped[str] = mapped_column(String(128))
+    title: Mapped[str] = mapped_column(String(RESEARCH_TITLE_MAX))
     description: Mapped[str] = mapped_column(
         String(RESEARCH_DESCRIPTION_MAX), default="", server_default=text("''")
     )

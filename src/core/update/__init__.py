@@ -1,8 +1,14 @@
-"""`app.py update` — two halves behind one import path.
+"""Moving an installation from one release to the next.
 
-`selection` decides which processes of this checkout must stop and stops them; `sequence` is the
-update itself (preconditions → flag → kill → fetch/merge/sync → backup → migrate → restart).
-Design and failure policy: `AGENTS/docs/platform/update.md`.
+The command itself is two halves, re-exported here: `selection` decides which processes of this
+checkout must stop and stops them; `sequence` is the update (preconditions → flag → kill →
+fetch/merge/sync → backup → migrate → restart).
+
+Three more files serve the same act from the outside and are imported as submodules, not
+re-exported: `status` answers whether this install is behind and may be updated at all, `spawn`
+starts `update.sh` from inside the installation, `api` is the HTTP surface both are reached
+through. `api` stays out of this list on purpose — the worker imports this package and has no
+business pulling FastAPI in with it.
 """
 
 from src.core.update.errors import UpdateRefused

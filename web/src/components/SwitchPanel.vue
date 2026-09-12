@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, useSlots } from 'vue'
 
 // Серая плашка-переключатель: VSwitch слева, заголовок + описание справа.
 // Кликается целиком (сам VSwitch презентационный, pointer-events отключены —
@@ -50,6 +50,11 @@ const currentDescription = computed(() =>
   (model.value ? props.descriptionOn : props.descriptionOff) ?? props.description,
 )
 
+// Плашка бывает и без описания — одной строкой заголовка. Тогда выравнивать по верху нечего:
+// рядом с коробкой переключателя одинокая строка читается съехавшей вверх.
+const slots = useSlots()
+const hasDescription = computed(() => Boolean(currentDescription.value || slots.default))
+
 function toggle() {
   if (props.disabled) return
   model.value = !model.value
@@ -62,7 +67,11 @@ function toggle() {
     :class="[
       `switch-panel--${tone}`,
       `switch-panel--switch-${effectiveSwitchTone}`,
-      { 'switch-panel--on': model, 'switch-panel--disabled': disabled },
+      {
+        'switch-panel--on': model,
+        'switch-panel--disabled': disabled,
+        'switch-panel--single-line': !hasDescription,
+      },
     ]"
     role="switch"
     :aria-checked="model"
@@ -83,7 +92,7 @@ function toggle() {
     />
     <div class="switch-panel__text">
       <div v-if="currentTitle" class="switch-panel__title">{{ currentTitle }}</div>
-      <div class="switch-panel__desc">
+      <div v-if="hasDescription" class="switch-panel__desc">
         <slot>{{ currentDescription }}</slot>
       </div>
     </div>
@@ -109,6 +118,12 @@ function toggle() {
 }
 
 .switch-panel:hover { background: var(--sp-bg-hover); }
+
+/* Заголовок без описания встаёт по центру переключателя: по верху выравнивают многострочный текст,
+   чтобы его первая строка шла вровень с ручкой, а одна строка так просто висит выше неё. */
+.switch-panel--single-line {
+  align-items: center;
+}
 
 .switch-panel--primary {
   --sp-bg: var(--accent-soft);
