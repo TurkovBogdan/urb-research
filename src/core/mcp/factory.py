@@ -13,10 +13,10 @@ from typing import TYPE_CHECKING
 
 from fastmcp import FastMCP
 
+from src.core.version import app_version
+
 if TYPE_CHECKING:
     from src.core.mcp.context import McpServerContext
-
-_SERVER_VERSION = "0.4"
 
 
 def make_mcp_server(
@@ -25,12 +25,13 @@ def make_mcp_server(
     """``FastMCP`` с именем ``code``, общими auth + audit из ``ctx``.
 
     ``name=code`` совпадает с URL-сегментом ``/mcp/<code>``; ``version`` форк 3.x
-    принимает напрямую (workaround ``_mcp_server.version`` bundled-SDK не нужен).
+    принимает напрямую (workaround ``_mcp_server.version`` bundled-SDK не нужен) и берётся
+    из манифеста установки — своего номера у поверхности MCP нет.
     """
     return FastMCP(
         name=code,
         instructions=instructions,
-        version=_SERVER_VERSION,
+        version=app_version(),
         auth=ctx.auth,
         middleware=[ctx.audit],
     )

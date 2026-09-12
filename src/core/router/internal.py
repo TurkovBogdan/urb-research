@@ -20,6 +20,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from fastapi import APIRouter, Request
 
 from src.core.settings.api import router as settings_router
+from src.core.update.api import router as update_router
 from src.core.module import Module
 from src.core.router.degraded import health_payload
 from src.core.router.guards import guard
@@ -65,6 +66,7 @@ def build_internal_zone(modules: Sequence[Module]) -> APIRouter:
     zone = APIRouter()
     zone.add_api_route(HEALTH_ROUTE, _health, methods=["GET"], tags=["core"])
     zone.include_router(settings_router, prefix="/core/settings", tags=["core"])
+    zone.include_router(update_router, prefix="/core/update", tags=["core"])
     for m in modules:
         if m.internal_router is not None:
             zone.include_router(
