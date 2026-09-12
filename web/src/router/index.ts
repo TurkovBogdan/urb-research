@@ -5,6 +5,7 @@ import { trackNavigationKind } from './scroll'
 import { setupRoutePrefetch } from './prefetch'
 import { setupChunkReload } from './reload'
 import { designSystemRoutes } from './design-system'
+import { aboutRoutes } from '../features/about/routes'
 import { coreConnectorsRoutes } from '../features/core_connectors/routes'
 import { coreMcpRoutes } from '../features/core_mcp/routes'
 import { coreMonitoringRoutes } from '../features/core_monitoring/routes'
@@ -32,6 +33,7 @@ const router = createRouter({
     ...coreMonitoringRoutes,
     ...settingsRoutes,
     ...setupRoutes,
+    ...aboutRoutes,
     ...webSearchRoutes,
     ...researchRoutes,
     // Catch-all 404 — kept LAST so it can't shadow any route declared above it.
