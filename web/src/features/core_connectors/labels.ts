@@ -7,13 +7,13 @@ import type { ConnectorGroup } from './api'
 // back to the backend literal, so a newly added group renders its name instead of a raw key.
 //
 // Lookup: `core_connectors.group.<code>.<leaf>` → the backend literal.
-export function useGroupText() {
+export function useGroupLabels() {
   const { t, te } = useI18n()
 
-  function groupText(group: ConnectorGroup, leaf: 'name' | 'description'): string {
+  function groupLabel(group: ConnectorGroup, leaf: 'name' | 'description'): string {
     const key = `core_connectors.group.${group.code}.${leaf}`
     return te(key) ? t(key) : group[leaf]
   }
 
-  return { groupText }
+  return { groupLabel }
 }

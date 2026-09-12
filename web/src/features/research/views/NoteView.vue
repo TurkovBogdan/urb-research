@@ -14,7 +14,7 @@ import { fmtDateTime, fmtRelative } from '@/shared/utils/date'
 import BodySection from '../components/BodySection.vue'
 import TitleEditor from '../components/TitleEditor.vue'
 import { useNoteDetailStore } from '../stores/note-detail.store'
-import { useDetailReload } from '../useDetailReload'
+import { useDetailReload } from '../composables/useDetailReload'
 import { NOTE_KIND_COLOR } from '../labels'
 
 const { t } = useI18n()

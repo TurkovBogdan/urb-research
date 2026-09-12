@@ -11,7 +11,7 @@ import SectionHeader from '@/components/SectionHeader.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 
 import { useQueryDetailStore } from '../stores/query-detail.store'
-import { useDetailReload } from '../useDetailReload'
+import { useDetailReload } from '../composables/useDetailReload'
 import { SOURCE_STATUS_COLOR } from '../labels'
 
 const { t } = useI18n()

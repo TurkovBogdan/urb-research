@@ -14,7 +14,7 @@ import { fmtDateTime, fmtRelative } from '@/shared/utils/date'
 
 import BodySection from '../components/BodySection.vue'
 import { useSourceDetailStore } from '../stores/source-detail.store'
-import { useDetailReload } from '../useDetailReload'
+import { useDetailReload } from '../composables/useDetailReload'
 import { SOURCE_STATUS_COLOR } from '../labels'
 
 const { t } = useI18n()

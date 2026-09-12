@@ -7,7 +7,7 @@ import PageLayout from '@/layout/templates/PageLayout.vue'
 import PageHeader from '@/layout/components/PageHeader.vue'
 import TablePaginationBar from '@/components/TablePaginationBar.vue'
 import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
-import { useTaskText } from '../taskText'
+import { useTaskLabels } from '../labels'
 import {
   fetchTask,
   fetchTaskRuns,
@@ -19,7 +19,7 @@ import {
 
 const props = defineProps<{ module: string; code: string }>()
 const { t } = useI18n()
-const { taskName, taskDescription } = useTaskText()
+const { taskName, taskDescription } = useTaskLabels()
 
 const task = ref<TaskInfo | null>(null)
 const runs = ref<TaskRunInfo[]>([])

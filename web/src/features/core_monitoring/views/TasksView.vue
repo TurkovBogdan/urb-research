@@ -8,12 +8,12 @@ import { IconRefresh, IconListDetails, IconSearch, IconChevronRight } from '@tab
 import PageLayout from '@/layout/templates/PageLayout.vue'
 import PageHeader from '@/layout/components/PageHeader.vue'
 import { useTasksStore } from '../stores/tasks.store'
-import { useTaskText } from '../taskText'
+import { useTaskLabels } from '../labels'
 import type { TaskInfo } from '../api'
 
 const router = useRouter()
 const { t, locale } = useI18n()
-const { taskName, taskDescription } = useTaskText()
+const { taskName, taskDescription } = useTaskLabels()
 const store = useTasksStore()
 const {
   loading, refreshing, error, loadedAt,

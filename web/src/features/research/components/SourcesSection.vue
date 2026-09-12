@@ -11,7 +11,7 @@ import { useI18n } from 'vue-i18n'
 import SectionHeader from '@/components/SectionHeader.vue'
 
 import DocumentsTable from './DocumentsTable.vue'
-import { useSourcesRefetch } from '../useSourcesRefetch'
+import { useSourcesRefetch } from '../composables/useSourcesRefetch'
 import type { SourceDocumentRow } from '../api'
 
 defineProps<{

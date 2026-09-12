@@ -20,7 +20,7 @@ import type { TablerIcon } from '@/shared/nav'
 import ConnectorBalance from '../components/ConnectorBalance.vue'
 import AccessStatusChip from '../components/AccessStatusChip.vue'
 import AccessFormDialog from '../components/AccessFormDialog.vue'
-import { useGroupText } from '../groupText'
+import { useGroupLabels } from '../labels'
 import {
   checkAccess,
   fetchAccesses,
@@ -32,7 +32,7 @@ import {
 } from '../api'
 
 const { t } = useI18n()
-const { groupText } = useGroupText()
+const { groupLabel } = useGroupLabels()
 
 const passports = ref<ConnectorPassport[]>([])
 const accesses = ref<AccessView[]>([])
@@ -102,8 +102,8 @@ const shelves = computed<Shelf[]>(() => {
     .filter(group => byGroup.has(group.code))
     .map(group => ({
       code: group.code,
-      title: groupText(group, 'name'),
-      description: groupText(group, 'description'),
+      title: groupLabel(group, 'name'),
+      description: groupLabel(group, 'description'),
       icon: iconByName(group.icon),
       cards: byGroup.get(group.code) as Card[],
     }))

@@ -13,7 +13,7 @@ type Field = 'name' | 'short' | 'description'
 //   2. `core_monitoring.catalog.<module>.<code>.<field>` — catch-all для модулей без фронт-фичи (напр. `core`)
 //   3. литерал с бэка (`info.name` / `info.description`) — чтобы непереведённые/новые
 //      задачи рисовались, а не текли сырым ключом
-export function useTaskText() {
+export function useTaskLabels() {
   const { t, te } = useI18n()
 
   function pick(id: Identity, field: Field, fallback: string): string {

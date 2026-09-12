@@ -13,7 +13,7 @@ import { useI18n } from 'vue-i18n'
 
 import { pushToast } from '@/composables/useToasts'
 
-import { refetchSourceDocument, type SourceDocumentRow } from './api'
+import { refetchSourceDocument, type SourceDocumentRow } from '../api'
 
 /** @param reload Перечитать источники раздела. */
 export function useSourcesRefetch(reload: () => unknown) {
