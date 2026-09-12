@@ -12,7 +12,9 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import sys
 import time
+import traceback
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,7 +32,14 @@ from src.core.config import Config
 from src.core.loggers import get_logger
 from src.core.maintenance import MaintenanceHeld
 from src.core.update.errors import UpdateRefused
-from src.core.update.selection import ProcessesSurvived, plan_kill, terminate
+from src.core.update.stop import (
+    ForeignProcesses,
+    ProcessesSurvived,
+    UnregisteredProcesses,
+    UpdaterInsideInstall,
+    execute_stop,
+    plan_live_stop,
+)
 
 EXIT_OK = 0
 EXIT_PRECONDITIONS = 1
@@ -41,6 +50,14 @@ EXIT_BACKUP_FAILED = 5
 EXIT_ROLLBACK_FAILED = 6
 EXIT_STOP_FAILED = 7
 EXIT_BACKEND_DEAD = 8
+EXIT_CRASHED = 9
+EXIT_UNREGISTERED = 10
+EXIT_UNSUPPORTED_PLATFORM = 11
+
+# Windows needs a different machine, not a different signal: a job object instead of a process
+# group, a launcher that does not rely on `exec`, and an answer to `uv sync` being unable to
+# replace an image the running updater has mapped. Until that exists, the command says so.
+WINDOWS_PLATFORM = "win32"
 
 # Deliberately NOT configurable: `.env` is written unescaped and behind no auth, so an ENV-supplied
 # remote would put `--upload-pack=…` — arbitrary code execution — one field edit away. Git already
@@ -131,10 +148,13 @@ class UpdateHost:
         *,
         config: Config,
         report: Callable[[str], None] = print,
+        stop_unregistered: bool = False,
     ) -> None:
         self.checkout = checkout
         self.config = config
+        self.stop_unregistered = stop_unregistered
         self._report = report
+        self._modules_before_sync: frozenset[str] | None = None
 
     def report(self, line: str) -> None:
         self._report(line)
@@ -170,10 +190,23 @@ class UpdateHost:
         return self._run(argv, environment_overrides=environment_overrides, timeout=timeout)
 
     def stop_processes(self) -> None:
-        plan = plan_kill(self.checkout)
+        plan = self._plan_stop()
         self.report(plan.describe())
-        terminate(plan, dry_run=False)
-        self._sweep_again_for_latecomers()
+        execute_stop(plan, report=self.report)
+        self._stop_latecomers()
+
+    def freeze_imports(self) -> None:
+        self._modules_before_sync = frozenset(sys.modules)
+
+    def report_late_imports(self) -> None:
+        """`uv sync` replaces the venv under the updater, so anything imported after it is loaded
+        from the new tree into the old process — a mix that must stay impossible, not be debugged
+        after the fact. Every step past the sync runs in a fresh `uv run` child for that reason."""
+        if self._modules_before_sync is None:
+            return
+        late = sorted(set(sys.modules) - self._modules_before_sync)
+        if late:
+            self.report(f"WARNING: imported after `uv sync`: {', '.join(late)}")
 
     def start_backend(self) -> None:
         """Start the install back up in ITS role — and wait until it says it is serving.
@@ -196,15 +229,19 @@ class UpdateHost:
         maintenance.end()
         self.report("maintenance flag down")
 
-    def _sweep_again_for_latecomers(self) -> None:
-        """The MCP shim spawns a backend on demand, so one may land just after the kill."""
+    def _plan_stop(self):
+        return plan_live_stop(self.checkout, stop_unregistered=self.stop_unregistered)
+
+    def _stop_latecomers(self) -> None:
+        """The flag is up by now, so nothing *should* start — but the shim spawns a backend on
+        demand, and a client that won the race would be writing to the base during the migration."""
         deadline = time.monotonic() + RESWEEP_SECONDS
         while time.monotonic() < deadline:
             time.sleep(RESWEEP_POLL_SECONDS)
-            latecomers = plan_kill(self.checkout)
-            if latecomers.targets:
-                self.report(f"raced the kill — {latecomers.describe()}")
-                terminate(latecomers, dry_run=False)
+            latecomers = self._plan_stop()
+            if not latecomers.is_empty:
+                self.report(f"raced the stop — {latecomers.describe()}")
+                execute_stop(latecomers, report=self.report)
 
     def _wait_until_serving(self, log_path: Path) -> None:
         """A restart nobody checked is how «update complete» gets printed over a dead install."""
@@ -271,11 +308,17 @@ class DryRunHost(UpdateHost):
         return CommandResult(tuple(argv), returncode=0)
 
     def stop_processes(self) -> None:
-        self.report(plan_kill(self.checkout).describe())
+        self.report(self._plan_stop().describe())
 
     def start_backend(self) -> None:
         command = backend_command(UV_RUN_PYTHON, with_worker=self.config.worker_enabled)
         self.report(f"would start: {' '.join(command)}")
+
+    def freeze_imports(self) -> None:
+        self.report("would watch for modules imported after the sync")
+
+    def report_late_imports(self) -> None:
+        return None
 
     def raise_flag(self, reason: str) -> None:
         self.report(f"would raise the maintenance flag ({maintenance.flag_path()}): {reason}")
@@ -302,7 +345,27 @@ def validate_branch(branch: str) -> str:
 
 
 def run_update(host: UpdateHost, *, branch: str) -> int:
-    """Walk the sequence; the return value is the process exit code.
+    """Walk the sequence, turning even an unforeseen failure into an exit code and a report.
+
+    A traceback escaping this call is the worst outcome available: the operator is left with a
+    stack trace instead of the state of their install, and every step after the one that broke —
+    including the restart — is skipped silently. So anything the walk did not expect ends as
+    `EXIT_CRASHED` with the recovery commands, the way every foreseen failure does. The flag is
+    left as the walk left it: a flag whose updater has died is already inactive (liveness is the
+    pid, not the clock), while a crash after the migration is exactly when nothing may start.
+    """
+    try:
+        return _walk_the_sequence(host, branch)
+    except Exception:  # noqa: BLE001 — the exit code IS the error handling here
+        host.report(f"the update crashed:\n{traceback.format_exc()}")
+        host.report(_crash_recovery())
+        return EXIT_CRASHED
+    finally:
+        host.report_late_imports()
+
+
+def _walk_the_sequence(host: UpdateHost, branch: str) -> int:
+    """The steps themselves; the return value is the process exit code.
 
     Two orderings are load-bearing and must not be tidied away:
 
@@ -314,6 +377,10 @@ def run_update(host: UpdateHost, *, branch: str) -> int:
     A failed migration is the one outcome that keeps the flag up: the code is already new, and
     letting anything start over a stale schema is exactly what this command exists to prevent.
     """
+    if sys.platform == WINDOWS_PLATFORM:
+        host.report(_windows_refusal())
+        return EXIT_UNSUPPORTED_PLATFORM
+
     try:
         start = _verify_preconditions(host, branch)
     except UpdateRefused as refusal:
@@ -329,7 +396,11 @@ def run_update(host: UpdateHost, *, branch: str) -> int:
 
     try:
         target = _stop_and_fast_forward(host, start)
-    except ProcessesSurvived as refusal:
+    except UnregisteredProcesses as refusal:
+        host.report(f"refusing to update: {refusal}")
+        host.lower_flag()
+        return EXIT_UNREGISTERED
+    except (ProcessesSurvived, ForeignProcesses, UpdaterInsideInstall) as refusal:
         host.report(f"refusing to update: {refusal}")
         host.lower_flag()
         host.report(_survivor_recovery())
@@ -378,11 +449,16 @@ def _restart(host: UpdateHost, *, outcome: int) -> int:
     return outcome
 
 
-def update_command(*, dry_run: bool = False) -> int:
+def update_command(*, dry_run: bool = False, stop_unregistered: bool = False) -> int:
     """`app.py update` — the branch comes from ENV, the checkout is the one this file lives in."""
     config = Config()
     build_host = DryRunHost if dry_run else UpdateHost
-    host = build_host(project_root(), config=config, report=_reporter(dry_run=dry_run))
+    host = build_host(
+        project_root(),
+        config=config,
+        report=_reporter(dry_run=dry_run),
+        stop_unregistered=stop_unregistered,
+    )
     return run_update(host, branch=config.update_branch)
 
 
@@ -436,6 +512,7 @@ def _stop_and_fast_forward(host: UpdateHost, start: StartingPoint) -> str:
     )
     target = _resolve_fetched_commit(host, start.branch)
     _must_succeed(host.execute(["git", "merge", "--ff-only", target]))
+    host.freeze_imports()
     _must_succeed(host.execute(SYNC_COMMAND, timeout=SYNC_TIMEOUT_SECONDS))
     return target
 
@@ -530,13 +607,41 @@ def _rollback_recovery(start: StartingPoint) -> str:
     )
 
 
-def _survivor_recovery() -> str:
+def _crash_recovery() -> str:
     return (
-        "nothing was fetched, merged or migrated. A process of this checkout would not die — "
+        "the update stopped where the traceback says and went no further — how far it got is in "
+        "the lines above. Recovery:\n"
+        "  what is running:      ./update.sh --dry-run\n"
+        "  what is pending:      uv run python src/app.py migrate check\n"
+        "  retry (every step is a no-op on an install that is already current):  ./update.sh\n"
+        f"  the flag itself:      {maintenance.flag_path()}"
+    )
+
+
+def _survivor_recovery() -> str:
+    """`pgrep -af src/app.py` is deliberately not printed here: the pattern matches the coding
+    agent's own session and every shell that quotes it, and an operator who runs what a message
+    tells them to run is how the agent got killed once already."""
+    return (
+        "nothing was fetched, merged or migrated. A process of this install would not die — "
         "find out what holds it:\n"
-        "  who is running:       pgrep -af 'src/app.py'\n"
         "  what the plan sees:   ./update.sh --dry-run\n"
+        "  what recorded itself:  ls runtime/processes/\n"
         "  then retry:           ./update.sh"
+    )
+
+
+def _windows_refusal() -> str:
+    return (
+        "refusing to update: Windows is not supported by this command — it stops the install "
+        "through POSIX process groups, and `uv sync` cannot replace files this updater has "
+        "mapped. Update by hand instead:\n"
+        "  stop the app\n"
+        "  git pull --ff-only\n"
+        "  uv sync --all-groups\n"
+        "  uv run python src/app.py backup\n"
+        "  uv run python src/app.py migrate upgrade\n"
+        "  start the app"
     )
 
 
@@ -544,6 +649,7 @@ __all__ = [
     "BRANCH_PATTERN",
     "EXIT_BACKEND_DEAD",
     "EXIT_BACKUP_FAILED",
+    "EXIT_CRASHED",
     "EXIT_HELD",
     "EXIT_MIGRATION_FAILED",
     "EXIT_OK",
@@ -551,6 +657,8 @@ __all__ = [
     "EXIT_ROLLBACK_FAILED",
     "EXIT_ROLLED_BACK",
     "EXIT_STOP_FAILED",
+    "EXIT_UNREGISTERED",
+    "EXIT_UNSUPPORTED_PLATFORM",
     "GIT_NONINTERACTIVE",
     "SYNC_TIMEOUT_SECONDS",
     "BackendDidNotStart",

@@ -23,6 +23,7 @@ dependencies = [
     "python-intercom>=4.0",
     "nh3>=0.3.5",
     "pwdlib[argon2]>=0.2.1",
+    "psutil>=6.0",
     "watchfiles>=0.24",
     "google-api-python-client>=2.0",
     "google-auth>=2.0",

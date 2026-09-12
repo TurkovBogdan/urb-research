@@ -259,6 +259,19 @@ async def _own_postgres_database_for_heavy(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _registry_outside_the_checkout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Реестр процессов — во временный каталог для КАЖДОГО теста.
+
+    `app.main()` объявляет процесс в `runtime/processes/`, а тесты роли зовут именно его: без
+    подмены прогон описал бы pytest как процесс установки, и следующий апдейтер на этой машине
+    получил бы его в план остановки.
+    """
+    from src.core import process_registry
+
+    monkeypatch.setattr(process_registry, "project_root", lambda: tmp_path)
+
+
+@pytest.fixture(autouse=True)
 def _reset_logger_store():
     """Сбрасываем каналы между тестами, чтобы один не утекал в другой."""
     yield

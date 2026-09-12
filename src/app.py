@@ -29,7 +29,14 @@
 остановки, не трогая ничего. Коды выхода: 0 — обновлено/уже актуально, 1 — не прошли
 предусловия, 2 — флаг держит другой апдейтер, 3 — откат, 4 — упала миграция (флаг
 оставлен поднятым), 5 — не снялась копия базы (схему не трогали), 6 — не удался откат,
-7 — не удалось остановить процессы установки, 8 — backend не поднялся после обновления.
+7 — не удалось остановить процессы установки, 8 — backend не поднялся после обновления,
+9 — обновление упало непредвиденно (в лог уходит traceback, флаг остаётся как был),
+10 — найдены процессы установки без записи о себе (снять `--stop-unregistered`),
+11 — платформа не поддерживается (Windows): напечатана ручная процедура.
+
+Запуск процесса (server/worker) записывает себя в реестр `runtime/processes/<pid>.json`
+(`src/core/process_registry.py`) и снимает запись при выходе: по этим записям обновление
+гасит установку, вместо того чтобы опознавать её по cwd и argv.
 
 Пока флаг обслуживания держит живой апдейтер (`runtime/maintenance.json`), ЗАПУСК
 процесса отклоняется с кодом 1 — иначе MCP-шим поднял бы backend на полупереписанном
@@ -64,6 +71,7 @@
 
 import argparse
 import asyncio
+import atexit
 import os
 import signal
 import sys
@@ -167,6 +175,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="пройти последовательность и напечатать шаги (в т.ч. план остановки процессов), "
         "ничего не трогая: без сигналов, fetch/merge/sync, копии базы и миграций",
     )
+    upd.add_argument(
+        "--stop-unregistered",
+        action="store_true",
+        help="гасить и процессы этого чекаута без записи в реестре (иначе обновление "
+        "отказывается с кодом 10); нужен один раз — на первом обновлении после выкатки реестра",
+    )
     return p.parse_args(argv)
 
 
@@ -264,6 +278,37 @@ async def _run_worker(config) -> None:
         await stop.wait()
 
 
+def _run_the_role(config, args: argparse.Namespace) -> None:
+    """Собственно работа процесса: HTTP-сервер либо чистый worker (при hot-reload — под watch)."""
+    if config.server_enabled:
+        # Встроенный worker (если WORKER_ENABLED) поднимется в lifespan приложения.
+        _run_server(config, args)
+        return
+    # Чистый worker — без uvicorn и без порта.
+    if config.server_hot_reload:
+        _run_worker_hot_reload()
+        return
+    asyncio.run(_run_worker(config))
+
+
+def _run_recorded(config, args: argparse.Namespace) -> None:
+    """Отработать роль, пока процесс записан в реестре установки (`process_registry`).
+
+    Снятие записи нужно в двух местах: uvicorn возвращается из `run()` по SIGTERM и доходит до
+    `finally`, а `SystemExit` из глубины (например, занятый порт) уходит через `atexit`. Ни то,
+    ни другое не срабатывает на SIGKILL и на `os.execv` — запись, пережившую свой процесс,
+    опознаёт по паре pid + время старта и убирает следующий `announce`.
+    """
+    from src.core import process_registry
+
+    process_registry.announce(config)
+    atexit.register(process_registry.withdraw)
+    try:
+        _run_the_role(config, args)
+    finally:
+        process_registry.withdraw()
+
+
 # ── миграции (подкоманда migrate) ───────────────────────────────────────────
 
 
@@ -339,7 +384,7 @@ def main(argv: list[str] | None = None) -> int | None:
     if args.command == "update":
         from src.core.update import update_command
 
-        return update_command(dry_run=args.dry_run)
+        return update_command(dry_run=args.dry_run, stop_unregistered=args.stop_unregistered)
 
     if _launches_a_process(args):
         refusal = _maintenance_refusal()
@@ -386,15 +431,7 @@ def main(argv: list[str] | None = None) -> int | None:
         )
         return None
 
-    if config.server_enabled:
-        # Встроенный worker (если WORKER_ENABLED) поднимется в lifespan приложения.
-        _run_server(config, args)
-        return None
-    # Чистый worker — без uvicorn и без порта.
-    if config.server_hot_reload:
-        _run_worker_hot_reload()
-    else:
-        asyncio.run(_run_worker(config))
+    _run_recorded(config, args)
     return None
 
 

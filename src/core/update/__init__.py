@@ -1,7 +1,8 @@
 """Moving an installation from one release to the next.
 
-The command itself is two halves, re-exported here: `selection` decides which processes of this
-checkout must stop and stops them; `sequence` is the update (preconditions → flag → kill →
+Three halves, re-exported here: `selection` is the evidence-based sweep that now only detects
+strays, `stop` decides which processes of this checkout must stop — from the records they wrote
+about themselves — and stops them, `sequence` is the update itself (preconditions → flag → stop →
 fetch/merge/sync → backup → migrate → restart).
 
 Three more files serve the same act from the outside and are imported as submodules, not
@@ -13,29 +14,21 @@ business pulling FastAPI in with it.
 
 from src.core.update.errors import UpdateRefused
 from src.core.update.selection import (
-    KILL_GRACE_SECONDS,
     MATCH_DESCENDANT,
     MATCH_LAUNCHER,
     NON_SERVICE_SUBCOMMANDS,
-    TERM_GRACE_SECONDS,
     VETO_ARGV_MARKERS,
-    KillPlan,
     KillTarget,
-    Process,
-    ProcessesSurvived,
     ancestor_pids,
-    parse_proc_stat,
-    parse_proc_state,
-    plan_kill,
-    process_is_running,
-    read_process_table,
+    argv_is_vetoed,
+    descendants,
     select_kill_targets,
-    terminate,
 )
 from src.core.update.sequence import (
     BRANCH_PATTERN,
     EXIT_BACKEND_DEAD,
     EXIT_BACKUP_FAILED,
+    EXIT_CRASHED,
     EXIT_HELD,
     EXIT_MIGRATION_FAILED,
     EXIT_OK,
@@ -43,6 +36,8 @@ from src.core.update.sequence import (
     EXIT_ROLLBACK_FAILED,
     EXIT_ROLLED_BACK,
     EXIT_STOP_FAILED,
+    EXIT_UNREGISTERED,
+    EXIT_UNSUPPORTED_PLATFORM,
     GIT_NONINTERACTIVE,
     SYNC_TIMEOUT_SECONDS,
     BackendDidNotStart,
@@ -54,11 +49,31 @@ from src.core.update.sequence import (
     update_command,
     validate_branch,
 )
+from src.core.update.stop import (
+    KILL_GRACE_SECONDS,
+    MATCH_GROUP_MEMBER,
+    MATCH_RECORDED,
+    MATCH_UNREGISTERED,
+    TERM_GRACE_SECONDS,
+    ForeignProcesses,
+    GroupStop,
+    OwnIdentity,
+    ProcessesSurvived,
+    StopPlan,
+    StopTarget,
+    UnregisteredProcesses,
+    UpdaterInsideInstall,
+    classify_records,
+    execute_stop,
+    plan_live_stop,
+    plan_stop,
+)
 
 __all__ = [
     "BRANCH_PATTERN",
     "EXIT_BACKEND_DEAD",
     "EXIT_BACKUP_FAILED",
+    "EXIT_CRASHED",
     "EXIT_HELD",
     "EXIT_MIGRATION_FAILED",
     "EXIT_OK",
@@ -66,10 +81,15 @@ __all__ = [
     "EXIT_ROLLBACK_FAILED",
     "EXIT_ROLLED_BACK",
     "EXIT_STOP_FAILED",
+    "EXIT_UNREGISTERED",
+    "EXIT_UNSUPPORTED_PLATFORM",
     "GIT_NONINTERACTIVE",
     "KILL_GRACE_SECONDS",
     "MATCH_DESCENDANT",
+    "MATCH_GROUP_MEMBER",
     "MATCH_LAUNCHER",
+    "MATCH_RECORDED",
+    "MATCH_UNREGISTERED",
     "NON_SERVICE_SUBCOMMANDS",
     "SYNC_TIMEOUT_SECONDS",
     "TERM_GRACE_SECONDS",
@@ -77,22 +97,27 @@ __all__ = [
     "BackendDidNotStart",
     "CommandResult",
     "DryRunHost",
-    "KillPlan",
+    "ForeignProcesses",
+    "GroupStop",
     "KillTarget",
-    "Process",
+    "OwnIdentity",
     "ProcessesSurvived",
     "StartingPoint",
+    "StopPlan",
+    "StopTarget",
+    "UnregisteredProcesses",
     "UpdateHost",
     "UpdateRefused",
+    "UpdaterInsideInstall",
     "ancestor_pids",
-    "parse_proc_stat",
-    "parse_proc_state",
-    "plan_kill",
-    "process_is_running",
-    "read_process_table",
+    "argv_is_vetoed",
+    "classify_records",
+    "descendants",
+    "execute_stop",
+    "plan_live_stop",
+    "plan_stop",
     "run_update",
     "select_kill_targets",
-    "terminate",
     "update_command",
     "validate_branch",
 ]

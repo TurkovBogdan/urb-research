@@ -26,7 +26,7 @@ export interface Installation {
   describes_as: string | null
   dirty: boolean | null
   /** Код причины, по которой обновление откажется идти (`about.refusal.*`), или `null`. */
-  refusal: 'dirty_tree' | 'branch_mismatch' | null
+  refusal: 'dirty_tree' | 'branch_mismatch' | 'platform_unsupported' | null
 }
 
 /** Что предлагает ветка и как мы стоим относительно неё. */

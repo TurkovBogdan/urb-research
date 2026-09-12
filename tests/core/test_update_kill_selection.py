@@ -1,27 +1,20 @@
-"""Kill selection for `app.py update`: what it picks, and everything it must never touch.
+"""The stray sweep for `app.py update`: what it finds, and everything it must never point at.
 
 The process table is synthetic on purpose — the veto rules have to be provable without spawning
-anything, because the failure mode is killing the agent session or a second install.
+anything, because the failure mode is killing the agent session or a second install. A find of
+this sweep is no longer a kill target: it is a reason for the update to refuse (exit 10), and
+what gets stopped comes from the registry instead (`test_update_stop_plan.py`).
 """
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
 
 from src.core import update
-from src.core.update import selection
-from src.core.update import (
-    MATCH_DESCENDANT,
-    MATCH_LAUNCHER,
-    KillPlan,
-    Process,
-    parse_proc_stat,
-    select_kill_targets,
-    terminate,
-)
+from src.core.process_table import Process
+from src.core.update import MATCH_DESCENDANT, MATCH_LAUNCHER, select_kill_targets
 
 CHECKOUT = Path("/srv/urb-research")
 OTHER_INSTALL = Path("/srv/urb-research-stable")
@@ -227,43 +220,3 @@ def test_ignores_a_process_with_an_unreadable_cwd():
     unreadable = process(100, "python src/app.py --backend", cwd=None)
 
     assert select(unreadable) == []
-
-
-# ── the /proc reader and the guarded kill ────────────────────────────────────
-
-@pytest.mark.pure
-def test_parse_proc_stat_survives_a_comm_with_spaces_and_parens():
-    stat_line = "4242 (weird (name) here) S 4200 4100 4000 0 -1 4194560 0 0 0"
-
-    assert parse_proc_stat(stat_line) == (4200, 4100)
-
-
-@pytest.mark.pure
-def test_terminate_sends_nothing_by_default(monkeypatch: pytest.MonkeyPatch):
-    signalled: list[tuple[int, int]] = []
-    monkeypatch.setattr(
-        selection, "_signal", lambda pid, sent: signalled.append((pid, sent)) or True
-    )
-    plan = KillPlan(
-        checkout=CHECKOUT,
-        targets=select_kill_targets(
-            [process(100, "python src/app.py --backend")],
-            checkout=CHECKOUT,
-            own_pid=-1,
-            own_process_group=-1,
-        ),
-    )
-
-    assert plan.pids == [100]
-    assert terminate(plan) == []
-    assert signalled == []
-
-
-@pytest.mark.pure
-def test_reads_the_live_process_table_without_signalling_anything():
-    table = {entry.pid: entry for entry in update.read_process_table()}
-
-    own = table[os.getpid()]
-    assert own.pgid == os.getpgrp()
-    assert own.cwd == Path.cwd().resolve()
-    assert own.argv and "python" in own.argv[0]
