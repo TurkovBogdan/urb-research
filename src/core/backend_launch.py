@@ -110,6 +110,22 @@ def health_url(config) -> str:
     return base_url(config) + HEALTH_PATH
 
 
+def preload_health_client() -> None:
+    """Import everything the health probe needs, now.
+
+    `httpx` builds its transport lazily, so the FIRST request pulls in httpcore, anyio, h11 and
+    certifi. For the updater that first request comes after `uv sync` has replaced the venv under
+    it — the process would load the new tree's modules on top of the old ones it is running, or
+    fail outright if the sync moved a file. Observed on a rehearsal 2026-09-13: 70+ modules
+    imported after the sync, all of them this one call's dependencies.
+
+    Encoding a host name is the second half of the same call: the `idna` codec is loaded lazily
+    too, the first time a URL's host is normalised.
+    """
+    httpx.Client().close()
+    "localhost".encode("idna")
+
+
 def probe_health(config) -> BackendHealth | None:
     """The backend's state; None when it is unreachable, answered non-200 or not a JSON object."""
     try:
@@ -156,6 +172,7 @@ __all__ = [
     "base_url",
     "connect_host",
     "health_url",
+    "preload_health_client",
     "probe_health",
     "spawn_backend",
     "wait_until_ready",

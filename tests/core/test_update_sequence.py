@@ -8,6 +8,7 @@ real command.
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from src.core.maintenance import MaintenanceHeld
 from src.core.update import (
     EXIT_BACKEND_DEAD,
     EXIT_BACKUP_FAILED,
+    EXIT_CRASHED,
     EXIT_HELD,
     EXIT_MIGRATION_FAILED,
     EXIT_OK,
@@ -26,11 +28,15 @@ from src.core.update import (
     EXIT_ROLLBACK_FAILED,
     EXIT_ROLLED_BACK,
     EXIT_STOP_FAILED,
+    EXIT_UNREGISTERED,
+    EXIT_UNSUPPORTED_PLATFORM,
     SYNC_TIMEOUT_SECONDS,
     BackendDidNotStart,
     CommandResult,
     DryRunHost,
+    ForeignProcesses,
     ProcessesSurvived,
+    UnregisteredProcesses,
     UpdateHost,
     run_update,
     validate_branch,
@@ -62,8 +68,9 @@ class FakeHost(UpdateHost):
         tracking_ref_before_fetch: bool = True,
         flag_held: bool = False,
         failing_commands: Sequence[str] = (),
-        survivors: bool = False,
+        stop_refusal: Exception | None = None,
         backend_comes_up: bool = True,
+        stop_unregistered: bool = False,
     ) -> None:
         self.events: list[str] = []
         self.inspected: list[str] = []
@@ -83,9 +90,14 @@ class FakeHost(UpdateHost):
         # Each scripted failure fires ONCE: the rollback re-runs `uv sync`, and a failure that
         # never heals would turn every rollback test into a test about a broken rollback.
         self._pending_failures = list(failing_commands)
-        self._survivors = survivors
+        self._stop_refusal = stop_refusal
         self._backend_comes_up = backend_comes_up
-        super().__init__(CHECKOUT, config=install_config(), report=self.events.append)
+        super().__init__(
+            CHECKOUT,
+            config=install_config(),
+            report=self.events.append,
+            stop_unregistered=stop_unregistered,
+        )
 
     def backup_target(self) -> Path:
         return BACKUP_PATH
@@ -139,9 +151,9 @@ class FakeHost(UpdateHost):
         return CommandResult(tuple(argv), returncode=0)
 
     def stop_processes(self) -> None:
-        if self._survivors:
-            raise ProcessesSurvived("still alive after TERM and KILL: 4242")
-        self.events.append("stopped the install")
+        if self._stop_refusal is not None:
+            raise self._stop_refusal
+        self.events.append(f"stopped the install (stop_unregistered={self.stop_unregistered})")
 
     def start_backend(self) -> None:
         self.backend_started = True
@@ -162,6 +174,10 @@ class FakeHost(UpdateHost):
 
 def ran(host: FakeHost, fragment: str) -> bool:
     return any(fragment in command for command in host.executed)
+
+
+def step(host: FakeHost, fragment: str) -> int:
+    return next(index for index, line in enumerate(host.events) if line.startswith(fragment))
 
 
 # ── the happy path ───────────────────────────────────────────────────────────
@@ -190,10 +206,7 @@ def test_the_flag_goes_up_before_anything_is_stopped():
 
     run_update(host, branch=BRANCH)
 
-    flag_raised = next(
-        step for step, line in enumerate(host.events) if line.startswith("maintenance flag up")
-    )
-    assert flag_raised < host.events.index("stopped the install")
+    assert step(host, "maintenance flag up") < step(host, "stopped the install")
 
 
 @pytest.mark.pure
@@ -350,13 +363,76 @@ def test_a_rollback_that_fails_keeps_the_flag_up_and_starts_nothing():
 
 @pytest.mark.pure
 def test_processes_that_will_not_die_stop_the_update_before_anything_moves():
-    host = FakeHost(survivors=True)
+    host = FakeHost(stop_refusal=ProcessesSurvived("still alive after TERM and KILL: 4242"))
 
     assert run_update(host, branch=BRANCH) == EXIT_STOP_FAILED
     assert host.executed == []
     assert host.flag_up is False
     assert host.backend_started is False
     assert any("still alive after TERM and KILL" in line for line in host.events)
+
+
+@pytest.mark.pure
+def test_a_process_of_another_user_stops_the_update_the_same_way():
+    """macOS: the install runs under another account, so it can neither be read nor signalled.
+    Migrating beside a live writer is the outcome this refusal exists to prevent."""
+    host = FakeHost(stop_refusal=ForeignProcesses("pid 4242 belongs to another user"))
+
+    assert run_update(host, branch=BRANCH) == EXIT_STOP_FAILED
+    assert host.executed == []
+    assert host.flag_up is False
+    assert any("another user" in line for line in host.events)
+
+
+@pytest.mark.pure
+def test_unregistered_processes_refuse_the_update_and_fetch_nothing():
+    """Exit 10: something of this checkout is running that never recorded itself. Stopping it on
+    the sweep's evidence alone is what the registry exists to stop doing."""
+    host = FakeHost(
+        stop_refusal=UnregisteredProcesses("pid 4242 looks like this install\n--stop-unregistered")
+    )
+
+    assert run_update(host, branch=BRANCH) == EXIT_UNREGISTERED
+    assert host.executed == []
+    assert host.flag_up is False
+    assert host.backend_started is False
+    assert any("--stop-unregistered" in line for line in host.events)
+
+
+@pytest.mark.pure
+def test_the_stop_unregistered_flag_reaches_the_stop():
+    """The one run an operator needs it: the install that is up was started before the registry."""
+    host = FakeHost(stop_unregistered=True)
+
+    assert run_update(host, branch=BRANCH) == EXIT_OK
+    assert any("stop_unregistered=True" in line for line in host.events)
+
+
+@pytest.mark.pure
+def test_windows_is_refused_before_a_single_question_is_asked(monkeypatch: pytest.MonkeyPatch):
+    """No traceback, no half-stopped install: the platform has no working path through this
+    command, and the manual procedure is printed instead."""
+    monkeypatch.setattr(sys, "platform", "win32")
+    host = FakeHost()
+
+    assert run_update(host, branch=BRANCH) == EXIT_UNSUPPORTED_PLATFORM
+    assert host.inspected == []
+    assert host.executed == []
+    assert host.flag_up is False
+    assert any("Windows is not supported" in line for line in host.events)
+    assert any("migrate upgrade" in line for line in host.events)
+
+
+@pytest.mark.pure
+def test_no_project_module_is_imported_after_the_dependency_sync():
+    """`uv sync` replaces the venv under the updater, so a project module imported after it would
+    be new code loaded into the old process — every step past the sync is a fresh `uv run`."""
+    host = FakeHost()
+
+    run_update(host, branch=BRANCH)
+
+    late = [line for line in host.events if line.startswith("WARNING: imported after")]
+    assert not [line for line in late if "src." in line]
 
 
 @pytest.mark.pure
@@ -391,6 +467,26 @@ def test_failed_migration_keeps_the_flag_up_and_starts_nothing():
     assert host.head == REMOTE_HEAD
     assert not ran(host, "git reset --hard")
     assert any(str(BACKUP_PATH) in line for line in host.events)
+
+
+@pytest.mark.pure
+def test_an_unforeseen_failure_ends_as_an_exit_code_and_a_report():
+    """What a macOS install got instead of an update (2026-09-12): the procfs reader raised
+    `FileNotFoundError('/proc')`, the traceback escaped the command, and nothing said how far it
+    had gone or what state the install was in."""
+
+    class CrashingHost(FakeHost):
+        def stop_processes(self) -> None:
+            raise FileNotFoundError(2, "No such file or directory", "/proc")
+
+    host = CrashingHost()
+
+    assert run_update(host, branch=BRANCH) == EXIT_CRASHED
+    assert any("the update crashed" in line for line in host.events)
+    assert any("FileNotFoundError" in line for line in host.events)
+    assert any("./update.sh" in line for line in host.events)
+    assert host.executed == []
+    assert host.backend_started is False
 
 
 # ── the branch validator ─────────────────────────────────────────────────────

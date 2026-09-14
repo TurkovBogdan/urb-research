@@ -5,14 +5,14 @@ import { useI18n } from 'vue-i18n'
 import PageLayout from '@/layout/templates/PageLayout.vue'
 import PageHeader from '@/layout/components/PageHeader.vue'
 import ColorPicker from '@/components/ColorPicker.vue'
-// Демо идёт на настоящем наборе — палитре полок research: выдуманный список показывал бы
+// Демо идёт на настоящем наборе — палитре приложения: выдуманный список показывал бы
 // раскладку на цветах, которых в приложении нет.
-import { groupColorNames, groupColorVars } from '@/features/research/constants/groupColors'
+import { colorNames, colorVarsByName } from '@/shared/colors'
 import { iconByName } from '@/shared/icons'
 
 const { t } = useI18n()
 
-const colors = groupColorNames()
+const colors = colorNames()
 
 const picked = ref<string | null>('teal')
 const optional = ref<string | null>(null)
@@ -40,7 +40,7 @@ function modelLiteral(value: string | null): string {
         <div class="ds-row">
           <span class="ds-tag">default</span>
           <div class="ds-controls ds-controls--stack">
-            <ColorPicker v-model="picked" :colors="colors" :resolve="groupColorVars" />
+            <ColorPicker v-model="picked" :colors="colors" :resolve="colorVarsByName" />
             <p class="ds-value">picked = {{ modelLiteral(picked) }}</p>
           </div>
           <span class="ds-spec">v-model, :colors, :resolve</span>
@@ -49,7 +49,7 @@ function modelLiteral(value: string | null): string {
         <div class="ds-row">
           <span class="ds-tag">clearable</span>
           <div class="ds-controls ds-controls--stack">
-            <ColorPicker v-model="optional" :colors="colors" :resolve="groupColorVars" clearable />
+            <ColorPicker v-model="optional" :colors="colors" :resolve="colorVarsByName" clearable />
             <p class="ds-value">optional = {{ modelLiteral(optional) }}</p>
           </div>
           <span class="ds-spec">clearable</span>
@@ -58,7 +58,7 @@ function modelLiteral(value: string | null): string {
         <div class="ds-row">
           <span class="ds-tag">size</span>
           <div class="ds-controls ds-controls--stack">
-            <ColorPicker v-model="large" :colors="colors" :resolve="groupColorVars" :size="48" />
+            <ColorPicker v-model="large" :colors="colors" :resolve="colorVarsByName" :size="48" />
             <p class="ds-value">large = {{ modelLiteral(large) }}</p>
           </div>
           <span class="ds-spec">:size="48"</span>
@@ -74,21 +74,21 @@ function modelLiteral(value: string | null): string {
         <div class="ds-row">
           <span class="ds-tag">plate</span>
           <div class="ds-controls">
-            <span v-for="name in colors" :key="name" class="ds-plate color-tones" :style="groupColorVars(name)">
+            <span v-for="name in colors" :key="name" class="ds-plate color-tones" :style="colorVarsByName(name)">
               <component :is="iconByName('flask')" :size="18" :stroke-width="1.6" />
             </span>
           </div>
-          <span class="ds-spec">groupColorVars(name)</span>
+          <span class="ds-spec">colorVarsByName(name)</span>
         </div>
 
         <div class="ds-row">
           <span class="ds-tag">unset</span>
           <div class="ds-controls">
-            <span class="ds-plate color-tones" :style="groupColorVars(null)">
+            <span class="ds-plate color-tones" :style="colorVarsByName(null)">
               <component :is="iconByName('flask')" :size="18" :stroke-width="1.6" />
             </span>
           </div>
-          <span class="ds-spec">groupColorVars(null) → accent</span>
+          <span class="ds-spec">colorVarsByName(null) → accent</span>
         </div>
       </div>
     </section>

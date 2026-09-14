@@ -8,7 +8,7 @@
 // повторяет ширину, либо приходит от места (`--swatch-height`, см. `ResearchShelfMark`).
 import { computed } from 'vue'
 
-import { groupColorVars } from '../constants/groupColors'
+import { colorVarsByName } from '@/shared/colors'
 import { iconByName } from '@/shared/icons'
 
 const ICON_SHARE_OF_WIDTH = 0.7
@@ -29,7 +29,7 @@ const iconSize = computed(() => Math.round(props.width * ICON_SHARE_OF_WIDTH))
 
 const boxStyle = computed(() => ({
   '--swatch-width': `${props.width}px`,
-  ...(props.plain ? {} : groupColorVars(props.color)),
+  ...(props.plain ? {} : colorVarsByName(props.color)),
 }))
 </script>
 

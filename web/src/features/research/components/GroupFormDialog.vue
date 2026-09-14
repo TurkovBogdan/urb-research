@@ -14,7 +14,7 @@ import AppDialog from '@/components/AppDialog.vue'
 import IconColorPicker from '@/components/IconColorPicker.vue'
 import { errorText } from '@/api/errorText'
 
-import { groupColorNames, groupColorVars } from '../constants/groupColors'
+import { colorNames, colorVarsByName } from '@/shared/colors'
 import { iconByName, iconNames } from '@/shared/icons'
 import { createGroup, updateGroup, type GroupBody, type GroupRow } from '../api'
 
@@ -31,7 +31,7 @@ const emit = defineEmits<{ saved: [] }>()
 const { t } = useI18n()
 
 const icons = iconNames()
-const colors = groupColorNames()
+const colors = colorNames()
 
 const title = ref('')
 const description = ref('')
@@ -136,7 +136,7 @@ async function save() {
           :icons="icons"
           :colors="colors"
           :resolve-icon="iconByName"
-          :resolve-color="groupColorVars"
+          :resolve-color="colorVarsByName"
           :height="160"
           clearable
         />

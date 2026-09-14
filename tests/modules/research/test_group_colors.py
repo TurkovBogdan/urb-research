@@ -10,10 +10,7 @@ import pytest
 from src.modules.research.colors import GROUP_COLORS, group_colors
 from src.modules.research.constants import GROUP_COLOR_MAX
 
-_FRONT_REGISTRY = (
-    Path(__file__).resolve().parents[3]
-    / "web/src/features/research/constants/groupColors.ts"
-)
+_FRONT_REGISTRY = Path(__file__).resolve().parents[3] / "web/src/shared/colors.ts"
 
 pytestmark = pytest.mark.pure
 

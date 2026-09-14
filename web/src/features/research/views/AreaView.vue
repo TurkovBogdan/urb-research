@@ -18,7 +18,7 @@ import BodySection from '../components/BodySection.vue'
 import SourcesSection from '../components/SourcesSection.vue'
 import TitleEditor from '../components/TitleEditor.vue'
 import { useAreaDetailStore } from '../stores/area-detail.store'
-import { useDetailReload } from '../useDetailReload'
+import { useDetailReload } from '../composables/useDetailReload'
 
 const { t } = useI18n()
 const router = useRouter()

@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { onActivated, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { IconRefresh, IconDeviceFloppy } from '@tabler/icons-vue'
 
 import PageLayout from '@/layout/templates/PageLayout.vue'
 import PageHeader from '@/layout/components/PageHeader.vue'
 import SwitchPanel from '@/components/SwitchPanel.vue'
 import { getSetup, applySetup, isBackendUp, type SetupGroup, type SetupField } from '../api'
+
+const { t } = useI18n()
 
 const groups = ref<SetupGroup[]>([])
 // Локальная working-copy: { ENV_KEY: строковое значение }.
@@ -60,7 +63,7 @@ async function waitForRestart() {
     await sleep(1000)
   }
   restarting.value = false
-  error.value = 'Сервер не вернулся за 30 секунд — проверьте процесс вручную.'
+  error.value = t('setup.error.restart_timeout')
 }
 
 async function apply() {
@@ -81,13 +84,13 @@ async function apply() {
 <template>
   <PageLayout>
     <PageHeader
-      title="Настройка сервера"
-      description="Базовые параметры сервера: база данных, адрес и порты, фоновые задачи. После сохранения сервер перезапустится."
+      :title="t('setup.page.title')"
+      :description="t('setup.page.description')"
     >
       <template #actions>
         <VBtn variant="text" :disabled="loading || applying || restarting" @click="load">
           <template #prepend><IconRefresh :size="16" /></template>
-          Обновить
+          {{ t('setup.action.refresh') }}
         </VBtn>
         <VBtn
           color="primary"
@@ -96,7 +99,7 @@ async function apply() {
           @click="apply"
         >
           <template #prepend><IconDeviceFloppy :size="18" /></template>
-          Сохранить и перезапустить
+          {{ t('setup.action.apply') }}
         </VBtn>
       </template>
     </PageHeader>
@@ -119,7 +122,7 @@ async function apply() {
     <VAlert v-if="restarting" type="info" variant="tonal" class="mb-4">
       <div class="d-flex align-center ga-3">
         <VProgressCircular indeterminate size="20" width="2" />
-        Сервер перезапускается с новой конфигурацией…
+        {{ t('setup.status.restarting') }}
       </div>
     </VAlert>
 

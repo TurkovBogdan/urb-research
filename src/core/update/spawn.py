@@ -16,12 +16,14 @@ itself through `uv run`, so the update runs on the dependencies it has just sync
 from __future__ import annotations
 
 import subprocess
+import sys
 import threading
 from dataclasses import dataclass
 from pathlib import Path
 
 from src.core import maintenance
 from src.core.app_path import AppPath, project_root
+from src.core.update.sequence import WINDOWS_PLATFORM
 
 UPDATE_SCRIPT_NAME = "update.sh"
 SPAWN_LOG_NAME = "update_spawn.log"
@@ -37,6 +39,10 @@ class UpdateScriptMissing(RuntimeError):
 
 class CheckoutNotUpdatable(RuntimeError):
     """The sequence would refuse this checkout — say so before stopping anything."""
+
+
+class PlatformUnsupported(RuntimeError):
+    """No update path exists on this platform — the script is bash and the stop is POSIX."""
 
 
 @dataclass(frozen=True)
@@ -63,6 +69,8 @@ def spawn_update(*, refusal: str | None = None) -> SpawnedUpdate:
     The caller gets only the pid — from here on the update owns the installation, and the next
     thing the browser sees is the backend going away and coming back.
     """
+    if sys.platform == WINDOWS_PLATFORM:
+        raise PlatformUnsupported("the update command does not support Windows")
     if refusal:
         raise CheckoutNotUpdatable(refusal)
 
@@ -110,6 +118,7 @@ __all__ = [
     "SPAWN_LOG_NAME",
     "UPDATE_SCRIPT_NAME",
     "CheckoutNotUpdatable",
+    "PlatformUnsupported",
     "SpawnedUpdate",
     "UpdateAlreadyRunning",
     "UpdateScriptMissing",

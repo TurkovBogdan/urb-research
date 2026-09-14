@@ -91,6 +91,54 @@ def test_launch_is_not_gated_without_a_flag(tmp_path: Path, monkeypatch: pytest.
 def test_a_dead_updater_does_not_gate_the_launch(
     update_in_progress, monkeypatch: pytest.MonkeyPatch
 ):
-    monkeypatch.setattr(maintenance, "process_is_updater", lambda pid: False)
+    """Liveness is the pid plus its start time: a flag whose updater died stops gating at once,
+    however recent the file is."""
+    monkeypatch.setattr(maintenance, "process_is_running", lambda pid, start_time=None: False)
 
     assert app._maintenance_refusal() is None
+
+
+# ── the process registry: what a launch records about itself ─────────────────
+
+@pytest.mark.pure
+def test_a_launched_role_is_recorded_and_the_record_is_removed_afterwards(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """The updater stops the install from these records, so a process that runs without one is a
+    process the update will refuse to work around."""
+    from src.core import process_registry
+
+    recorded: list[str] = []
+    monkeypatch.setattr(
+        app,
+        "_run_the_role",
+        lambda config, args: recorded.extend(
+            record.role for record in process_registry.read_records()
+        ),
+    )
+
+    app.main(["--backend", "--no-worker"])
+
+    assert recorded == [process_registry.ROLE_BACKEND]
+    assert process_registry.read_records() == []
+
+
+@pytest.mark.pure
+def test_the_stdio_shim_records_nothing(monkeypatch: pytest.MonkeyPatch):
+    """The shim is the client's process, never a target — and it refuses to spawn under the flag."""
+    from src.apps.app import mcp_stdio
+    from src.core import process_registry
+
+    monkeypatch.setattr(mcp_stdio, "run_mcp_stdio", lambda config: None)
+
+    app.main(["--mcp-stdio"])
+
+    assert process_registry.read_records() == []
+
+
+@pytest.mark.pure
+def test_a_launch_refused_by_the_flag_records_nothing(update_in_progress):
+    from src.core import process_registry
+
+    assert app.main([]) == 1
+    assert process_registry.read_records() == []

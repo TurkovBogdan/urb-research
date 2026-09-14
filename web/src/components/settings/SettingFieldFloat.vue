@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { FloatFieldDescriptor } from '@/features/settings/api'
+import type { FloatFieldDescriptor } from '@/shared/settings-fields'
 
 defineProps<{
   field: FloatFieldDescriptor

@@ -1,11 +1,11 @@
 <script setup lang="ts">
 // Полка исследования строкой: иконка в её цвете плюс имя, и то и другое уводит на саму полку.
-// Тот же облик, что у плашки на плитке исследования (`shared/icons` / `groupColors`) — полка
+// Тот же облик, что у плашки на плитке исследования (`shared/icons` / `shared/colors`) — полка
 // узнаётся по паре «иконка + цвет» везде, где упомянута.
 //
 // Адрес полки лежит в том же сегменте, что и исследование, и разведён префиксом кода
 // (`GROUP@…` — см. `routes.ts`), поэтому ссылка собирается из кода как есть.
-import { groupColorVars } from '../constants/groupColors'
+import { colorVarsByName } from '@/shared/colors'
 import { iconByName } from '@/shared/icons'
 
 const props = withDefaults(defineProps<{
@@ -25,7 +25,7 @@ const props = withDefaults(defineProps<{
     :to="`/research/researches/${props.code}`"
     class="group-link"
     :class="props.plain ? 'group-link--plain' : 'color-tones'"
-    :style="props.plain ? undefined : groupColorVars(props.color)"
+    :style="props.plain ? undefined : colorVarsByName(props.color)"
   >
     <component :is="iconByName(props.icon)" :size="14" :stroke-width="1.7" class="group-link__icon" />
     <span class="group-link__name">{{ props.name }}</span>

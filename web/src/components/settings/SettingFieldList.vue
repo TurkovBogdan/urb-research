@@ -9,7 +9,7 @@ import type {
   FieldDescriptor,
   ListFieldDescriptor,
   ListItemDescriptor,
-} from '@/features/settings/api'
+} from '@/shared/settings-fields'
 
 import SettingFieldInt from './SettingFieldInt.vue'
 import SettingFieldFloat from './SettingFieldFloat.vue'

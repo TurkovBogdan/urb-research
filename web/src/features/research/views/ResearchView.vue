@@ -26,7 +26,7 @@ import TitleEditor from '../components/TitleEditor.vue'
 import GroupLink from '../components/GroupLink.vue'
 import ResearchGroupDialog from '../components/ResearchGroupDialog.vue'
 import { useResearchDetailStore } from '../stores/research-detail.store'
-import { useDetailReload } from '../useDetailReload'
+import { useDetailReload } from '../composables/useDetailReload'
 import { UNGROUPED_CODE, setResearchGroup } from '../api'
 import { NOTE_KIND_COLOR } from '../labels'
 

@@ -7,13 +7,9 @@ import PageLayout from '@/layout/templates/PageLayout.vue'
 import PageHeader from '@/layout/components/PageHeader.vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import SettingField from '@/components/settings/SettingField.vue'
-import { useSettingText } from '../settingText'
-import {
-  listModules,
-  putValue,
-  type FieldDescriptor,
-  type ModulePayload,
-} from '../api'
+import type { FieldDescriptor } from '@/shared/settings-fields'
+import { useSettingLabels } from '../labels'
+import { listModules, putValue, type ModulePayload } from '../api'
 
 /** Блок полей на экране: либо со своей подписью, либо во главе с тумблером. */
 interface FieldBlock {
@@ -26,7 +22,7 @@ interface FieldBlock {
 }
 
 const { t } = useI18n()
-const { localizeField } = useSettingText()
+const { localizeField } = useSettingLabels()
 
 // Названия модулей в шапке карточек. Если ключа нет — показываем как есть.
 const MODULE_LABELS: Record<string, string> = {

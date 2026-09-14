@@ -1,6 +1,6 @@
 // Contract between a named-colour palette and whatever paints with it.
 //
-// A palette (today: research group shelves, `features/research/constants/groupColors.ts`) stores
+// A palette (today: research group shelves, `shared/colors.ts`) stores
 // three lightness steps per hue. Which step becomes the readable one depends on the theme, and a
 // plain object cannot hold that condition — so the object carries the raw steps as CSS variables
 // and the choice is made once, in `main.scss`, by the `.color-tones` class:

@@ -15,12 +15,14 @@ covered by it. A route that can stop the installation must not be the one that o
 
 from __future__ import annotations
 
+import sys
 from typing import Any
 
 from fastapi import APIRouter, Request
 
 from src.core.api import ApiError
 from src.core.update import spawn, status
+from src.core.update.sequence import WINDOWS_PLATFORM
 
 router = APIRouter()
 
@@ -29,6 +31,7 @@ SPAWN_FAILED = 500
 
 REFUSAL_DIRTY_TREE = "dirty_tree"
 REFUSAL_BRANCH_MISMATCH = "branch_mismatch"
+REFUSAL_PLATFORM_UNSUPPORTED = "platform_unsupported"
 
 
 def _followed_branch(request: Request) -> str:
@@ -42,6 +45,8 @@ def _refusal(installation: status.Installation) -> str | None:
     English. Same contract as the rest of the API: the server names the reason, the frontend
     says it.
     """
+    if sys.platform == WINDOWS_PLATFORM:
+        return REFUSAL_PLATFORM_UNSUPPORTED
     if installation.dirty:
         return REFUSAL_DIRTY_TREE
     if not installation.branch_matches:
@@ -96,6 +101,10 @@ def start_update(request: Request) -> dict[str, Any]:
     refusal = _refusal(installation)
     try:
         started = spawn.spawn_update(refusal=refusal)
+    except spawn.PlatformUnsupported as unsupported:
+        raise ApiError.conflict(
+            str(unsupported), code=REFUSAL_PLATFORM_UNSUPPORTED
+        ) from unsupported
     except spawn.UpdateAlreadyRunning as held:
         raise ApiError.conflict(str(held), code="update_already_running") from held
     except spawn.CheckoutNotUpdatable as unusable:
