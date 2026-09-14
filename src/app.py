@@ -34,6 +34,19 @@
 10 — найдены процессы установки без записи о себе (снять `--stop-unregistered`),
 11 — платформа не поддерживается (Windows): напечатана ручная процедура.
 
+Подкоманда `stop` — погасить процессы этой установки (и только её) по тем же записям
+реестра и тем же слоем, что и обновление: группой TERM → CONT → KILL с доказательством
+смерти, чужой пользователь и незарегистрированные процессы — отказ, а не тихий пропуск.
+Vite остановка не касается — он не процесс приложения (его гасит `./run.sh stop`).
+
+    uv run python src/app.py stop                       — погасить
+    uv run python src/app.py stop --dry-run             — напечатать план, не трогая
+    uv run python src/app.py stop --stop-unregistered   — гасить и процессы без записи
+
+Коды выхода: 0 — погашено (или гасить было нечего), 7 — что-то пережило сигналы, процесс
+чужого пользователя или общая группа с гасящим, 10 — найдены процессы без записи о себе,
+11 — платформа не поддерживается (Windows).
+
 Запуск процесса (server/worker) записывает себя в реестр `runtime/processes/<pid>.json`
 (`src/core/process_registry.py`) и снимает запись при выходе: по этим записям обновление
 гасит установку, вместо того чтобы опознавать её по cwd и argv.
@@ -180,6 +193,19 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="гасить и процессы этого чекаута без записи в реестре (иначе обновление "
         "отказывается с кодом 10); нужен один раз — на первом обновлении после выкатки реестра",
+    )
+
+    # ── подкоманда stop ──────────────────────────────────────────────────────
+    stp = sub.add_parser("stop", help="погасить процессы этой установки по их записям в реестре")
+    stp.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="напечатать план остановки и выйти, не подавая сигналов",
+    )
+    stp.add_argument(
+        "--stop-unregistered",
+        action="store_true",
+        help="гасить и процессы этого чекаута без записи в реестре (иначе отказ с кодом 10)",
     )
     return p.parse_args(argv)
 
@@ -350,7 +376,7 @@ async def _run_migrate(action: str) -> int:
 def _launches_a_process(args: argparse.Namespace) -> bool:
     """Нет подкоманды — значит запускаем процесс (в том числе `--mcp-stdio`).
 
-    Подкоманды (`migrate`, `backup`, `update`) освобождены от гейта намеренно: сам
+    Подкоманды (`migrate`, `backup`, `update`, `stop`) освобождены от гейта намеренно: сам
     апдейтер гоняет `backup` и `migrate upgrade` при поднятом флаге, а упавшая миграция
     флаг не опускает — гейт на подкомандах запер бы обновление изнутри и лишил бы повтора.
     """
@@ -385,6 +411,11 @@ def main(argv: list[str] | None = None) -> int | None:
         from src.core.update import update_command
 
         return update_command(dry_run=args.dry_run, stop_unregistered=args.stop_unregistered)
+
+    if args.command == "stop":
+        from src.core.update import stop_command
+
+        return stop_command(dry_run=args.dry_run, stop_unregistered=args.stop_unregistered)
 
     if _launches_a_process(args):
         refusal = _maintenance_refusal()

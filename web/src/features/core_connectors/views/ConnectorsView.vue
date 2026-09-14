@@ -143,21 +143,18 @@ function edit(card: Card) {
   formOpen.value = true
 }
 
-// Тело карточки ведёт в ту же модалку, но зовётся по состоянию: подключения ещё нет —
-// его заводят, есть — правят.
-function cardBodyLabel(card: Card): string {
+// Настройки зовутся по состоянию: подключения ещё нет — его заводят, есть — правят. Подпись
+// одна на оба входа в модалку (шестерёнка в углу и тело карточки), чтобы диктор читал их
+// одинаково.
+function settingsLabel(card: Card): string {
   const name = card.passport.name
   return card.access === null
     ? t('core_connectors.action.connect_service', { name })
     : t('core_connectors.action.configure_service', { name })
 }
 
-// Угловая кнопка одна на все состояния: заведённое подключение проверяют, отсутствующее заводят.
-function cardAction(card: Card): { label: string; run: () => void } {
-  const name = card.passport.name
-  return card.access === null
-    ? { label: t('core_connectors.action.connect_service', { name }), run: () => edit(card) }
-    : { label: t('core_connectors.action.check_service', { name }), run: () => runCheck(card) }
+function checkLabel(card: Card): string {
+  return t('core_connectors.action.check_service', { name: card.passport.name })
 }
 
 // Итог проверки — новость на несколько секунд, а не состояние карточки: держать под неё
@@ -231,37 +228,54 @@ async function runCheck(card: Card) {
             class="conn-card"
             :class="{ 'conn-card--off': card.access?.status.status !== 'ok' }"
           >
-            <!-- Действие карточки — иконкой в углу и ВНЕ кликабельного тела: кнопка внутри
-                 кнопки ломает клавиатуру и экранный диктор, поэтому она соседний элемент,
-                 положенный поверх. У заведённого подключения это проверка, у отсутствующего —
-                 настройка: угол один, и карточка не обрастает второй полосой ради одной кнопки. -->
-            <VBtn
-              icon
-              variant="text"
-              size="small"
-              density="comfortable"
-              :ripple="false"
-              class="conn-card__probe"
-              :loading="checking !== null && checking === card.access?.id"
-              :aria-label="cardAction(card).label"
-              :title="cardAction(card).label"
-              @click="cardAction(card).run()"
-            >
-              <IconRefresh v-if="card.access" :size="18" />
-              <IconSettings v-else :size="18" />
-              <!-- Свой загрузчик: штатный у VBtn фиксированного размера 23px и в углу карточки
-                   выпирает за иконку, которую подменяет. -->
-              <template #loader>
-                <VProgressCircular indeterminate :size="18" :width="1.5" />
-              </template>
-            </VBtn>
+            <!-- Действия карточки — иконками в углу и ВНЕ кликабельного тела: кнопка внутри
+                 кнопки ломает клавиатуру и экранный диктор, поэтому они соседний элемент,
+                 положенный поверх. Проверка есть только у заведённого подключения — проверять
+                 нечего, пока его нет; шестерёнка стоит всегда и делает видимым вход в настройки,
+                 который иначе живёт только в клике по телу карточки. -->
+            <div class="conn-card__actions">
+              <VBtn
+                v-if="card.access"
+                icon
+                variant="text"
+                size="small"
+                density="comfortable"
+                :ripple="false"
+                class="conn-card__action"
+                :loading="checking !== null && checking === card.access.id"
+                :aria-label="checkLabel(card)"
+                :title="checkLabel(card)"
+                @click="runCheck(card)"
+              >
+                <IconRefresh :size="18" />
+                <!-- Свой загрузчик: штатный у VBtn фиксированного размера 23px и в углу карточки
+                     выпирает за иконку, которую подменяет. -->
+                <template #loader>
+                  <VProgressCircular indeterminate :size="18" :width="1.5" />
+                </template>
+              </VBtn>
+
+              <VBtn
+                icon
+                variant="text"
+                size="small"
+                density="comfortable"
+                :ripple="false"
+                class="conn-card__action"
+                :aria-label="settingsLabel(card)"
+                :title="settingsLabel(card)"
+                @click="edit(card)"
+              >
+                <IconSettings :size="18" />
+              </VBtn>
+            </div>
 
             <!-- Кнопка настройки — тело карточки, а не карточка целиком: см. выше. -->
             <div
               class="conn-card__body"
               role="button"
               tabindex="0"
-              :aria-label="cardBodyLabel(card)"
+              :aria-label="settingsLabel(card)"
               @click="edit(card)"
               @keydown.enter="edit(card)"
               @keydown.space.prevent="edit(card)"
@@ -388,6 +402,7 @@ async function runCheck(card: Card) {
 .conn-card {
   --card-pad: 18px;
   --balance-height: 104px;
+  --actions-width: 60px;
 
   position: relative;
   display: flex;
@@ -395,23 +410,29 @@ async function runCheck(card: Card) {
   padding: 0;
 }
 
-/* Иконка проверки лежит поверх карточки в её углу; тело карточки под ней остаётся
-   кликабельным, а сама кнопка в него не вложена. Оформление приглушено: карточка про
-   баланс, а не про кнопку, поэтому и подложка, и наведение звучат вполголоса. */
-.conn-card__probe {
-  --v-hover-opacity: 0.03;
-
+/* Иконки лежат поверх карточки в её углу; тело карточки под ними остаётся кликабельным, а
+   сами кнопки в него не вложены. Оформление приглушено: карточка про баланс, а не про
+   кнопки, поэтому и подложка, и наведение звучат вполголоса. */
+.conn-card__actions {
   position: absolute;
   top: 10px;
   right: 10px;
   z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.conn-card__action {
+  --v-hover-opacity: 0.03;
+
   color: var(--text-faint);
   transition: color 140ms ease;
 }
 
-.conn-card__probe:hover { color: var(--text-muted); }
+.conn-card__action:hover { color: var(--text-muted); }
 
-.conn-card__probe :deep(.v-progress-circular) { opacity: 0.7; }
+.conn-card__action :deep(.v-progress-circular) { opacity: 0.7; }
 
 .conn-card--off { opacity: 0.7; }
 
@@ -434,12 +455,14 @@ async function runCheck(card: Card) {
   outline-offset: 4px;
 }
 
-/* Место под иконку в углу: без отступа статус-чип уезжал бы под неё. */
+/* Место под иконки в углу: без отступа статус-чип уезжал бы под них. Ширина взята по паре
+   кнопок и не зависит от состояния — иначе чип ездил бы по горизонтали от карточки к
+   карточке в зависимости от того, заведено подключение или нет. */
 .conn-card__header {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding-right: 34px;
+  padding-right: var(--actions-width);
 }
 
 /* Имя — ровно одна строка: длинное иначе переносится и растит шапку. */

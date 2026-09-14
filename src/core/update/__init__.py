@@ -46,6 +46,7 @@ from src.core.update.sequence import (
     StartingPoint,
     UpdateHost,
     run_update,
+    stop_command,
     update_command,
     validate_branch,
 )
@@ -118,6 +119,7 @@ __all__ = [
     "plan_stop",
     "run_update",
     "select_kill_targets",
+    "stop_command",
     "update_command",
     "validate_branch",
 ]

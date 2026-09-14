@@ -171,8 +171,9 @@ class StopPlan:
             raise UnregisteredProcesses(
                 "these processes look like this install but never recorded themselves (started "
                 f"before the registry shipped, or not through src/app.py):\n{listed}\n"
-                "stop them yourself, or let the updater stop them by pid:\n"
-                "  ./update.sh --stop-unregistered"
+                "stop them yourself, or let this command stop them by pid:\n"
+                "  ./update.sh --stop-unregistered\n"
+                "  uv run python src/app.py stop --stop-unregistered"
             )
 
     def describe(self) -> str:

@@ -5,6 +5,10 @@ back the database up, migrate it and start the install back up.
 the world goes through `UpdateHost`, which `DryRunHost` replaces with a narration. The step
 order, the failure policy behind each exit code and the reasons for the invariants kept here:
 `AGENTS/docs/platform/update.md`.
+
+`stop_command` is the stopping step offered on its own (`app.py stop`), for a launcher script or
+an operator who only wants the install down. It keeps the update's refusals and exit codes: an
+install that could not be stopped completely must not be reported as stopped, whoever asked.
 """
 
 from __future__ import annotations
@@ -466,6 +470,32 @@ def update_command(*, dry_run: bool = False, stop_unregistered: bool = False) ->
     return run_update(host, branch=config.update_branch)
 
 
+def stop_command(*, dry_run: bool = False, stop_unregistered: bool = False) -> int:
+    """`app.py stop` — stop every process of this install, from the records they wrote themselves.
+
+    The plan is printed before anything is signalled, because the operator's next question after
+    «stopped» is always «what exactly». A dry run stops at that print.
+    """
+    if sys.platform == WINDOWS_PLATFORM:
+        print(_windows_stop_refusal())
+        return EXIT_UNSUPPORTED_PLATFORM
+
+    plan = plan_live_stop(project_root(), stop_unregistered=stop_unregistered)
+    print(plan.describe())
+    if dry_run:
+        return EXIT_OK
+
+    try:
+        execute_stop(plan, report=print)
+    except UnregisteredProcesses as refusal:
+        print(f"refusing to stop: {refusal}")
+        return EXIT_UNREGISTERED
+    except (ProcessesSurvived, ForeignProcesses, UpdaterInsideInstall) as refusal:
+        print(f"refusing to stop: {refusal}")
+        return EXIT_STOP_FAILED
+    return EXIT_OK
+
+
 def _reporter(*, dry_run: bool) -> Callable[[str], None]:
     """A real run is recorded — a failure must stay diagnosable after the terminal is closed."""
     if dry_run:
@@ -636,6 +666,13 @@ def _survivor_recovery() -> str:
     )
 
 
+def _windows_stop_refusal() -> str:
+    return (
+        "refusing to stop: Windows is not supported by this command — it stops the install "
+        "through POSIX process groups and signals. Stop the processes by hand instead."
+    )
+
+
 def _windows_refusal() -> str:
     return (
         "refusing to update: Windows is not supported by this command — it stops the install "
@@ -672,6 +709,7 @@ __all__ = [
     "StartingPoint",
     "UpdateHost",
     "run_update",
+    "stop_command",
     "update_command",
     "validate_branch",
 ]
