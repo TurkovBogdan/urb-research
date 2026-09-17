@@ -8,7 +8,7 @@ import { IconChevronRight, IconChevronLeft } from '@tabler/icons-vue'
 import { useLayoutStore } from '../store'
 import { useSettingsStore } from '@/stores/settings'
 import { isGroup, isSection, type NavEntry, type NavLink, type NavSection, type NavSectionEntry } from '@/shared/nav'
-import { IconPalette, IconServerCog, IconAdjustments, IconWorldSearch, IconListSearch, IconFileText, IconClock, IconServerBolt, IconTelescope, IconPlugConnected, IconTypography, IconCategory, IconInfoCircle } from '@tabler/icons-vue'
+import { IconPalette, IconServerCog, IconAdjustments, IconWorldSearch, IconListSearch, IconFileText, IconClock, IconServerBolt, IconTelescope, IconPlugConnected, IconTypography, IconCategory, IconInfoCircle, IconFileImport } from '@tabler/icons-vue'
 
 const layout = useLayoutStore()
 const settings = useSettingsStore()
@@ -48,6 +48,7 @@ const navEntries: NavSectionEntry[] = [
   { section: 'mcp', order: 10, path: '/mcp-servers', label: 'MCP-серверы', labelKey: 'core_mcp.nav', icon: IconServerBolt },
   { section: 'research', order: 10, path: '/research/groups', label: 'Группы', labelKey: 'research.nav_groups', icon: IconCategory },
   { section: 'research', order: 20, path: '/research/researches', label: 'Исследования', labelKey: 'research.nav', icon: IconTelescope },
+  { section: 'research', order: 30, path: '/research/import', label: 'Импорт', labelKey: 'research.nav_import', icon: IconFileImport },
   {
     section: 'data',
     order: 10,

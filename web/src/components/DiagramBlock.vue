@@ -151,9 +151,19 @@ watch([() => props.code, family, () => settings.diagrams.theme], draw)
 // ── Полноэкранный режим: зум к курсору, панорама перетаскиванием ──────────────
 const ZOOM_LIMITS = { min: 0.2, max: 8 }
 const ZOOM_STEP = 1.15
+// Щипок на тачпаде приезжает тем же `wheel`, только с зажатым ctrl (так система отдаёт жест
+// странице), и за одно движение пальцев их прилетают десятки. Шаг колеса здесь не годится:
+// он увёл бы масштаб в упор с первого же щипка, поэтому жест меняет масштаб непрерывно —
+// пропорционально сдвигу, который сам и принёс.
+const PINCH_ZOOM_SPEED = 0.01
 // Доля кадра, которую занимает вписанная схема: воздух по краям нужен, чтобы крайние блоки не
 // упирались в панель управления и в границу экрана.
 const FIT_MARGIN = 0.92
+// Сколько «помнится» тачпад после последнего его росчерка. Росчерк двумя пальцами изредка
+// выпадает ровным целым числом без горизонтальной доли — неотличимо от щелчка колеса, и без
+// памяти посреди панорамы он дёргал бы масштаб. Окно короткое: на маке рядом с тачпадом
+// бывает и мышь, и её колесу зум надо вернуть сразу, как только тачпад отпустили.
+const TRACKPAD_HOLD_MS = 800
 
 const fullscreen = ref(false)
 const stage = ref<HTMLElement | null>(null)
@@ -215,9 +225,81 @@ function zoomCenter(factor: number) {
   zoomAt(box.left + frame.clientWidth / 2, box.top + frame.clientHeight / 2, factor)
 }
 
+function panBy(dx: number, dy: number) {
+  view.x += dx
+  view.y += dy
+}
+
+// Колесо мыши и тачпад приходят одним и тем же событием, и отличить их можно только по форме
+// сдвига: щелчок колеса — целый «пункт» (сотня-другая) строго по вертикали, тачпад шлёт мелкие
+// дробные сдвиги и почти всегда с горизонтальной долей.
+let trackpadSeenAt = -TRACKPAD_HOLD_MS
+
+function isTrackpadScroll(event: WheelEvent): boolean {
+  const smooth = event.deltaMode === 0 && (event.deltaX !== 0 || !Number.isInteger(event.deltaY))
+  if (smooth) trackpadSeenAt = event.timeStamp
+  return event.timeStamp - trackpadSeenAt < TRACKPAD_HOLD_MS
+}
+
+// Тачпад даёт панораму прокруткой двумя пальцами: другого способа сдвинуть холст у него нет —
+// перетаскивание с зажатым пробелом требует третьей руки. Колесо мыши остаётся масштабом: у
+// мыши, наоборот, нет ни второй оси, ни щипка.
 function onWheel(event: WheelEvent) {
+  if (gesturing) return
+  if (event.ctrlKey) {
+    zoomAt(event.clientX, event.clientY, Math.exp(-event.deltaY * PINCH_ZOOM_SPEED))
+    return
+  }
+  if (isTrackpadScroll(event)) {
+    panBy(-event.deltaX, -event.deltaY)
+    return
+  }
   zoomAt(event.clientX, event.clientY, event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP)
 }
+
+// Safari отдаёт щипок не колесом, а собственными жестовыми событиями — они есть только в WebKit,
+// поэтому их нет ни в типах DOM, ни в шаблонных `@`-слушателях, и вешаются они руками. `scale`
+// в них накоплен от начала жеста, отсюда шаг как отношение к предыдущему значению. Пока жест
+// идёт, колесо не слушаем: браузер, отдающий и то и другое, иначе увеличил бы дважды.
+interface SafariGestureEvent extends Event {
+  readonly scale: number
+  readonly clientX: number
+  readonly clientY: number
+}
+
+let gesturing = false
+let gestureScale = 1
+
+function onGestureStart(event: Event) {
+  event.preventDefault()
+  gesturing = true
+  gestureScale = (event as SafariGestureEvent).scale
+}
+
+function onGestureChange(event: Event) {
+  event.preventDefault()
+  const gesture = event as SafariGestureEvent
+  zoomAt(gesture.clientX, gesture.clientY, gesture.scale / gestureScale)
+  gestureScale = gesture.scale
+}
+
+function onGestureEnd(event: Event) {
+  event.preventDefault()
+  gesturing = false
+}
+
+const GESTURE_LISTENERS: [string, (event: Event) => void][] = [
+  ['gesturestart', onGestureStart],
+  ['gesturechange', onGestureChange],
+  ['gestureend', onGestureEnd],
+]
+
+watch(stage, (element, previous) => {
+  for (const [type, handler] of GESTURE_LISTENERS) {
+    previous?.removeEventListener(type, handler)
+    element?.addEventListener(type, handler)
+  }
+})
 
 // Перетаскивание панорамирует только с зажатым пробелом — иначе из схемы нельзя выделить текст,
 // а он в ней настоящий: это SVG, а не картинка. При панорамировании выделение подавляется: без
@@ -233,8 +315,7 @@ function onPointerDown(event: PointerEvent) {
 
 function onPointerMove(event: PointerEvent) {
   if (!panning.value) return
-  view.x += event.movementX
-  view.y += event.movementY
+  panBy(event.movementX, event.movementY)
 }
 
 function onPointerUp(event: PointerEvent) {
@@ -343,7 +424,9 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <p class="viewer__legend">колесо — масштаб · пробел с перетаскиванием — перемещение</p>
+      <p class="viewer__legend">
+        колесо и щипок — масштаб · двумя пальцами или пробел с перетаскиванием — перемещение
+      </p>
     </div>
   </VDialog>
 </template>
@@ -520,13 +603,22 @@ onBeforeUnmount(() => {
   padding: 4px;
 }
 
+/* Подсказка делит нижнюю полосу с панелью зума, поэтому её ширина ограничена расстоянием до
+   панели: иначе на узком окне строка заезжает под кнопки. Растёт она вверх — прижата нижним
+   краем. Совсем узкому окну подсказка не достаётся: там место дороже объяснения жестов. */
 .viewer__legend {
   position: absolute;
   left: 16px;
   bottom: 24px;
+  max-width: calc(50% - 140px);
   margin: 0;
   font-size: 11px;
+  line-height: 1.5;
   color: var(--text-faint);
   user-select: none;
+}
+
+@media (max-width: 720px) {
+  .viewer__legend { display: none; }
 }
 </style>

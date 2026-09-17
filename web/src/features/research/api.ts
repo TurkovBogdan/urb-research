@@ -455,6 +455,173 @@ export async function getSourceDocument(code: string): Promise<SourceDocumentDet
   return internalApi.get<SourceDocumentDetail>(`${BASE}/source-documents/${seg(code)}`)
 }
 
+// ── Перенос исследования между установками (.urch) ────────────────────────────
+
+// Выгрузка идёт не клиентом API, а самим браузером: клиент разбирает только JSON, а здесь ответ —
+// файл, и его имя (с кириллицей, `filename*=UTF-8''…`) знает лишь сервер. Ссылка отдаёт загрузку
+// браузеру целиком, вместе с уважением к этому заголовку. Префикс зоны собирается тем же способом,
+// что и у опроса здоровья (`features/about/waitForRestart.ts`).
+export function researchExportUrl(code: string): string {
+  return `${import.meta.env.VITE_API_BASE ?? ''}/internal${BASE}/researches/${seg(code)}/export`
+}
+
+const IMPORT_BASE = `${BASE}/import`
+
+// Разбор и применение читают весь архив: сотня страниц с материалом не укладывается в общий
+// потолок ожидания зоны (20 с), и оборванный по нему запрос выглядел бы как отказ бэкенда.
+const IMPORT_TIMEOUT_MS = 10 * 60 * 1000
+
+export interface ImportUpload {
+  upload_id: string
+  file_name: string
+  size: number
+}
+
+export interface ImportArchive {
+  file_name: string
+  size: number
+  created_at: string
+  app_version: string
+  format_version: number
+  /** Архив снят с ЭТОЙ установки: коды в нём уже здешние, и расхождения ожидаются мелкими. */
+  same_install: boolean
+}
+
+export interface ImportRoot {
+  code: string
+  title: string
+}
+
+// Сущности архива в порядке показа — от исследования вниз по иерархии, страницы веб-поиска и
+// полка в конце. Ключи приходят от бэкенда; перечисление задаёт ТОЛЬКО порядок строк сводки,
+// поэтому незнакомый ключ не теряется, а дописывается следом (см. `ImportView`).
+export const IMPORT_ENTITIES = [
+  'research',
+  'areas',
+  'notes',
+  'source_queries',
+  'searches',
+  'search_results',
+  'sources',
+  'pages',
+  'group',
+] as const
+
+export interface ImportPlanCounts {
+  create: number
+  update: number
+  skip: number
+  merge: number
+  recode: number
+}
+
+/** Запись, которой код в этой базе уже занят: приедет под новым. */
+export interface ImportRecoded {
+  entity: string
+  title: string
+  from: string
+  to: string
+}
+
+export interface ImportUpdating {
+  entity: string
+  title: string
+  code: string
+}
+
+export interface ImportDivergedPage {
+  code: string
+  url: string
+}
+
+export interface ImportLocallyNewer {
+  entity: string
+  code: string
+  title: string
+}
+
+export interface ImportTruncated {
+  entity: string
+  code: string
+  field: string
+}
+
+export interface ImportWarnings {
+  /** Ссылки наружу архива: в теле они останутся кодами, которые здесь ничего не открывают. */
+  dangling_refs: string[]
+  diverged_pages: ImportDivergedPage[]
+  locally_newer: ImportLocallyNewer[]
+  truncated: ImportTruncated[]
+}
+
+export interface ImportPlan {
+  archive: ImportArchive
+  roots: ImportRoot[]
+  counts: Record<string, ImportPlanCounts>
+  details: {
+    recoded: ImportRecoded[]
+    updating: ImportUpdating[]
+  }
+  warnings: ImportWarnings
+}
+
+// Что делать с записью, которая в этой базе уже есть. Умолчание — по времени правки: архив
+// переписывает только то, что здесь старше него.
+export const IMPORT_MODES = ['newer', 'always', 'never'] as const
+
+export type ImportMode = (typeof IMPORT_MODES)[number]
+
+export interface ImportReportCounts {
+  created: number
+  updated: number
+  skipped: number
+  merged: number
+}
+
+export interface ImportReport {
+  roots: ImportRoot[]
+  counts: Record<string, ImportReportCounts>
+  /** Сколько ссылок в телах переписано на здешние коды. */
+  refs_rewritten: number
+  dangling_refs: string[]
+  warnings: ImportWarnings
+}
+
+export async function uploadImportArchive(
+  file: File,
+  opts?: RequestOptions,
+): Promise<ImportUpload> {
+  const form = new FormData()
+  form.append('file', file)
+  return internalApi.post<ImportUpload>(`${IMPORT_BASE}/upload`, form, {
+    timeoutMs: IMPORT_TIMEOUT_MS,
+    ...opts,
+  })
+}
+
+export async function analyzeImport(uploadId: string, opts?: RequestOptions): Promise<ImportPlan> {
+  return internalApi.post<ImportPlan>(`${IMPORT_BASE}/${seg(uploadId)}/analyze`, undefined, {
+    timeoutMs: IMPORT_TIMEOUT_MS,
+    ...opts,
+  })
+}
+
+export async function applyImport(
+  uploadId: string,
+  mode: ImportMode,
+  opts?: RequestOptions,
+): Promise<ImportReport> {
+  return internalApi.post<ImportReport>(`${IMPORT_BASE}/${seg(uploadId)}/apply`, { mode }, {
+    timeoutMs: IMPORT_TIMEOUT_MS,
+    ...opts,
+  })
+}
+
+/** Снять загруженный архив, не применяя его: место под него держит сервер, а не браузер. */
+export async function cancelImport(uploadId: string, opts?: RequestOptions): Promise<void> {
+  await internalApi.del<void>(`${IMPORT_BASE}/${seg(uploadId)}`, undefined, opts)
+}
+
 // Разрешение ссылок-кодов из тела (TYPE@hash) в заголовки сущностей (батч). code — префиксный.
 export interface CodeLabel {
   code: string

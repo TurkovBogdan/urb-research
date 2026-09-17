@@ -13,6 +13,12 @@ export const researchRoutes: RouteRecordRaw[] = [
     component: () => import('./views/ResearchesView.vue'),
     meta: { scroll: 'y', title: 'research.nav' },
   },
+  {
+    path: '/research/import',
+    name: 'research-import',
+    component: () => import('./views/ImportView.vue'),
+    meta: { scroll: 'y', title: 'research.import.page.title' },
+  },
   // Адрес полки — тот же сегмент, что и у исследования, разведён префиксом кода:
   // GROUP@… открывает список исследований этой полки, любой другой код — саму карточку
   // исследования. Регистрируется первым: у обоих маршрутов одинаковый вес, побеждает ранний.

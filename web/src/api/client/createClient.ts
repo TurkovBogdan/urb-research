@@ -6,6 +6,7 @@
 //    'same-origin'. Absolute URLs are rejected outright.
 //  - Errors follow the backend envelope (`src/core/api/errors.py`): { error, code?, fields? }.
 //    Every non-2xx is thrown as a typed `ApiError`. Network/abort/timeout normalize too.
+//  - Тело запроса — JSON; исключение одно: `FormData` уезжает как есть (загрузка файла).
 //  - Ответ обязан быть JSON. Редирект НЕ ответ: `redirect: 'manual'` — за ним не идут никогда
 //    (запрещать надо на входе, после ответа запрос уже ушёл на чужой адрес), не-JSON тело и
 //    неразбираемый JSON тоже отвергаются. Всё это — `ApiError` с кодом `protocol`.
@@ -341,7 +342,12 @@ export function createClient(config: ClientConfig): ApiClient {
     // Сериализация ВНУТРИ потолка и внутри нормализации: цикл или BigInt в теле — ошибка кода,
     // но наружу она обязана выйти тем же `ApiError`, а не сырым TypeError.
     try {
-      if (payload !== undefined) {
+      // ⚠️ Разделитель частей у multipart ставит САМ браузер, и только пока `Content-Type` не
+      // задан руками: объявленный здесь заголовок увёз бы форму без границы, и бэкенд разобрал бы
+      // тело как пустое.
+      if (payload instanceof FormData) {
+        init.body = payload
+      } else if (payload !== undefined) {
         headers['Content-Type'] = 'application/json'
         init.body = JSON.stringify(payload)
       }
