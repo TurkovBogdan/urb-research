@@ -8,6 +8,7 @@ import {
   IconCheck,
   IconCopy,
   IconDotsVertical,
+  IconFileExport,
   IconFileText,
   IconFolderPlus,
   IconFolderX,
@@ -18,7 +19,7 @@ import {
 
 import { useClipboard } from '@/composables/useClipboard'
 
-import type { ResearchListRow } from '../api'
+import { researchExportUrl, type ResearchListRow } from '../api'
 
 const props = defineProps<{ research: ResearchListRow }>()
 
@@ -81,6 +82,18 @@ const researchesPath = (code: string) => `/research/researches/${code}`
           @click="emit('detach')"
         >
           <VListItemTitle>{{ t('research.research.action.unset_group') }}</VListItemTitle>
+        </VListItem>
+
+        <VDivider class="my-1" />
+
+        <!-- Выгрузку забирает сам браузер по ссылке: пустой `download` означает «имя файла назовёт
+             сервер» — он и называет его темой исследования (`Content-Disposition`). -->
+        <VListItem
+          :prepend-icon="IconFileExport"
+          :href="researchExportUrl(props.research.code)"
+          download
+        >
+          <VListItemTitle>{{ t('research.research.action.export') }}</VListItemTitle>
         </VListItem>
 
         <VDivider class="my-1" />

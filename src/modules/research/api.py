@@ -91,6 +91,7 @@ from src.modules.research.dto import (
 from src.modules.research.models.area import ResearchArea
 from src.modules.research.models.note import ResearchNote
 from src.modules.research.services.refetch import refetch_sources
+from src.modules.research.transfer.api import router as transfer_router
 from src.modules.research.services.search import search_bodies, search_groups, search_researches
 
 router = APIRouter()
@@ -679,5 +680,9 @@ async def delete_note(note_code: str) -> Response:
         raise ApiError.not_found("Заметка не найдена")
     return Response(status_code=204)
 
+
+# Перенос исследования между установками живёт своим файлом: у него своя предметная область
+# (формат архива, карта кодов, этапы импорта) и ни одной общей модели с ручками реестра.
+router.include_router(transfer_router)
 
 __all__ = ["router"]

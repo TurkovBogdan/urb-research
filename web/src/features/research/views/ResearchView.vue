@@ -3,7 +3,13 @@ import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
-import { IconChevronRight, IconFileTypePdf, IconFolderPlus, IconFolderX } from '@tabler/icons-vue'
+import {
+  IconChevronRight,
+  IconFileExport,
+  IconFileTypePdf,
+  IconFolderPlus,
+  IconFolderX,
+} from '@tabler/icons-vue'
 
 import DetailHead from '@/layout/components/DetailHead.vue'
 import { useDetailRail } from '@/layout/detailRail'
@@ -27,7 +33,7 @@ import GroupLink from '../components/GroupLink.vue'
 import ResearchGroupDialog from '../components/ResearchGroupDialog.vue'
 import { useResearchDetailStore } from '../stores/research-detail.store'
 import { useDetailReload } from '../composables/useDetailReload'
-import { UNGROUPED_CODE, setResearchGroup } from '../api'
+import { UNGROUPED_CODE, researchExportUrl, setResearchGroup } from '../api'
 import { NOTE_KIND_COLOR } from '../labels'
 
 const { t } = useI18n()
@@ -266,6 +272,15 @@ useDetailRail(() => ({
         <template #more>
           <VListItem :prepend-icon="IconFileTypePdf" :disabled="printing" @click="downloadPdf">
             <VListItemTitle>{{ t('research.research.action.download_pdf') }}</VListItemTitle>
+          </VListItem>
+          <!-- Выгрузку забирает сам браузер по ссылке: пустой `download` означает «имя файла назовёт
+               сервер» — он и называет его темой исследования (`Content-Disposition`). -->
+          <VListItem
+            :prepend-icon="IconFileExport"
+            :href="researchExportUrl(store.research.code)"
+            download
+          >
+            <VListItemTitle>{{ t('research.research.action.export') }}</VListItemTitle>
           </VListItem>
           <VDivider class="my-1" />
           <VListItem :prepend-icon="IconFolderPlus" @click="groupDialog = true">
