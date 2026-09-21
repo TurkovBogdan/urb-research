@@ -404,11 +404,11 @@ useDetailRail(() => ({
         </section>
 
         <section v-if="sectionShown.documents" :key="SECTION.documents" :id="SECTION.documents">
-          <!-- Без ручки «перекачать всё сломанное»: на уровне исследования это сотни строк, и по
-               итогу прогона не видно, что именно чинили. Действие осталось уровнем ниже, у зоны. -->
           <SourcesSection
             :items="store.filteredSources"
             :loading="store.loading"
+            level="research"
+            :code="store.research.code"
             @reload="reload"
           />
         </section>

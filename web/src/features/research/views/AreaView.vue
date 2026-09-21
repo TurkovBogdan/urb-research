@@ -254,6 +254,8 @@ useDetailRail(() => ({
           <SourcesSection
             :items="store.filteredSources"
             :loading="store.loading"
+            level="area"
+            :code="store.area?.code ?? ''"
             @reload="reload"
           />
         </section>

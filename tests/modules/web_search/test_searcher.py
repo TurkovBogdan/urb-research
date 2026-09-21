@@ -17,6 +17,22 @@ def test_default_engines_fall_back_to_tavily_without_settings():
     assert Searcher._default_fetch_engine() == "tavily"
 
 
+@pytest.mark.pure
+def test_refetch_chunk_is_one_wave_of_batches(monkeypatch):
+    """Кусок повтора = батч движка × параллелизм: ровно столько страниц уходит одной волной."""
+    monkeypatch.setattr(searcher.settings, "fetch_concurrency", lambda: 2)
+
+    assert Searcher.refetch_chunk_size(fetch_engine="firecrawl") == 2  # батч из одной страницы
+
+
+@pytest.mark.pure
+def test_refetch_chunk_is_capped(monkeypatch):
+    """Настройка параллелизма не вправе растить кусок бесконечно: ждать его человеку."""
+    monkeypatch.setattr(searcher.settings, "fetch_concurrency", lambda: 50)
+
+    assert Searcher.refetch_chunk_size(fetch_engine="tavily") == searcher.REFETCH_CHUNK_MAX
+
+
 @pytest.fixture
 async def db(config: Config):
     engine = await init_database(config)

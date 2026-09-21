@@ -1,1 +1,0 @@
-import{bh as n,be as l,bg as o,bi as s,bN as u,bn as f,bt as i}from"./index-CgsQ0K78.js";const e=i(null);function r(){return e}function v(t){const a=f(!1);n(()=>{a.value=!0}),l(()=>{a.value=!0}),o(()=>{a.value=!1}),s(()=>{a.value=!1}),u(()=>{a.value&&(e.value=t())})}export{r as d,v as u};

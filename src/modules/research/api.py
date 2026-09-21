@@ -24,6 +24,11 @@
   ``sources_refetch``: содержимое не пишет, а добирает то, что не скачалось. По уровню чинятся
   источники без материала (``error``), по одиночному коду — он сам в любом статусе, и его разбор
   при этом сбрасывается.
+- **Повтор кусками** (``GET .../documents/unfetched`` + ``POST /documents/refetch``) — тот же
+  ремонт, но заказанный человеком из интерфейса: сперва план (страницы, которых не хватает),
+  затем куски по ``chunk_size`` кодов, которые браузер шлёт по одному. Ручки уровня качают всё
+  одним запросом и потому годятся только скриптам: сотни страниц не укладываются ни в потолок
+  ожидания зоны, ни в представление человека о том, что происходит.
 
 Зона ``internal`` в чистом ядре открыта (``allow_all``), guard не нужен.
 """
@@ -83,14 +88,17 @@ from src.modules.research.dto import (
     CodeLabel,
     ReferencesBody,
     SourceQueryDetail,
+    UnfetchedPlan,
     group_fields,
     group_style_fields,
     source_document_detail,
     source_document_row,
+    unfetched_page_row,
 )
 from src.modules.research.models.area import ResearchArea
 from src.modules.research.models.note import ResearchNote
-from src.modules.research.services.refetch import refetch_sources
+from src.modules.research.services.refetch import plan_unfetched, refetch_sources
+from src.modules.web_search.services.searcher import REFETCH_CHUNK_MAX, Searcher
 from src.modules.research.transfer.api import router as transfer_router
 from src.modules.research.services.search import search_bodies, search_groups, search_researches
 
@@ -158,6 +166,16 @@ class AreaDescriptionBody(BaseModel):
     description: Annotated[
         str, StringConstraints(strip_whitespace=True, max_length=AREA_DESCRIPTION_MAX)
     ]
+
+
+class RefetchChunkBody(BaseModel):
+    """Тело ``POST /documents/refetch``: коды источников одного куска работы.
+
+    Потолок тот же, каким меряет кусок план (``UnfetchedPlan.chunk_size``): ручка блокирующая,
+    и список длиннее означает, что заказчик режет работу не по плану, а как придётся.
+    """
+
+    codes: list[str] = Field(min_length=1, max_length=REFETCH_CHUNK_MAX)
 
 
 class NoteDescriptionBody(BaseModel):
@@ -546,6 +564,50 @@ async def _refetched_rows(
             "Движок получения контента выключен в настройках"
         ) from None
     return [source_document_row(doc, page) for doc, page in rows]
+
+
+def _unfetched_plan(
+    documents: list[source_document_crud.SourceDocumentWithPage],
+) -> UnfetchedPlan:
+    return UnfetchedPlan(
+        pages=[
+            unfetched_page_row(doc, page, sources=sources)
+            for doc, page, sources in plan_unfetched(documents)
+        ],
+        sources_total=len(documents),
+        chunk_size=Searcher.refetch_chunk_size(),
+    )
+
+
+@router.get("/researches/{research_code}/documents/unfetched")
+async def list_research_unfetched(research_code: str) -> UnfetchedPlan:
+    """План повтора по исследованию: источники без материала, свёрнутые до страниц."""
+    broken = await source_document_crud.source_document_list_by_research(
+        strip_prefix(research_code), status=DOC_ERROR
+    )
+    return _unfetched_plan(broken)
+
+
+@router.get("/areas/{area_code}/documents/unfetched")
+async def list_area_unfetched(area_code: str) -> UnfetchedPlan:
+    """План повтора по области."""
+    broken = await source_document_crud.source_document_list_by_area(
+        strip_prefix(area_code), status=DOC_ERROR
+    )
+    return _unfetched_plan(broken)
+
+
+@router.post("/documents/refetch")
+async def refetch_documents(payload: RefetchChunkBody) -> list[ResearchSourceDocumentRow]:
+    """Перекачать материал названных источников — один кусок плана.
+
+    Исчезнувший код просто не попадает в ответ: кусок собран по плану, а план между его выдачей
+    и нажатием мог устареть — агент успевает и удалить прогон, и перекачать те же страницы сам.
+    """
+    documents = await source_document_crud.source_document_list_by_codes(
+        [strip_prefix(code) for code in payload.codes]
+    )
+    return await _refetched_rows(documents)
 
 
 @router.post("/areas/{area_code}/documents/refetch")
