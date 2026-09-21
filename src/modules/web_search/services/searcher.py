@@ -48,6 +48,11 @@ _SLOT_POLL_MIN_SECONDS = 0.5
 _SLOT_POLL_MAX_SECONDS = 1.5
 _PROCESSING_STALE_TTL = timedelta(minutes=15)
 
+# Потолок одного повтора получения. Большой ремонт режет на куски тот, кто его заказал (браузер
+# шлёт их по одному), и кусок обязан укладываться в человеческое ожидание, а не в терпение движка:
+# у одной волны батчей ожидание растёт вместе с настройкой параллелизма.
+REFETCH_CHUNK_MAX = 50
+
 # Ссылки на живые фоновые прогоны (``submit``): без них ``asyncio`` может собрать task
 # сборщиком до завершения. Снимается в done-callback.
 _BACKGROUND_TASKS: set[asyncio.Task[None]] = set()
@@ -183,6 +188,13 @@ class Searcher:
         await _fetch_pages(fetcher, await page_crud.pages_by_codes(page_codes))
 
     @staticmethod
+    def refetch_chunk_size(*, fetch_engine: str | None = None) -> int:
+        """Сколько страниц просить за один ``refetch``, чтобы вышла ровно одна волна батчей."""
+        fetcher = fetch_engine_registry.get(fetch_engine or Searcher._default_fetch_engine())
+        one_wave = fetcher.pages_per_request * settings.fetch_concurrency()
+        return min(one_wave, REFETCH_CHUNK_MAX)
+
+    @staticmethod
     def _default_search_engine() -> str:
         """Дефолтный движок поиска (настройка), когда в запуске не передан явный."""
         return settings.search_engine()
@@ -278,4 +290,4 @@ async def _fetch_pages(fetcher: FetchEngine, pages: list[WebSearchPage]) -> None
     await asyncio.gather(*(run(batch) for batch in batches))
 
 
-__all__ = ["Searcher"]
+__all__ = ["REFETCH_CHUNK_MAX", "Searcher"]

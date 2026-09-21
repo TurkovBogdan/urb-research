@@ -439,12 +439,65 @@ export async function listResearchDocuments(researchCode: string): Promise<Sourc
 // снимается (вердикт был вынесен по прежнему материалу). Отвечает затронутая строка — по её новому
 // статусу видно, чем кончилось: `pending` = материал пришёл, `error` = снова нет.
 //
-// Ручки уровня исследования и области (`POST .../documents/refetch`) у бэкенда есть, но интерфейс
-// их не зовёт: «перекачать всё сломанное» — долгий прогон, по итогу которого не видно, что именно
-// чинили. Массово это делает агент своим тулом `sources_refetch`.
+// Ручки уровня исследования и области (`POST .../documents/refetch`) качают всё одним запросом и
+// остаются скриптам: сотни страниц не укладываются ни в потолок ожидания зоны, ни в представление
+// человека о происходящем. Интерфейс чинит массово по плану (`unfetched`) кусками (`refetchSources`).
+
+// Страница качается дольше, чем живёт обычный запрос зоны (20 с): у демона-скрейпера один батч
+// ждёт до трёх минут. Потолок кладём с запасом — рубить на полпути нечем, бэк всё равно доведёт
+// начатое до конца, а клиент останется без ответа.
+const REFETCH_TIMEOUT_MS = 5 * 60 * 1000
+
+/** Страница без материала: сколько источников её ждут и почему она не дошла. */
+export interface UnfetchedPage {
+  /** Код ОДНОГО из ждущих источников — просят по источнику, чинится страница. */
+  code: string
+  url: string | null
+  title: string | null
+  error: string | null
+  sources: number
+}
+
+export interface UnfetchedPlan {
+  pages: UnfetchedPage[]
+  sources_total: number
+  /** Сколько кодов слать за раз: размер куска знает бэк — он зависит от движка получения. */
+  chunk_size: number
+}
+
+const UNFETCHED_LEVEL = { research: 'researches', area: 'areas' } as const
+
+export type SourcesLevel = keyof typeof UNFETCHED_LEVEL
+
+export async function listUnfetched(
+  level: SourcesLevel,
+  code: string,
+  opts: RequestOptions = {},
+): Promise<UnfetchedPlan> {
+  return internalApi.get<UnfetchedPlan>(
+    `${BASE}/${UNFETCHED_LEVEL[level]}/${seg(code)}/documents/unfetched`,
+    opts,
+  )
+}
+
+/** Один кусок плана. Исчезнувший код бэк молча пропускает — отвечают только тронутые строки. */
+export async function refetchSources(
+  codes: string[],
+  opts: RequestOptions = {},
+): Promise<SourceDocumentRow[]> {
+  return internalApi.post<SourceDocumentRow[]>(
+    `${BASE}/documents/refetch`,
+    { codes },
+    { timeoutMs: REFETCH_TIMEOUT_MS, ...opts },
+  )
+}
 
 export async function refetchSourceDocument(code: string): Promise<SourceDocumentRow> {
-  return internalApi.post<SourceDocumentRow>(`${BASE}/source-documents/${seg(code)}/refetch`)
+  return internalApi.post<SourceDocumentRow>(
+    `${BASE}/source-documents/${seg(code)}/refetch`,
+    undefined,
+    { timeoutMs: REFETCH_TIMEOUT_MS },
+  )
 }
 
 export async function getNote(code: string): Promise<NoteDetail> {

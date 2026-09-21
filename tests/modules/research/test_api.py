@@ -24,6 +24,7 @@ from src.modules.research.crud import research as research_crud
 from src.modules.research.crud import source_document as source_document_crud
 from src.modules.research.crud import source_query as source_query_crud
 from src.modules.web_search.crud import page as page_crud
+from src.modules.web_search.services.searcher import REFETCH_CHUNK_MAX
 
 pytestmark = pytest.mark.db
 
@@ -1739,6 +1740,123 @@ async def test_refetch_refuses_a_disabled_fetch_engine(client, use_search, monke
     r = await client.post(f"{BASE}/researches/{tree['research']}/documents/refetch")
 
     assert r.status_code == 400
+
+
+# ── Повтор получения кусками: план + кусок ────────────────────────────────────
+
+
+async def _twin_source_on_the_same_page(tree: dict[str, str]) -> str:
+    """Второй источник той же страницы (другой прогон поиска нашёл тот же url)."""
+    query = await source_query_crud.source_query_create(
+        research_code=tree["research"],
+        area_code=tree["area"],
+        search_code="1" * 22,
+        query="тот же url другим запросом",
+    )
+    twin = await source_document_crud.source_document_create(
+        research_code=tree["research"],
+        area_code=tree["area"],
+        query_code=query.code,
+        page_code=tree["page"],
+    )
+    await source_document_crud.source_document_reset_by_codes([twin.code])
+    return twin.code
+
+
+async def test_unfetched_plan_folds_sources_of_one_page(client):
+    """План считается страницами: два источника одного url — одна работа, а не две."""
+    tree = await _tree_with_broken_source("https://example.test/shared")
+    await _twin_source_on_the_same_page(tree)
+
+    plan = (
+        await client.get(f"{BASE}/researches/{tree['research']}/documents/unfetched")
+    ).json()
+
+    assert plan["sources_total"] == 2
+    assert [(page["url"], page["sources"]) for page in plan["pages"]] == [
+        ("https://example.test/shared", 2)
+    ]
+
+
+async def test_unfetched_plan_names_the_reason_and_sizes_the_chunk(client):
+    tree = await _tree_with_broken_source("https://example.test/why")
+
+    plan = (
+        await client.get(f"{BASE}/researches/{tree['research']}/documents/unfetched")
+    ).json()
+
+    assert plan["pages"][0]["error"] == "ConnectError"
+    assert 1 <= plan["chunk_size"] <= REFETCH_CHUNK_MAX
+
+
+async def test_unfetched_plan_leaves_out_sources_with_material(client):
+    tree = await _build_tree("Целое", url="https://example.test/whole")
+    await page_crud.page_set_body(tree["page"], body="# материал")
+
+    plan = (
+        await client.get(f"{BASE}/researches/{tree['research']}/documents/unfetched")
+    ).json()
+
+    assert plan == {"pages": [], "sources_total": 0, "chunk_size": plan["chunk_size"]}
+
+
+async def test_unfetched_plan_takes_the_area_level(client):
+    tree = await _tree_with_broken_source("https://example.test/area-plan")
+
+    plan = (await client.get(f"{BASE}/areas/{tree['area']}/documents/unfetched")).json()
+
+    assert [page["code"] for page in plan["pages"]] == [f"SOURCE@{tree['document']}"]
+
+
+async def test_refetch_chunk_revives_the_named_sources(client, use_search):
+    tree = await _tree_with_broken_source("https://example.test/chunk")
+    use_search(pages={"https://example.test/chunk": "# материал"})
+
+    r = await client.post(
+        f"{BASE}/documents/refetch", json={"codes": [f"SOURCE@{tree['document']}"]}
+    )
+
+    assert r.status_code == 200
+    assert [row["status"] for row in r.json()] == ["pending"]
+
+
+async def test_refetch_chunk_heals_the_twin_of_the_same_page(client, use_search):
+    """В кусок попадает один источник страницы — оживает вся её родня: качается страница."""
+    tree = await _tree_with_broken_source("https://example.test/twins")
+    twin = await _twin_source_on_the_same_page(tree)
+    use_search(pages={"https://example.test/twins": "# материал"})
+
+    await client.post(f"{BASE}/documents/refetch", json={"codes": [f"SOURCE@{tree['document']}"]})
+
+    doc, _ = await source_document_crud.source_document_get(twin)
+    assert doc.status == "pending"
+
+
+async def test_refetch_chunk_ignores_a_code_that_is_gone(client, use_search):
+    """План мог устареть между выдачей и нажатием — исчезнувший код не роняет кусок целиком."""
+    tree = await _tree_with_broken_source("https://example.test/stale")
+    use_search(pages={"https://example.test/stale": "# материал"})
+
+    r = await client.post(
+        f"{BASE}/documents/refetch",
+        json={"codes": [f"SOURCE@{tree['document']}", f"SOURCE@{MISSING}"]},
+    )
+
+    assert r.status_code == 200
+    assert [row["code"] for row in r.json()] == [f"SOURCE@{tree['document']}"]
+
+
+async def test_refetch_chunk_refuses_a_list_over_the_ceiling(client):
+    r = await client.post(
+        f"{BASE}/documents/refetch",
+        json={"codes": [f"SOURCE@{MISSING}"] * (REFETCH_CHUNK_MAX + 1)},
+    )
+
+    assert r.status_code == 422
+
+
+async def test_refetch_chunk_refuses_an_empty_list(client):
+    assert (await client.post(f"{BASE}/documents/refetch", json={"codes": []})).status_code == 422
 
 
 # ── Глубокий поиск: по телам зон, заметок и материалу источников ──────────────

@@ -264,6 +264,32 @@ class ResearchSourceDocumentDetail(AgentSourceDocumentDetail):
     area_title: str = ""
 
 
+class UnfetchedPageRow(BaseModel):
+    """Страница без материала: чем она является, почему не дошла и сколько источников её ждут.
+
+    ``code`` — код одного из этих источников: повтор заказывают по источнику, а чинится
+    страница, и она снимает ``error`` со всех своих источников разом.
+    """
+
+    code: SourceDocumentCode
+    url: str | None = None
+    title: str | None = None
+    error: str | None = None
+    sources: int
+
+
+class UnfetchedPlan(BaseModel):
+    """Что предстоит перекачать на уровне и каким куском это просить.
+
+    ``chunk_size`` считает движок контента (одна волна его батчей): резать работу на куски —
+    дело заказчика повтора, но размер куска знает тот, кто качает.
+    """
+
+    pages: list[UnfetchedPageRow] = []
+    sources_total: int = 0
+    chunk_size: int = 1
+
+
 class AgentSkippedCode(BaseModel):
     """Код, по которому качать оказалось нечего — любого из принятых типов, как его передали,
     — и причина."""
@@ -597,6 +623,19 @@ def source_document_row(
 ) -> ResearchSourceDocumentRow:
     """Собрать строку источника: свои поля + url/title из join'а страницы."""
     return ResearchSourceDocumentRow(**_source_document_fields(doc, page))
+
+
+def unfetched_page_row(
+    doc: "ResearchSourceDocument", page: "WebSearchPage | None", *, sources: int
+) -> UnfetchedPageRow:
+    """Строка плана повтора: страница глазами её источника + причина отказа из самой страницы."""
+    return UnfetchedPageRow(
+        code=doc.code,
+        url=page.url if page else None,
+        title=page.title if page else None,
+        error=page.error if page else None,
+        sources=sources,
+    )
 
 
 def agent_source_document_detail(
