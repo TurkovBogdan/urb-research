@@ -75,12 +75,18 @@ export interface ConnectorCheck {
   error: string | null
 }
 
+/**
+ * Подключение к сервису. У коннектора их бывает несколько (скрейпер напрямую и через VPN);
+ * модули ходят через первое, если в их настройках не выбрано другое. Список приходит в
+ * порядке заведения, поэтому первое — это первый элемент.
+ */
 export interface AccessRow {
   id: number
   enabled: boolean
   connector: string
   connector_name: string
-  is_default: boolean
+  // Название подключения; `null` — без названия.
+  title: string | null
   status: AccessStatus
   created_at: string
   updated_at: string
@@ -100,6 +106,8 @@ export interface AccessDetail extends AccessRow {
 
 export interface AccessPayload {
   enabled?: boolean
+  // Пустая строка снимает название.
+  title?: string
   values?: Record<string, string>
   clear?: string[]
 }

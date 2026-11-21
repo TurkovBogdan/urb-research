@@ -24,6 +24,7 @@
     "field": {
       "search_engine": "Поисковый движок",
       "fetch_engine": "Движок контента",
+      "fetch_engine_by_settings": "По настройкам",
       "created_at": "Создан",
       "finished_at": "Завершён"
     },
