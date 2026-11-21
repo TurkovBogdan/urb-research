@@ -122,6 +122,34 @@ async def test_reset_writes_default_and_dispatches(db):
 
 
 @pytest.mark.db
+async def test_provided_choice_survives_a_reload_after_its_option_is_gone(db):
+    options = [("direct", "Напрямую"), ("vpn", "Через VPN")]
+
+    async def connections() -> list[tuple[str, str]]:
+        return options
+
+    class Routed(Module):
+        name = "routed"
+        settings_schema = (
+            ChoiceField(
+                key="route", label="R", default_="direct", options_provider=connections
+            ),
+        )
+
+    reg = get_registry()
+    reg.register_schema(Routed())
+    await reg.load_initial("routed")
+    await reg.update("routed", "route", "vpn")
+
+    options.pop()  # подключение «Через VPN» удалили в другом модуле
+    await reg.load_initial("routed")
+
+    assert reg.get("routed").route == "vpn"  # выбор человека не сброшен к умолчанию молча
+    with pytest.raises(ValueError):
+        await reg.update("routed", "route", "vpn")
+
+
+@pytest.mark.db
 async def test_corrupt_db_row_falls_back_to_default(db):
     reg = get_registry()
     m = _M()

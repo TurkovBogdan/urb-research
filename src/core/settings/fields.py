@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import json
 from abc import ABC, abstractmethod
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any, ClassVar
@@ -78,6 +78,18 @@ class Field(ABC):
     @abstractmethod
     def ui_descriptor(self) -> dict[str, Any]:
         """Описатель поля для UI."""
+
+    async def validate_input(self, value: Any) -> None:
+        """Проверка значения на записи.
+
+        Строже ``validate`` там, где допустимое зависит от состояния вне схемы (варианты
+        выбора из базы): перечитка такое значение не сбрасывает, а запись — не принимает.
+        """
+        self.validate(value)
+
+    async def resolved_ui_descriptor(self) -> dict[str, Any]:
+        """Описатель поля для UI с тем, что известно только в момент запроса."""
+        return self.ui_descriptor()
 
     def is_secret(self) -> bool:
         """Секрет (токен/пароль): маскируется на чтение, не логируется."""
@@ -362,10 +374,17 @@ def _normalize_options(
     return tuple((str(k), str(v)) for k, v in options)
 
 
+OptionsProvider = Callable[[], Awaitable[Sequence[tuple[str, str]]]]
+
+
 @dataclass(frozen=True)
 class ChoiceField(Field):
     default_: str = ""
     options: tuple[tuple[str, str], ...] = ()
+    #: Варианты, которые знает только рантайм (например, подключения из базы): зовётся при
+    #: показе формы и при записи. Перечитка проверяет у такого поля лишь тип — вариант,
+    #: исчезнувший из базы, не должен молча сбрасывать выбор человека к умолчанию.
+    options_provider: OptionsProvider | None = None
 
     kind: ClassVar[str] = "choice"
 
@@ -389,7 +408,16 @@ class ChoiceField(Field):
     def validate(self, value: Any) -> None:
         if not isinstance(value, str):
             raise ValueError(f"{self.key}: expected str code")
+        if self.options_provider is not None:
+            return
         if value not in {code for code, _ in self.options}:
+            raise ValueError(f"{self.key}: unknown option {value!r}")
+
+    async def validate_input(self, value: Any) -> None:
+        self.validate(value)
+        if self.options_provider is None:
+            return
+        if value not in {code for code, _ in await self._provided_options()}:
             raise ValueError(f"{self.key}: unknown option {value!r}")
 
     def ui_descriptor(self) -> dict[str, Any]:
@@ -397,6 +425,18 @@ class ChoiceField(Field):
             **self._base_ui(),
             "options": [{"code": c, "label": l} for c, l in self.options],
         }
+
+    async def resolved_ui_descriptor(self) -> dict[str, Any]:
+        if self.options_provider is None:
+            return self.ui_descriptor()
+        return {
+            **self._base_ui(),
+            "options": [{"code": c, "label": l} for c, l in await self._provided_options()],
+        }
+
+    async def _provided_options(self) -> tuple[tuple[str, str], ...]:
+        assert self.options_provider is not None
+        return _normalize_options(await self.options_provider())
 
 
 @dataclass(frozen=True)
@@ -508,9 +548,21 @@ class ListField(Field):
                 f"{self.key}: items > max_items ({self.max_items})"
             )
 
+    async def validate_input(self, value: Any) -> None:
+        self.validate(value)
+        assert self.item is not None
+        for x in value:
+            await self.item.validate_input(x)
+
     def ui_descriptor(self) -> dict[str, Any]:
         assert self.item is not None
-        item_desc = self.item.ui_descriptor()
+        return self._list_ui(self.item.ui_descriptor())
+
+    async def resolved_ui_descriptor(self) -> dict[str, Any]:
+        assert self.item is not None
+        return self._list_ui(await self.item.resolved_ui_descriptor())
+
+    def _list_ui(self, item_desc: dict[str, Any]) -> dict[str, Any]:
         # Элемент списка — это тип значения, а не отдельная настройка: собственного ключа,
         # подписи, места в блоке и условия видимости у него нет.
         for own_field_only in ("key", "label", "description", "default", "group", "visible_when"):

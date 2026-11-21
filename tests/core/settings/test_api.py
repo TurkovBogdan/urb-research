@@ -12,7 +12,7 @@ from src.core.settings.bootstrap import (
     register_settings_schemas,
 )
 from src.core.api import register_exception_handlers
-from src.core.settings.fields import ChoiceField, IntField, StrField
+from src.core.settings.fields import ChoiceField, IntField, ListField, StrField
 from src.core.config import Config
 from src.core.database import close_database, init_database
 from src.core.database.runtime import Base
@@ -38,12 +38,26 @@ class _SecretM(Module):
     )
 
 
+async def _routes() -> list[tuple[str, str]]:
+    return [("direct", "Напрямую"), ("vpn", "Через VPN")]
+
+
+class _RoutedM(Module):
+    """Варианты выбора, которых нет в коде, и список строк — как у маршрутов web_search."""
+
+    name = "routed_m"
+    settings_schema = (
+        ChoiceField(key="route", label="Route", default_="direct", options_provider=_routes),
+        ListField(key="zones", label="Zones", item=StrField(key="zone", label="Zone")),
+    )
+
+
 @pytest.fixture
 async def app():
     engine = await init_database(Config())
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    modules = [_M(), _SecretM()]
+    modules = [_M(), _SecretM(), _RoutedM()]
     register_settings_schemas(modules)
     await load_initial_stores(modules)
     fastapi_app = FastAPI()
@@ -79,6 +93,37 @@ async def test_get_module(client):
     assert body["values"] == {"n": 5, "mode": "a"}
     keys = [f["key"] for f in body["fields"]]
     assert keys == ["n", "mode"]
+
+
+@pytest.mark.db
+async def test_provided_options_reach_the_form(client):
+    r = await client.get("/internal/core/settings/routed_m")
+
+    fields = {f["key"]: f for f in r.json()["fields"]}
+    assert fields["route"]["options"] == [
+        {"code": "direct", "label": "Напрямую"},
+        {"code": "vpn", "label": "Через VPN"},
+    ]
+    assert fields["zones"]["kind"] == "list" and fields["zones"]["item"]["kind"] == "str"
+
+
+@pytest.mark.db
+async def test_a_provided_choice_takes_only_a_provided_option(client):
+    accepted = await client.put("/internal/core/settings/routed_m/route", json={"value": "vpn"})
+    refused = await client.put("/internal/core/settings/routed_m/route", json={"value": "gone"})
+
+    assert accepted.status_code == 200 and accepted.json()["values"]["route"] == "vpn"
+    assert refused.status_code == 422 and refused.json()["fields"]["route"]
+
+
+@pytest.mark.db
+async def test_a_list_setting_round_trips_through_the_api(client):
+    r = await client.put(
+        "/internal/core/settings/routed_m/zones", json={"value": [".ru", ".рф"]}
+    )
+
+    assert r.status_code == 200
+    assert r.json()["values"]["zones"] == [".ru", ".рф"]
 
 
 @pytest.mark.db
