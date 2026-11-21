@@ -28,17 +28,21 @@ from src.modules.core_connectors.errors import (
 router = APIRouter()
 
 
-# Длина совпадает с колонкой ``core_connectors_access.connector``: слишком длинное значение
-# должно отвергаться проверкой формы, а не падать на вставке в Postgres (SQLite длину
-# игнорирует, поэтому в dev дефект был бы не виден).
+# Длины совпадают с колонками ``core_connectors_access``: слишком длинное значение должно
+# отвергаться проверкой формы, а не падать на вставке в Postgres (SQLite длину игнорирует,
+# поэтому в dev дефект был бы не виден).
+#
+# Умолчания в теле нет: им всегда остаётся первое подключение коннектора.
 class CreateAccessBody(BaseModel):
     connector: str = Field(max_length=64)
+    title: str | None = Field(default=None, max_length=96)
     values: dict[str, str] = {}
     enabled: bool = True
 
 
 class UpdateAccessBody(BaseModel):
     enabled: bool | None = None
+    title: str | None = Field(default=None, max_length=96)
     values: dict[str, str] = {}
     clear: list[str] = []
 
@@ -64,7 +68,10 @@ async def get_access(access_id: int) -> AccessDetail:
 async def create_access(body: CreateAccessBody) -> AccessRow:
     try:
         return await service.create_access(
-            connector=body.connector, values=body.values, enabled=body.enabled
+            connector=body.connector,
+            values=body.values,
+            enabled=body.enabled,
+            title=body.title,
         )
     except UnknownConnector as exc:
         raise ApiError.bad_request(str(exc))
@@ -77,7 +84,11 @@ async def create_access(body: CreateAccessBody) -> AccessRow:
 async def update_access(access_id: int, body: UpdateAccessBody) -> AccessRow:
     try:
         row = await service.update_access(
-            access_id, enabled=body.enabled, values=body.values, clear=body.clear
+            access_id,
+            enabled=body.enabled,
+            title=body.title,
+            values=body.values,
+            clear=body.clear,
         )
     except AccessUndecryptable as exc:
         # Мастер-ключ пропал или сменился: сказать об этом прямо честнее, чем записать

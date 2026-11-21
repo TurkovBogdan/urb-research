@@ -6,7 +6,9 @@ ORM ``WebSearchPage`` + её read-DTO (``PageRow`` — зеркало строк
 ключ дедупа по url (web_search коды не типизирует — префиксы живут в research). Хранится
 только обработанный ``body`` (markdown) + ``body_hash`` для change-detection (raw не
 храним). ``fetch_engine`` — движок, которым тянули (или потянут) контент (nullable — страница
-создаётся до фетча и переиспользуется по дедупу; нужен для per-engine учёта фетча).
+создаётся до фетча и переиспользуется по дедупу; нужен для per-engine учёта фетча);
+``fetch_access_id`` — подключение этого движка (id записи ``core_connectors_access``, без
+внешнего ключа: запись чужого модуля, её могут удалить, а история попытки остаётся).
 ``title`` — заголовок документа (свойство самой страницы, независимое от запроса; берётся из
 выдачи поиска при создании — первый нашедший движок задаёт, дедуп не перетирает). Машина
 статусов ``pending`` (создана) → ``processing`` (идёт получение) → ``done``
@@ -19,7 +21,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import CheckConstraint, Index, String, Text
+from sqlalchemy import CheckConstraint, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.core.database.runtime import Base
@@ -45,6 +47,7 @@ class WebSearchPage(Base):
     code: Mapped[str] = mapped_column(String(25), primary_key=True)
     status: Mapped[str] = mapped_column(String(16), server_default=FETCH_STATUS_PENDING)
     fetch_engine: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    fetch_access_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     domain: Mapped[str | None] = mapped_column(String(255), nullable=True)
     url: Mapped[str] = mapped_column(Text)
     title: Mapped[str | None] = mapped_column(String(512), nullable=True)

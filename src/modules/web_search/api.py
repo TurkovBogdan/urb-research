@@ -29,7 +29,11 @@ _MAX_PAGE_SIZE = 200
 
 
 class CreateQueryBody(BaseModel):
-    """Тело ``POST /queries``: текст запроса + опциональные движки/лимит (None → дефолт настроек)."""
+    """Тело ``POST /queries``: текст запроса + опциональные движки/лимит (None → дефолт настроек).
+
+    Явный ``fetch_engine`` (код движка или маршрута) заменяет политику получения контента
+    целиком: только он, без запасного и зон.
+    """
 
     query: str = Field(min_length=1, max_length=2000)
     search_engine: str | None = None
@@ -43,6 +47,7 @@ class EnginesInfo(BaseModel):
     search: list[str]
     fetch: list[str]
     search_default: str
+    # Пусто — контент по настройкам модуля: основной движок, запасной и их зоны.
     fetch_default: str
 
 
@@ -100,7 +105,7 @@ async def list_engines() -> EnginesInfo:
         search=await Searcher.search_engines(),
         fetch=await Searcher.fetch_engines(),
         search_default=settings.search_engine(),
-        fetch_default=settings.fetch_engine(),
+        fetch_default="",
     )
 
 

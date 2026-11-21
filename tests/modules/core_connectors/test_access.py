@@ -129,7 +129,7 @@ async def test_detail_never_returns_the_secret(db):
 
 async def test_non_secret_field_is_returned_as_is(db):
     row = await service.create_access(
-        connector="web_scrapper", values={"base_url": "http://127.0.0.1:19020"}
+        connector="simple_web_scraper", values={"base_url": "http://127.0.0.1:19020"}
     )
 
     detail = await service.access_detail(row.id)
@@ -139,7 +139,7 @@ async def test_non_secret_field_is_returned_as_is(db):
 
 async def test_daemon_without_a_token_is_a_legitimate_configuration(db):
     # У локального демона авторизация может быть выключена — обязательных полей нет
-    row = await service.create_access(connector="web_scrapper", values={})
+    row = await service.create_access(connector="simple_web_scraper", values={})
 
     assert row.status.status == ACCESS_STATUS_OK
 
@@ -186,7 +186,7 @@ async def test_encryption_switched_on_later_seals_the_next_write(db, monkeypatch
 async def test_a_key_that_appeared_later_seals_the_records_that_were_open(db, monkeypatch):
 
     row = await service.create_access(connector="tavily", values={"api_key": "plain"})
-    await service.create_access(connector="web_scrapper", values={"base_url": "http://x"})
+    await service.create_access(connector="simple_web_scraper", values={"base_url": "http://x"})
     assert (await crud.access_get(row.id)).values["api_key"] == "plain"
 
     key = base64.urlsafe_b64encode(os.urandom(32)).decode().rstrip("=")
@@ -231,6 +231,20 @@ async def test_a_record_of_another_connector_is_refused(db):
         await service.open_connector("tavily", access=foreign.id)
 
 
+async def test_readiness_of_a_named_connection_is_its_own(db):
+    direct = await service.create_access(connector="simple_web_scraper", values={})
+    vpn = await service.create_access(connector="simple_web_scraper", values={})
+    foreign = await service.create_access(connector="tavily", values={"api_key": "k"})
+    await service.update_access(vpn.id, enabled=False)
+
+    assert await service.access_available("simple_web_scraper", access=direct.id) is True
+    assert await service.access_available("simple_web_scraper", access=vpn.id) is False
+    # Чужая запись не делает готовым этот сервис, даже если сама готова
+    assert await service.access_available("simple_web_scraper", access=foreign.id) is False
+    assert await service.access_available("simple_web_scraper", access=10_000) is False
+    assert await service.access_available("simple_web_scraper") is True  # умолчание — direct
+
+
 async def test_an_explicit_record_of_the_same_connector_is_taken(db):
     first = await service.create_access(connector="tavily", values={"api_key": "first"})
     second = await service.create_access(connector="tavily", values={"api_key": "second"})
@@ -241,16 +255,63 @@ async def test_an_explicit_record_of_the_same_connector_is_taken(db):
     assert second.id != first.id
 
 
-async def test_only_one_record_stays_default_per_connector(db):
+async def test_only_the_first_record_is_the_default(db):
     first = await service.create_access(connector="tavily", values={"api_key": "first"})
     second = await service.create_access(connector="tavily", values={"api_key": "second"})
+    third = await service.create_access(connector="tavily", values={"api_key": "third"})
 
     rows = {row.id: row for row in await service.access_rows(connector="tavily")}
 
-    assert rows[first.id].is_default is False
-    assert rows[second.id].is_default is True
-    # Умолчание — то, что отмечено последним, а не то, что раньше по id
-    assert (await service.open_connector("tavily")).access.require("api_key") == "second"
+    assert [rows[r.id].is_default for r in (first, second, third)] == [True, False, False]
+    assert (await service.open_connector("tavily")).access.require("api_key") == "first"
+
+
+async def test_a_second_connection_does_not_take_over_the_default(db):
+    # Второе подключение заводят рядом (скрейпер через VPN) — модули ходят прежним путём
+    direct = await service.create_access(
+        connector="simple_web_scraper", title="Напрямую", values={"base_url": "http://d:19020"}
+    )
+    vpn = await service.create_access(
+        connector="simple_web_scraper", title="Через VPN", values={"base_url": "http://v:19021"}
+    )
+
+    assert (direct.is_default, vpn.is_default) == (True, False)
+    connector = await service.open_connector("simple_web_scraper")
+    assert connector.access.get("base_url") == "http://d:19020"
+
+
+async def test_deleting_the_default_passes_it_to_the_oldest_connection(db):
+    direct = await service.create_access(connector="simple_web_scraper", values={})
+    vpn = await service.create_access(connector="simple_web_scraper", values={})
+    spare = await service.create_access(connector="simple_web_scraper", values={})
+
+    await service.delete_access(direct.id)
+
+    rows = {row.id: row for row in await service.access_rows(connector="simple_web_scraper")}
+    assert (rows[vpn.id].is_default, rows[spare.id].is_default) == (True, False)
+
+
+async def test_deleting_a_spare_connection_keeps_the_default(db):
+    direct = await service.create_access(connector="simple_web_scraper", values={})
+    vpn = await service.create_access(connector="simple_web_scraper", values={})
+
+    await service.delete_access(vpn.id)
+
+    rows = await service.access_rows(connector="simple_web_scraper")
+    assert [(row.id, row.is_default) for row in rows] == [(direct.id, True)]
+
+
+async def test_title_is_trimmed_kept_and_removed_by_an_empty_one(db):
+    row = await service.create_access(
+        connector="simple_web_scraper", title="  Через VPN ", values={}
+    )
+    assert row.title == "Через VPN"
+
+    untouched = await service.update_access(row.id, enabled=False)
+    assert untouched.title == "Через VPN"  # не передано — не тронуто
+
+    removed = await service.update_access(row.id, title="")
+    assert removed.title is None
 
 
 async def test_default_of_one_connector_does_not_touch_another(db):
@@ -287,7 +348,7 @@ async def test_disabling_a_record_takes_effect_at_once(db):
 
 async def test_values_survive_a_toggle_only_update(db):
     row = await service.create_access(
-        connector="web_scrapper", values={"base_url": "http://daemon:19020"}
+        connector="simple_web_scraper", values={"base_url": "http://daemon:19020"}
     )
 
     await service.update_access(row.id, enabled=False)

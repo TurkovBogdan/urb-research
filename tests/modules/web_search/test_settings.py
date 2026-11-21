@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.core.settings.fields import ChoiceField, IntField
+from src.core.settings.fields import ChoiceField, IntField, ListField
 from src.modules.web_search import WebSearchModule
 from src.modules.web_search.settings import SCHEMA
 
@@ -16,9 +16,23 @@ def test_schema_has_search_and_fetch_engines():
     assert isinstance(by_key["fetch_engine"], ChoiceField)
 
     search_opts = {code for code, _ in by_key["search_engine"].options}
-    fetch_opts = {code for code, _ in by_key["fetch_engine"].options}
     assert search_opts == {"tavily", "firecrawl", "xai"}  # Grok умеет искать
-    assert fetch_opts == {"tavily", "firecrawl", "web_scrapper"}  # daemon-web-scrapper — только фетч
+    # Маршруты контента — из подключений в момент показа, а не списком в коде
+    assert by_key["fetch_engine"].options_provider is not None
+    assert by_key["fetch_engine_fallback"].options_provider is not None
+    assert by_key["fetch_engine_fallback"].default() == ""  # запасного нет, пока не выбран
+
+
+@pytest.mark.pure
+def test_schema_has_zone_lists_for_both_fetch_routes():
+    by_key = {f.key: f for f in SCHEMA}
+
+    for key in ("fetch_engine_zones", "fetch_engine_fallback_zones"):
+        field = by_key[key]
+        assert isinstance(field, ListField)
+        field.validate([".ru", ".рф", "example.com", ""])  # пустая строка безвредна
+        with pytest.raises(ValueError):
+            field.validate(["https://example.com/"])  # адрес, а не зона
 
 
 @pytest.mark.pure

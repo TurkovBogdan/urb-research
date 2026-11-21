@@ -230,6 +230,18 @@ async def test_page_set_body_marks_done_with_hash(db):
 
 
 @pytest.mark.db
+async def test_page_remembers_the_engine_and_the_connection_of_its_attempt(db):
+    page = await page_crud.page_upsert("https://example.ru/v")
+
+    await page_crud.pages_mark_processing(
+        [page.code], fetch_engine="simple_web_scraper", fetch_access_id=6
+    )
+
+    marked = await page_crud.page_get_by_code(page.code)
+    assert (marked.fetch_engine, marked.fetch_access_id) == ("simple_web_scraper", 6)
+
+
+@pytest.mark.db
 async def test_page_set_error_is_terminal(db):
     page = await page_crud.page_upsert("https://example.com/e")
     erred = await page_crud.page_set_error(page.code, error="timeout")

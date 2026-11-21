@@ -8,9 +8,10 @@ ORM + её read-DTO рядом. Единственная таблица моду
 полей секрет, знает паспорт, а два места для одной записи означали бы рассинхрон. Секретные
 значения лежат шифртекстом (``access/crypto.py``), несекретные — как есть.
 
-Имени у записи нет: запись опознаётся коннектором, а его имя живёт в паспорте. Своё название
-понадобится в тот день, когда записей на один сервис станет несколько и их придётся
-различать в списке — до тех пор это было бы поле, которое правится, но нигде не показано.
+Записей на один коннектор бывает несколько (два экземпляра скрейпера — напрямую и через VPN),
+поэтому у записи есть своё название: в списке подключений их надо различать. Название
+необязательно — у единственного подключения его роль играет имя коннектора из паспорта.
+Умолчание у коннектора одно: его запись берут потребители, когда не просят конкретную.
 
 Ключ обычный числовой: типизированные коды вида ``TYPE@hash`` — принадлежность MCP-плоскости,
 где агенту надо с одного взгляда отличить исследование от источника. У доступов агентской
@@ -56,6 +57,7 @@ class CoreConnectorsAccess(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     connector: Mapped[str] = mapped_column(String(64))
+    title: Mapped[str | None] = mapped_column(String(96), nullable=True)
     is_default: Mapped[bool] = mapped_column(Boolean, default=True)
     values: Mapped[dict] = mapped_column(json_value(), default=dict)
     data_key: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -78,6 +80,7 @@ class AccessRow(BaseModel):
     enabled: bool
     connector: str
     connector_name: str  # имя из паспорта; пусто, если коннектор снят с регистрации
+    title: str | None  # название подключения; пусто — без названия
     is_default: bool
     status: AccessStatus
     created_at: DatetimeUTCStr

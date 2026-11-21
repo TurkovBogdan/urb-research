@@ -68,8 +68,18 @@ async def test_connector_with_nothing_to_fill_still_gets_its_record(db):
 
     mark = await import_legacy_accesses(module_store("core_connectors"))
 
-    assert mark["connectors"] == ["web_scrapper"]
-    assert await service.access_available("web_scrapper") is True
+    assert mark["connectors"] == ["simple_web_scraper"]
+    assert await service.access_available("simple_web_scraper") is True
+
+
+async def test_renamed_connector_is_read_from_its_old_keys(db):
+    # Строки старой схемы остались под прежним кодом демона, запись заводится под нынешним
+    await _legacy_rows(web_scrapper_base_url="http://daemon:19020")
+
+    await import_legacy_accesses(module_store("core_connectors"))
+
+    connector = await service.open_connector("simple_web_scraper")
+    assert connector.access.get("base_url") == "http://daemon:19020"
 
 
 async def test_pasted_whitespace_around_a_token_is_trimmed(db):

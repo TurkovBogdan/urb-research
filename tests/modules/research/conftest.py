@@ -20,7 +20,12 @@ from src.core.database import close_database, init_database
 from src.core.mcp.context import McpServerContext
 from src.modules.research.mcp import mcp_server
 from src.modules.web_search.providers import registry
-from src.modules.web_search.providers.base import FetchEngine, SearchEngine
+from src.modules.web_search.providers.base import (
+    FetchedPage,
+    FetchEngine,
+    SearchEngine,
+    fetched,
+)
 from src.modules.web_search.providers.request import SearchRequest
 from src.modules.web_search.services.searcher import Searcher
 
@@ -68,7 +73,7 @@ class _StubSearch(SearchEngine, FetchEngine):
 
     code = "stub"
 
-    async def available(self) -> bool:
+    async def available(self, access: int | None = None) -> bool:
         """Записи доступа в core_connectors у заглушки нет — считаем её готовой."""
         return True
 
@@ -81,10 +86,12 @@ class _StubSearch(SearchEngine, FetchEngine):
     async def search(self, request: SearchRequest) -> list[dict[str, Any]]:
         return self.results
 
-    async def fetch_pages(self, urls: list[str]) -> dict[str, str | None]:
+    async def fetch_pages(
+        self, urls: list[str], *, access: int | None = None
+    ) -> dict[str, FetchedPage]:
         if self.fetch_raises is not None:
             raise self.fetch_raises
-        return {url: self.pages.get(url) for url in urls}
+        return {url: fetched(self.pages.get(url)) for url in urls}
 
 
 @pytest.fixture

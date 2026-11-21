@@ -22,12 +22,46 @@ from src.core.database import session_scope, write_scope
 from src.modules.web_search.models.page import WebSearchPage
 from src.modules.web_search.models.query import WebSearchQuery
 from src.modules.web_search.models.query_result import WebSearchQueryResult
+from src.modules.web_search.services.fetch_routes import ROUTE_SEPARATOR
+
+
+# Движки контента, переименованные с тех пор, как архив мог уехать из другой установки: в
+# его строках остался прежний код, а здесь он обязан совпадать с реестром движков.
+_RENAMED_FETCH_ENGINES = {"web_scrapper": "simple_web_scraper"}
 
 
 def _insert_for(session):
     """Диалектный ``INSERT`` с поддержкой ``ON CONFLICT`` (sqlite и postgres расходятся типом)."""
     dialect = session.bind.dialect.name if session.bind else "postgresql"
     return sqlite_insert if dialect == "sqlite" else pg_insert
+
+
+def _current_fetch_engine(code: str | None) -> str | None:
+    """Код движка контента из архива — под нынешним именем и без подключения.
+
+    Прогон хранит код маршрута (``simple_web_scraper:7``), а id подключения в нём —
+    установки-источника: здесь под тем же числом может лежать чужое подключение.
+    """
+    if code is None:
+        return None
+    engine_code = code.partition(ROUTE_SEPARATOR)[0]
+    return _RENAMED_FETCH_ENGINES.get(engine_code, engine_code)
+
+
+def _with_current_fetch_engine(row: dict[str, Any]) -> dict[str, Any]:
+    """Строка архива с кодом движка контента под нынешним именем."""
+    if "fetch_engine" not in row:
+        return row
+    return {**row, "fetch_engine": _current_fetch_engine(row["fetch_engine"])}
+
+
+def _as_local_page(row: dict[str, Any]) -> dict[str, Any]:
+    """Строка страницы из архива, пригодная для этой базы.
+
+    Подключение, которым страницу тянули, обнуляется: id записи доступа принадлежит
+    установке-источнику, а здесь под тем же числом может лежать чужое подключение.
+    """
+    return {**_with_current_fetch_engine(row), "fetch_access_id": None}
 
 
 async def pages_by_codes(codes: list[str]) -> list[WebSearchPage]:
@@ -81,9 +115,9 @@ async def pages_insert(rows: list[dict[str, Any]]) -> int:
     if not rows:
         return 0
     async with write_scope() as s:
-        stmt = _insert_for(s)(WebSearchPage).values(rows).on_conflict_do_nothing(
-            index_elements=["code"]
-        )
+        stmt = _insert_for(s)(WebSearchPage).values(
+            [_as_local_page(row) for row in rows]
+        ).on_conflict_do_nothing(index_elements=["code"])
         await s.execute(stmt)
     return len(rows)
 
@@ -98,7 +132,11 @@ async def page_fill_material(
     fetched_at: Any,
     error: str | None,
 ) -> None:
-    """Дописать материал в существующую страницу (пустую или упавшую) из архива."""
+    """Дописать материал в существующую страницу (пустую или упавшую) из архива.
+
+    Материал получен в другой установке, поэтому и здешнее подключение прошлой попытки к нему
+    больше не относится — оно обнуляется.
+    """
     async with write_scope() as s:
         await s.execute(
             update(WebSearchPage)
@@ -107,7 +145,8 @@ async def page_fill_material(
                 body=body,
                 body_hash=body_hash,
                 status=status,
-                fetch_engine=fetch_engine,
+                fetch_engine=_current_fetch_engine(fetch_engine),
+                fetch_access_id=None,
                 fetched_at=fetched_at,
                 error=error,
             )
@@ -119,9 +158,9 @@ async def searches_insert(rows: list[dict[str, Any]]) -> int:
     if not rows:
         return 0
     async with write_scope() as s:
-        stmt = _insert_for(s)(WebSearchQuery).values(rows).on_conflict_do_nothing(
-            index_elements=["code"]
-        )
+        stmt = _insert_for(s)(WebSearchQuery).values(
+            [_with_current_fetch_engine(row) for row in rows]
+        ).on_conflict_do_nothing(index_elements=["code"])
         await s.execute(stmt)
     return len(rows)
 
@@ -131,7 +170,11 @@ async def search_replace(code: str, values: dict[str, Any]) -> None:
     if not values:
         return
     async with write_scope() as s:
-        await s.execute(update(WebSearchQuery).where(WebSearchQuery.code == code).values(**values))
+        await s.execute(
+            update(WebSearchQuery)
+            .where(WebSearchQuery.code == code)
+            .values(**_with_current_fetch_engine(values))
+        )
 
 
 async def results_insert(rows: list[dict[str, Any]]) -> int:

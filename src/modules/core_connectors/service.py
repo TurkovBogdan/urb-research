@@ -70,10 +70,18 @@ async def open_connector(service: str, *, access: int | None = None) -> Connecto
     return connector_cls(await access_store.ready_values(row))
 
 
-async def access_available(service: str) -> bool:
-    """Готов ли сервис к работе: запись есть, включена и заполнена. Сети не касается."""
-    row = await crud.access_default_for(service)
-    if row is None:
+async def access_available(service: str, *, access: int | None = None) -> bool:
+    """Готов ли сервис к работе: запись есть, включена и заполнена. Сети не касается.
+
+    Без ``access`` — запись по умолчанию; с ним — именно эта запись, и только если она
+    принадлежит этому же сервису (как и в ``open_connector``).
+    """
+    row = (
+        await crud.access_get(access)
+        if access is not None
+        else await crud.access_default_for(service)
+    )
+    if row is None or row.connector != service:
         return False
     return access_store.row_status(row).status == ACCESS_STATUS_OK
 
@@ -162,8 +170,9 @@ async def create_access(
     connector: str,
     values: Mapping[str, str] | None = None,
     enabled: bool = True,
+    title: str | None = None,
 ) -> AccessRow:
-    row = await crud.access_create(connector=connector, values=values, enabled=enabled)
+    row = await crud.access_create(connector=connector, values=values, enabled=enabled, title=title)
     access_store.invalidate(row.id)
     return _row_view(row)
 
@@ -172,10 +181,17 @@ async def update_access(
     access_id: int,
     *,
     enabled: bool | None = None,
+    title: str | None = None,
     values: Mapping[str, str] | None = None,
     clear: Iterable[str] = (),
 ) -> AccessRow | None:
-    row = await crud.access_update(access_id, enabled=enabled, values=values, clear=clear)
+    row = await crud.access_update(
+        access_id,
+        enabled=enabled,
+        title=title,
+        values=values,
+        clear=clear,
+    )
     access_store.invalidate(access_id)
     return _row_view(row) if row is not None else None
 
@@ -230,6 +246,7 @@ def _row_fields(row: CoreConnectorsAccess) -> dict[str, Any]:
         "enabled": row.enabled,
         "connector": row.connector,
         "connector_name": _connector_name(row.connector),
+        "title": row.title,
         "is_default": row.is_default,
         "status": access_store.row_status(row),
         "created_at": row.created_at,

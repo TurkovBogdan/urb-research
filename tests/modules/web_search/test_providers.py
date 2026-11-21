@@ -12,7 +12,7 @@ from src.modules.web_search.providers import (
     search_engines,
 )
 from src.modules.web_search.providers import base
-from src.modules.web_search.providers.base import SearchEngine
+from src.modules.web_search.providers.base import FetchedPage, SearchEngine
 
 
 def _connector_with(**methods: Any):
@@ -40,46 +40,138 @@ def test_search_registry_has_all_engines():
 
 @pytest.mark.pure
 def test_fetch_registry_excludes_search_only_engines():
-    assert set(fetch_engines.codes()) >= {"tavily", "firecrawl", "web_scrapper"}
+    assert set(fetch_engines.codes()) >= {"tavily", "firecrawl", "simple_web_scraper"}
     assert "xai" not in fetch_engines.codes()  # Grok контент не тянет
     assert fetch_engines.get("firecrawl").code == "firecrawl"
 
 
 @pytest.mark.pure
-def test_web_scrapper_is_fetch_only():
-    assert fetch_engines.get("web_scrapper").code == "web_scrapper"
-    assert "web_scrapper" not in search_engines.codes()  # daemon-web-scrapper не ищет, только фетч
+def test_simple_web_scraper_is_fetch_only():
+    assert fetch_engines.get("simple_web_scraper").code == "simple_web_scraper"
+    assert "simple_web_scraper" not in search_engines.codes()  # скрейпер не ищет, только фетч
 
 
 @pytest.mark.pure
-async def test_web_scrapper_maps_batch_content_by_url(monkeypatch):
-    from src.modules.web_search.providers.web_scrapper import client as web_scrapper_client
-    from src.modules.web_search.providers.web_scrapper.client import WebScrapperEngine
+async def test_simple_web_scraper_takes_the_outcome_not_the_content(monkeypatch):
+    from src.modules.web_search.providers.simple_web_scraper import client as scraper_client
+    from src.modules.web_search.providers.simple_web_scraper.client import SimpleWebScraperEngine
 
     async def _fake_scrap_batch(_params: Any) -> dict[str, Any]:
         return {
             "results": [
                 {"url": "https://a.com", "outcome": "ok", "content": "# A"},
-                {"url": "https://b.com", "outcome": "timeout", "content": None},
+                {"url": "https://moved.com", "outcome": "redirected", "content": "# Moved"},
+                # Стена ботозащиты приходит с текстом — это не материал страницы
+                {"url": "https://wall.ru", "outcome": "access_denied", "content": "Подтвердите…"},
+                {"url": "https://gone.com", "outcome": "not_found", "content": None},
+                {"url": "https://blank.com", "outcome": "ok", "content": ""},
+                # Ответ без вердикта — не повод верить тексту
+                {"url": "https://odd.com", "content": "# Без outcome"},
             ],
             "elapsed_ms": 12,
         }
 
     monkeypatch.setattr(
-        web_scrapper_client,
+        scraper_client,
         "open_connector",
         _connector_with(scrap_batch=_fake_scrap_batch),
     )
 
-    pages = await WebScrapperEngine().fetch_pages(
-        ["https://a.com", "https://b.com", "https://c.com"]
+    pages = await SimpleWebScraperEngine().fetch_pages(
+        [
+            "https://a.com",
+            "https://moved.com",
+            "https://wall.ru",
+            "https://gone.com",
+            "https://blank.com",
+            "https://odd.com",
+            "https://missing.com",
+        ]
     )
 
     assert pages == {
-        "https://a.com": "# A",
-        "https://b.com": None,  # неуспешный outcome — контента нет
-        "https://c.com": None,  # url отсутствует в ответе — остаётся None
+        "https://a.com": FetchedPage(content="# A"),
+        "https://moved.com": FetchedPage(content="# Moved"),
+        "https://wall.ru": FetchedPage(error="access_denied"),
+        "https://gone.com": FetchedPage(error="not_found"),
+        "https://blank.com": FetchedPage(error="empty"),
+        "https://odd.com": FetchedPage(error="empty"),
+        "https://missing.com": FetchedPage(error="empty"),  # url нет в ответе демона
     }
+
+
+def _record_opening(monkeypatch, client_module: Any, **methods: Any) -> list[Any]:
+    """Подменить ``open_connector`` адаптера коннектором с ``methods``; вернуть список
+    подключений, через которые адаптер его открывал."""
+    opened: list[Any] = []
+
+    async def _open(_service: str, **kwargs: Any):
+        opened.append(kwargs.get("access"))
+        return type("_Stub", (), {name: staticmethod(fn) for name, fn in methods.items()})()
+
+    monkeypatch.setattr(client_module, "open_connector", _open)
+    return opened
+
+
+@pytest.mark.pure
+async def test_simple_web_scraper_goes_through_the_connection_of_its_route(monkeypatch):
+    from src.modules.web_search.providers.simple_web_scraper import client as scraper_client
+    from src.modules.web_search.providers.simple_web_scraper.client import SimpleWebScraperEngine
+
+    async def _scrap_batch(_params: Any) -> dict[str, Any]:
+        return {"results": []}
+
+    opened = _record_opening(monkeypatch, scraper_client, scrap_batch=_scrap_batch)
+
+    await SimpleWebScraperEngine().fetch_pages(["https://a.ru"], access=6)
+
+    assert opened == [6]
+
+
+@pytest.mark.pure
+async def test_tavily_gives_each_url_its_material_or_a_reason(monkeypatch):
+    from src.modules.web_search.providers.tavily import client as tavily_client
+    from src.modules.web_search.providers.tavily.client import TavilyEngine
+
+    async def _extract(_params: Any) -> dict[str, Any]:
+        return {
+            "results": [
+                {"url": "https://a.com", "raw_content": "# A"},
+                {"url": "https://blank.com", "raw_content": ""},
+            ]
+        }
+
+    opened = _record_opening(monkeypatch, tavily_client, extract=_extract)
+
+    pages = await TavilyEngine().fetch_pages(
+        ["https://a.com", "https://blank.com", "https://lost.com"], access=3
+    )
+
+    assert pages == {
+        "https://a.com": FetchedPage(content="# A"),
+        "https://blank.com": FetchedPage(error="empty"),
+        "https://lost.com": FetchedPage(error="empty"),  # Tavily не вернул url вовсе
+    }
+    assert opened == [3]
+
+
+@pytest.mark.pure
+async def test_firecrawl_scrapes_each_url_through_the_connection_of_its_route(monkeypatch):
+    from src.modules.web_search.providers.firecrawl import client as firecrawl_client
+    from src.modules.web_search.providers.firecrawl.client import FirecrawlEngine
+
+    async def _scrape(params: Any) -> dict[str, Any]:
+        return {"data": {"markdown": f"# {params.url}"}} if "ok" in params.url else {"data": {}}
+
+    opened = _record_opening(monkeypatch, firecrawl_client, scrape=_scrape)
+
+    pages = await FirecrawlEngine().fetch_pages(["https://ok.com", "https://no.com"], access=4)
+
+    assert pages == {
+        "https://ok.com": FetchedPage(content="# https://ok.com"),
+        "https://no.com": FetchedPage(error="empty"),
+    }
+    assert opened == [4]
 
 
 @pytest.mark.pure
@@ -92,7 +184,7 @@ def test_registry_unknown_raises():
 
 @pytest.mark.pure
 async def test_registry_reflects_access_readiness(monkeypatch):
-    async def _ready(service: str) -> bool:
+    async def _ready(service: str, *, access: int | None = None) -> bool:
         return service != "xai"
 
     monkeypatch.setattr(base, "access_available", _ready)

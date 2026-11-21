@@ -50,7 +50,11 @@ async def access_list(*, connector: str | None = None) -> list[CoreConnectorsAcc
 
 
 async def access_default_for(connector: str) -> CoreConnectorsAccess | None:
-    """Запись по умолчанию для коннектора; при единственной записи — она и есть."""
+    """Запись по умолчанию для коннектора — первая заведённая.
+
+    Флаг ставится первой записи и при её удалении переходит к самой старой из оставшихся;
+    другого способа его сдвинуть нет, поэтому флаг и порядок заведения всегда совпадают.
+    """
     stmt = (
         select(CoreConnectorsAccess)
         .where(CoreConnectorsAccess.connector == connector)
@@ -66,18 +70,23 @@ async def access_create(
     connector: str,
     values: Mapping[str, str] | None = None,
     enabled: bool = True,
-    is_default: bool = True,
+    title: str | None = None,
 ) -> CoreConnectorsAccess:
     """Создать запись доступа. Коннектор обязан быть в реестре — иначе неизвестно, из каких
     полей она состоит. Значения пишутся вторым шагом: связывание шифртекста включает id
-    записи, а он появляется только после вставки."""
+    записи, а он появляется только после вставки.
+
+    Умолчанием становится только первая запись коннектора: второе подключение не должно
+    молча перехватить то, через что модули уже ходят.
+    """
     connectors_registry.get(connector)
     data_key, key_version = crypto.new_data_key() if crypto.encryption_enabled() else (None, None)
     async with write_scope() as s:
         row = CoreConnectorsAccess(
             enabled=enabled,
             connector=connector,
-            is_default=is_default,
+            title=_clean_title(title),
+            is_default=await _has_no_records(s, connector),
             values={},
             data_key=data_key,
             key_version=key_version,
@@ -85,8 +94,6 @@ async def access_create(
         s.add(row)
         await s.flush()
         row.values = _sealed_values(row, dict(values or {}))
-        if is_default:
-            await _demote_siblings(s, row)
         await s.flush()
         return row
 
@@ -95,12 +102,13 @@ async def access_update(
     access_id: int,
     *,
     enabled: bool | None = None,
-    is_default: bool | None = None,
+    title: str | None = None,
     values: Mapping[str, str] | None = None,
     clear: Iterable[str] = (),
 ) -> CoreConnectorsAccess | None:
     """Изменить запись. Переданы только те поля, что меняются; ``clear`` стирает
-    перечисленные поля (пустая строка этого не делает — см. контракт секрета)."""
+    перечисленные поля (пустая строка этого не делает — см. контракт секрета). Пустое
+    ``title`` снимает название."""
     async with write_scope() as s:
         row = (
             await s.execute(
@@ -111,10 +119,8 @@ async def access_update(
             return None
         if enabled is not None:
             row.enabled = enabled
-        if is_default is not None:
-            row.is_default = is_default
-            if is_default:
-                await _demote_siblings(s, row)
+        if title is not None:
+            row.title = _clean_title(title)
         if values is not None or clear:
             row.values = _sealed_values(row, dict(values or {}), clear=frozenset(clear))
         row.updated_at = utc_now()
@@ -123,25 +129,54 @@ async def access_update(
 
 
 async def access_delete(access_id: int) -> None:
+    """Удалить запись. Умолчание удалённой переходит к самой старой из оставшихся записей
+    коннектора: иначе в списке не было бы ни одного умолчания, а модули молча брали бы ту,
+    что раньше заведена."""
     async with write_scope() as s:
+        row = (
+            await s.execute(
+                select(CoreConnectorsAccess).where(CoreConnectorsAccess.id == access_id)
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            return
         await s.execute(
             sa_delete(CoreConnectorsAccess).where(CoreConnectorsAccess.id == access_id)
         )
+        if row.is_default:
+            await _promote_oldest(s, row.connector)
 
 
-async def _demote_siblings(session: AsyncSession, row: CoreConnectorsAccess) -> None:
-    """Умолчание у коннектора одно: назначая его записи, снимаем флаг с остальных.
+def _clean_title(title: str | None) -> str | None:
+    """Название без краевых пробелов; пустое — подключение без названия."""
+    if title is None:
+        return None
+    return title.strip() or None
 
-    Иначе ``access_default_for`` выбирал бы из двух «умолчаний» по порядку id — то есть
-    молча и не тем, что человек отметил последним.
-    """
+
+async def _has_no_records(session: AsyncSession, connector: str) -> bool:
+    found = await session.execute(
+        select(CoreConnectorsAccess.id).where(CoreConnectorsAccess.connector == connector).limit(1)
+    )
+    return found.first() is None
+
+
+async def _promote_oldest(session: AsyncSession, connector: str) -> None:
+    """Сделать умолчанием самую старую запись коннектора, если записи у него остались."""
+    oldest = (
+        await session.execute(
+            select(CoreConnectorsAccess.id)
+            .where(CoreConnectorsAccess.connector == connector)
+            .order_by(CoreConnectorsAccess.id)
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if oldest is None:
+        return
     await session.execute(
         sa_update(CoreConnectorsAccess)
-        .where(
-            CoreConnectorsAccess.connector == row.connector,
-            CoreConnectorsAccess.id != row.id,
-        )
-        .values(is_default=False)
+        .where(CoreConnectorsAccess.id == oldest)
+        .values(is_default=True)
     )
 
 

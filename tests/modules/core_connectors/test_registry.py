@@ -133,10 +133,10 @@ def test_required_fields_belong_to_the_passport():
 
 @pytest.mark.pure
 def test_a_connector_without_balance_still_belongs_to_the_registry():
-    scrapper = connectors_registry.get("web_scrapper")
+    scraper = connectors_registry.get("simple_web_scraper")
 
-    assert scrapper.HAS_BALANCE is False
-    assert scrapper in connectors_registry.all()
+    assert scraper.HAS_BALANCE is False
+    assert scraper in connectors_registry.all()
 
 
 @pytest.mark.db
