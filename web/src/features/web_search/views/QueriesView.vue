@@ -78,9 +78,12 @@ const createForm = ref({ query: '', pages: 10, searchEngine: '', fetchEngine: ''
 const searchEngineOptions = computed(() =>
   (store.engines?.search ?? []).map((c) => ({ value: c, title: c })),
 )
-const fetchEngineOptions = computed(() =>
-  (store.engines?.fetch ?? []).map((c) => ({ value: c, title: c })),
-)
+// Пустое значение — контент по настройкам модуля (основной движок, запасной и их зоны); явный
+// движок заменяет их целиком.
+const fetchEngineOptions = computed(() => [
+  { value: '', title: t('web_search.query.field.fetch_engine_by_settings') },
+  ...(store.engines?.fetch ?? []).map((c) => ({ value: c, title: c })),
+])
 const canSubmit = computed(() => createForm.value.query.trim().length > 0)
 
 function openCreate() {

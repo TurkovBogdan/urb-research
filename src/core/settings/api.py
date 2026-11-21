@@ -45,12 +45,12 @@ def _store_values(module: str) -> dict[str, Any]:
     }
 
 
-def _module_payload(module: str) -> dict[str, Any]:
+async def _module_payload(module: str) -> dict[str, Any]:
     store = get_registry().get(module)
     schema = get_registry().schema(module)
     fields: list[dict[str, Any]] = []
     for f in schema:
-        descriptor = f.ui_descriptor()
+        descriptor = await f.resolved_ui_descriptor()
         if f.is_secret():
             descriptor["is_set"] = bool(getattr(store, f.key))
         fields.append(descriptor)
@@ -64,14 +64,14 @@ def _module_payload(module: str) -> dict[str, Any]:
 
 @router.get("/modules")
 async def list_modules() -> list[dict[str, Any]]:
-    return [_module_payload(m) for m in get_registry().modules()]
+    return [await _module_payload(m) for m in get_registry().modules()]
 
 
 @router.get("/{module}")
 async def get_module(module: str) -> dict[str, Any]:
     if module not in get_registry().modules():
         raise HTTPException(status_code=404, detail="unknown module")
-    return _module_payload(module)
+    return await _module_payload(module)
 
 
 @router.put("/{module}/{key}")

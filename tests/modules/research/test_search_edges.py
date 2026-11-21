@@ -48,7 +48,7 @@ async def test_a_search_with_a_disabled_engine_does_not_look_like_an_empty_resul
     """
     engine = use_search(results=[{"url": "https://ex.com/0", "rank": 0, "summary": "s"}])
 
-    async def _not_ready() -> bool:
+    async def _not_ready(access: int | None = None) -> bool:
         return False
 
     monkeypatch.setattr(engine, "available", _not_ready)

@@ -198,7 +198,7 @@ async def test_sources_refetch_refuses_a_disabled_fetch_engine(call, use_search,
     """Движок контента выключен — отказ до сети, а не сотня страниц, разложенных в ``error``."""
     r, _, _, engine = await _seed_unfetched(call, use_search, pages={})
 
-    async def _not_ready() -> bool:
+    async def _not_ready(access: int | None = None) -> bool:
         return False
 
     monkeypatch.setattr(engine, "available", _not_ready)

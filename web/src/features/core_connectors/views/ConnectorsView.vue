@@ -7,9 +7,12 @@
 // Карточки всегда разложены по группам справочника: группа отвечает «что это за сервис», и
 // её порядок задан бэком. Незнакомая и пустая группа сводятся в «Прочее» — чужой модуль со
 // своей группой не обязан быть известен этому экрану.
+//
+// Подключений у сервиса бывает несколько; карточка показывает первое — через него модули ходят,
+// если в их настройках не выбрано другое, — а в подвале имена всех. Правка живёт в модалке.
 import { computed, onActivated, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { IconRefresh, IconSettings } from '@tabler/icons-vue'
+import { IconPlugConnected, IconRefresh, IconSettings } from '@tabler/icons-vue'
 
 import PageLayout from '@/layout/templates/PageLayout.vue'
 import PageHeader from '@/layout/components/PageHeader.vue'
@@ -20,7 +23,7 @@ import type { TablerIcon } from '@/shared/nav'
 import ConnectorBalance from '../components/ConnectorBalance.vue'
 import AccessStatusChip from '../components/AccessStatusChip.vue'
 import AccessFormDialog from '../components/AccessFormDialog.vue'
-import { useGroupLabels } from '../labels'
+import { useConnectionLabels, useGroupLabels } from '../labels'
 import {
   checkAccess,
   fetchAccesses,
@@ -33,6 +36,7 @@ import {
 
 const { t } = useI18n()
 const { groupLabel } = useGroupLabels()
+const { connectionLabel } = useConnectionLabels()
 
 const passports = ref<ConnectorPassport[]>([])
 const accesses = ref<AccessView[]>([])
@@ -44,6 +48,9 @@ const error = ref<string | null>(null)
 
 interface Card {
   passport: ConnectorPassport
+  // Все подключения сервиса в порядке заведения.
+  accesses: AccessView[]
+  // Первое подключение; его статус и баланс рисует карточка.
   access: AccessView | null
 }
 
@@ -81,10 +88,10 @@ async function load() {
 onActivated(load)
 
 const cards = computed<Card[]>(() =>
-  passports.value.map(passport => ({
-    passport,
-    access: accesses.value.find(row => row.connector === passport.service) ?? null,
-  })),
+  passports.value.map(passport => {
+    const own = accesses.value.filter(row => row.connector === passport.service)
+    return { passport, accesses: own, access: own[0] ?? null }
+  }),
 )
 
 const UNGROUPED = ''
@@ -155,6 +162,12 @@ function settingsLabel(card: Card): string {
 
 function checkLabel(card: Card): string {
   return t('core_connectors.action.check_service', { name: card.passport.name })
+}
+
+function connectionsLabel(card: Card): string {
+  const count = t('core_connectors.connection.count', { n: card.accesses.length })
+  const names = card.accesses.map(access => connectionLabel(access, card.accesses))
+  return `${count} — ${names.join(', ')}`
 }
 
 // Итог проверки — новость на несколько секунд, а не состояние карточки: держать под неё
@@ -228,49 +241,8 @@ async function runCheck(card: Card) {
             class="conn-card"
             :class="{ 'conn-card--off': card.access?.status.status !== 'ok' }"
           >
-            <!-- Действия карточки — иконками в углу и ВНЕ кликабельного тела: кнопка внутри
-                 кнопки ломает клавиатуру и экранный диктор, поэтому они соседний элемент,
-                 положенный поверх. Проверка есть только у заведённого подключения — проверять
-                 нечего, пока его нет; шестерёнка стоит всегда и делает видимым вход в настройки,
-                 который иначе живёт только в клике по телу карточки. -->
-            <div class="conn-card__actions">
-              <VBtn
-                v-if="card.access"
-                icon
-                variant="text"
-                size="small"
-                density="comfortable"
-                :ripple="false"
-                class="conn-card__action"
-                :loading="checking !== null && checking === card.access.id"
-                :aria-label="checkLabel(card)"
-                :title="checkLabel(card)"
-                @click="runCheck(card)"
-              >
-                <IconRefresh :size="18" />
-                <!-- Свой загрузчик: штатный у VBtn фиксированного размера 23px и в углу карточки
-                     выпирает за иконку, которую подменяет. -->
-                <template #loader>
-                  <VProgressCircular indeterminate :size="18" :width="1.5" />
-                </template>
-              </VBtn>
-
-              <VBtn
-                icon
-                variant="text"
-                size="small"
-                density="comfortable"
-                :ripple="false"
-                class="conn-card__action"
-                :aria-label="settingsLabel(card)"
-                :title="settingsLabel(card)"
-                @click="edit(card)"
-              >
-                <IconSettings :size="18" />
-              </VBtn>
-            </div>
-
-            <!-- Кнопка настройки — тело карточки, а не карточка целиком: см. выше. -->
+            <!-- Кнопка настройки — тело карточки, а не карточка целиком: кнопка внутри кнопки
+                 ломает клавиатуру и экранный диктор, поэтому действия живут в подвале рядом. -->
             <div
               class="conn-card__body"
               role="button"
@@ -295,6 +267,61 @@ async function runCheck(card: Card) {
                 />
               </div>
             </div>
+
+            <!-- Шапка держит только то, что читают с первого взгляда: имя и статус. Подключения и
+                 действия — в подвале. Проверка есть только у заведённого подключения: проверять
+                 нечего, пока его нет; шестерёнка стоит всегда и делает видимым вход в настройки,
+                 который иначе живёт только в клике по телу карточки. -->
+            <footer class="conn-card__footer">
+              <span
+                v-if="card.accesses.length > 1"
+                class="conn-card__connections"
+                :title="connectionsLabel(card)"
+                :aria-label="connectionsLabel(card)"
+              >
+                <IconPlugConnected :size="13" :stroke-width="1.8" class="conn-card__connections-icon" />
+                <span v-for="access in card.accesses" :key="access.id" class="conn-card__connection">
+                  {{ connectionLabel(access, card.accesses) }}
+                </span>
+              </span>
+
+              <div class="conn-card__actions">
+                <VBtn
+                  v-if="card.access"
+                  icon
+                  variant="text"
+                  size="small"
+                  density="comfortable"
+                  :ripple="false"
+                  class="conn-card__action"
+                  :loading="checking !== null && checking === card.access.id"
+                  :aria-label="checkLabel(card)"
+                  :title="checkLabel(card)"
+                  @click="runCheck(card)"
+                >
+                  <IconRefresh :size="17" />
+                  <!-- Свой загрузчик: штатный у VBtn фиксированного размера 23px и выпирает за
+                       иконку, которую подменяет. -->
+                  <template #loader>
+                    <VProgressCircular indeterminate :size="17" :width="1.5" />
+                  </template>
+                </VBtn>
+
+                <VBtn
+                  icon
+                  variant="text"
+                  size="small"
+                  density="comfortable"
+                  :ripple="false"
+                  class="conn-card__action"
+                  :aria-label="settingsLabel(card)"
+                  :title="settingsLabel(card)"
+                  @click="edit(card)"
+                >
+                  <IconSettings :size="17" />
+                </VBtn>
+              </div>
+            </footer>
           </VCard>
         </div>
       </section>
@@ -304,7 +331,7 @@ async function runCheck(card: Card) {
       v-if="editing"
       v-model="formOpen"
       :passport="editing.passport"
-      :access="editing.access"
+      :accesses="editing.accesses"
       @saved="load"
       @removed="load"
     />
@@ -402,25 +429,50 @@ async function runCheck(card: Card) {
 .conn-card {
   --card-pad: 18px;
   --balance-height: 104px;
-  --actions-width: 60px;
 
-  position: relative;
   display: flex;
   flex-direction: column;
   padding: 0;
 }
 
-/* Иконки лежат поверх карточки в её углу; тело карточки под ними остаётся кликабельным, а
-   сами кнопки в него не вложены. Оформление приглушено: карточка про баланс, а не про
-   кнопки, поэтому и подложка, и наведение звучат вполголоса. */
+/* Подвал отделён той же линией, что и баланс: слева подключения, справа действия. Высота не
+   зависит от того, есть ли строка подключений, — иначе подвалы в ряду шли бы вразнобой. */
+.conn-card__footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 8px 0 var(--card-pad);
+  border-top: 1px solid var(--border);
+}
+
+.conn-card__connections {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.conn-card__connections-icon { flex: none; color: var(--text-faint); }
+
+.conn-card__connection + .conn-card__connection::before {
+  content: '·';
+  margin-right: 6px;
+  color: var(--text-faint);
+}
+
+/* Оформление действий приглушено: карточка про состояние и баланс, а не про кнопки, поэтому и
+   подложка, и наведение звучат вполголоса. */
 .conn-card__actions {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 1;
   display: flex;
   align-items: center;
   gap: 2px;
+  margin-left: auto;
 }
 
 .conn-card__action {
@@ -455,14 +507,10 @@ async function runCheck(card: Card) {
   outline-offset: 4px;
 }
 
-/* Место под иконки в углу: без отступа статус-чип уезжал бы под них. Ширина взята по паре
-   кнопок и не зависит от состояния — иначе чип ездил бы по горизонтали от карточки к
-   карточке в зависимости от того, заведено подключение или нет. */
 .conn-card__header {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding-right: var(--actions-width);
 }
 
 /* Имя — ровно одна строка: длинное иначе переносится и растит шапку. */

@@ -17,7 +17,12 @@ from src.modules.core_connectors.connectors.tavily import (
     TavilySearchParams,
 )
 from src.modules.core_connectors.service import open_connector
-from src.modules.web_search.providers.base import FetchEngine, SearchEngine
+from src.modules.web_search.providers.base import (
+    FetchedPage,
+    FetchEngine,
+    SearchEngine,
+    fetched,
+)
 from src.modules.web_search.providers.request import SearchRequest
 
 
@@ -25,8 +30,8 @@ class TavilyEngine(SearchEngine, FetchEngine):
     code: ClassVar[str] = "tavily"
     pages_per_request: ClassVar[int] = 20
 
-    async def _connector(self) -> TavilyConnector:
-        return cast(TavilyConnector, await open_connector(self.code))
+    async def _connector(self, access: int | None = None) -> TavilyConnector:
+        return cast(TavilyConnector, await open_connector(self.code, access=access))
 
     async def search(self, request: SearchRequest) -> list[dict[str, Any]]:
         params = TavilySearchParams(
@@ -48,13 +53,13 @@ class TavilyEngine(SearchEngine, FetchEngine):
             for rank, item in enumerate(data.get("results", []), 1)
         ]
 
-    async def fetch_pages(self, urls: list[str]) -> dict[str, str | None]:
+    async def fetch_pages(
+        self, urls: list[str], *, access: int | None = None
+    ) -> dict[str, FetchedPage]:
         params = TavilyExtractParams(urls=urls, format="markdown", extract_depth="basic")
-        data = await (await self._connector()).extract(params)
-        by_url: dict[str, str | None] = {url: None for url in urls}
-        for item in data.get("results") or []:
-            by_url[item["url"]] = item.get("raw_content")
-        return by_url
+        data = await (await self._connector(access)).extract(params)
+        found = {item["url"]: item.get("raw_content") for item in data.get("results") or []}
+        return {url: fetched(found.get(url)) for url in urls}
 
 
 __all__ = ["TavilyEngine"]

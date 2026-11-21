@@ -95,11 +95,14 @@ async def pages_by_codes(codes: list[str]) -> list[WebSearchPage]:
         )
 
 
-async def pages_mark_processing(codes: list[str], *, fetch_engine: str) -> None:
+async def pages_mark_processing(
+    codes: list[str], *, fetch_engine: str, fetch_access_id: int | None = None
+) -> None:
     """Пометить страницы ``processing`` перед получением контента (батч).
 
-    Снимает движок контента (``fetch_engine``), которым тянем, — на попытке фетча, чтобы
-    запись сохранилась и при ``done``, и при ``error`` (движок известен до сети).
+    Снимает движок контента (``fetch_engine``) и подключение (``fetch_access_id``), которыми
+    тянем, — на попытке фетча, чтобы запись сохранилась и при ``done``, и при ``error``
+    (маршрут известен до сети).
     """
     if not codes:
         return
@@ -107,7 +110,12 @@ async def pages_mark_processing(codes: list[str], *, fetch_engine: str) -> None:
     stmt = (
         update(WebSearchPage)
         .where(WebSearchPage.code.in_(codes))
-        .values(status=FETCH_STATUS_PROCESSING, fetch_engine=fetch_engine, updated_at=now)
+        .values(
+            status=FETCH_STATUS_PROCESSING,
+            fetch_engine=fetch_engine,
+            fetch_access_id=fetch_access_id,
+            updated_at=now,
+        )
     )
     async with write_scope() as s:
         await s.execute(stmt)

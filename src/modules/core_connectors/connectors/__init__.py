@@ -26,8 +26,8 @@ from src.modules.core_connectors.connectors.registry import (
     ConnectorsRegistry,
     connectors_registry,
 )
+from src.modules.core_connectors.connectors.simple_web_scraper import SimpleWebScraperConnector
 from src.modules.core_connectors.connectors.tavily import TavilyConnector
-from src.modules.core_connectors.connectors.web_scrapper import WebScrapperConnector
 from src.modules.core_connectors.connectors.xai import XaiConnector
 
 BUILTIN_CONNECTORS: tuple[type[Connector], ...] = (
@@ -35,7 +35,7 @@ BUILTIN_CONNECTORS: tuple[type[Connector], ...] = (
     FirecrawlConnector,
     XaiConnector,
     OpenRouterConnector,
-    WebScrapperConnector,
+    SimpleWebScraperConnector,
 )
 
 
@@ -70,5 +70,5 @@ __all__ = [
     "FirecrawlConnector",
     "XaiConnector",
     "OpenRouterConnector",
-    "WebScrapperConnector",
+    "SimpleWebScraperConnector",
 ]

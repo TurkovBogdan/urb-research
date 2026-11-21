@@ -55,7 +55,7 @@ class SettingsRegistry:
         schema = self._schemas[module]
         f = field_by_key(schema, key)
         value = self._coerce(f, raw_value)
-        f.validate(value)
+        await f.validate_input(value)
         await crud_settings.upsert(
             module=module, key=key, value=f.serialize(value)
         )

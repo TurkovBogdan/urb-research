@@ -20,7 +20,12 @@ from src.modules.web_search.crud import page as page_crud
 from src.modules.web_search.crud import query as query_crud
 from src.modules.web_search.crud import query_result as query_result_crud
 from src.modules.web_search.providers import registry
-from src.modules.web_search.providers.base import FetchEngine, SearchEngine
+from src.modules.web_search.providers.base import (
+    FetchedPage,
+    FetchEngine,
+    SearchEngine,
+    fetched,
+)
 from src.modules.web_search.providers.request import SearchRequest
 from src.modules.web_search.services import searcher
 from src.modules.web_search.services.searcher import Searcher
@@ -32,15 +37,17 @@ class _StubEngine(SearchEngine, FetchEngine):
     code = "stub"
     pages_per_request = 20
 
-    async def available(self) -> bool:
+    async def available(self, access: int | None = None) -> bool:
         """Записи доступа в core_connectors у заглушки нет — считаем её готовой."""
         return True
 
     async def search(self, request: SearchRequest) -> list[dict[str, Any]]:
         return []
 
-    async def fetch_pages(self, urls: list[str]) -> dict[str, str | None]:
-        return {url: None for url in urls}
+    async def fetch_pages(
+        self, urls: list[str], *, access: int | None = None
+    ) -> dict[str, FetchedPage]:
+        return {url: fetched(None) for url in urls}
 
 
 @pytest.fixture
@@ -223,7 +230,7 @@ async def test_list_engines_returns_only_engines_with_a_ready_access(client):
     assert "xai" in body["search"] and "xai" not in body["fetch"]  # Grok контент не тянет
     assert "firecrawl" not in body["search"]  # нет записи доступа → движок недоступен
     assert body["search_default"] == "tavily"
-    assert body["fetch_default"] == "tavily"
+    assert body["fetch_default"] == ""  # контент по настройкам: основной, запасной, зоны
 
 
 @pytest.mark.db
@@ -256,3 +263,13 @@ async def test_create_query_unknown_engine_returns_400(client):
         "/internal/web-search/queries", json={"query": "x", "search_engine": "nope"}
     )
     assert r.status_code == 400  # неизвестный движок → bad_request (строка не создаётся)
+
+
+@pytest.mark.db
+async def test_create_query_refuses_a_fetch_route_it_cannot_read(client, use_stub):
+    for fetch_engine in ("nope", "simple_web_scraper:vpn", "simple_web_scraper:"):
+        r = await client.post(
+            "/internal/web-search/queries", json={"query": "x", "fetch_engine": fetch_engine}
+        )
+        assert r.status_code == 400, fetch_engine  # до создания строки, а не пустым прогоном
+    assert await query_crud.query_count(query=None, status=None, search_engine=None) == 0

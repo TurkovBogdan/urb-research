@@ -150,6 +150,42 @@ def test_choice_ui_descriptor_options_order():
     assert codes == ["x", "y", "z"]
 
 
+async def _connections() -> list[tuple[str, str]]:
+    return [("direct", "Напрямую"), ("vpn", "Через VPN")]
+
+
+@pytest.mark.pure
+async def test_provided_choice_lists_the_options_known_at_request_time():
+    f = ChoiceField(key="route", label="R", default_="direct", options_provider=_connections)
+
+    codes = [o["code"] for o in (await f.resolved_ui_descriptor())["options"]]
+
+    assert codes == ["direct", "vpn"]
+
+
+@pytest.mark.pure
+async def test_provided_choice_refuses_an_unknown_option_on_write_only():
+    f = ChoiceField(key="route", label="R", default_="direct", options_provider=_connections)
+
+    # Перечитка не сбрасывает выбор, чей вариант пропал из базы: проверка — только на записи
+    f.validate("deleted")
+    await f.validate_input("vpn")
+    with pytest.raises(ValueError):
+        await f.validate_input("deleted")
+
+
+@pytest.mark.pure
+async def test_list_forwards_the_write_check_and_the_options_to_its_item():
+    item = ChoiceField(key="i", label="", options_provider=_connections)
+    f = ListField(key="routes", label="R", item=item)
+
+    await f.validate_input(["direct", "vpn"])
+    with pytest.raises(ValueError):
+        await f.validate_input(["direct", "deleted"])
+    resolved_item = (await f.resolved_ui_descriptor())["item"]
+    assert [o["code"] for o in resolved_item["options"]] == ["direct", "vpn"]
+
+
 @pytest.mark.pure
 def test_multichoice_roundtrip_and_validation():
     f = MultiChoiceField(

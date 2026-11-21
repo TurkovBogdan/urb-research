@@ -1732,7 +1732,7 @@ async def test_refetch_refuses_a_disabled_fetch_engine(client, use_search, monke
     tree = await _tree_with_broken_source("https://example.test/off")
     engine = use_search(pages={})
 
-    async def _not_ready() -> bool:
+    async def _not_ready(access: int | None = None) -> bool:
         return False
 
     monkeypatch.setattr(engine, "available", _not_ready)

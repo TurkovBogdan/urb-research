@@ -22,11 +22,11 @@ async def test_connectors_list_returns_passports(client):
 
     assert r.status_code == 200
     by_service = {p["service"]: p for p in r.json()}
-    assert {"tavily", "xai", "web_scrapper"} <= by_service.keys()
+    assert {"tavily", "xai", "simple_web_scraper"} <= by_service.keys()
     assert by_service["xai"]["owner"] == "core_connectors"
     assert by_service["xai"]["group"] == "models"
     assert [f["key"] for f in by_service["xai"]["fields"]] == ["api_key", "management_api_key"]
-    assert by_service["web_scrapper"]["has_balance"] is False
+    assert by_service["simple_web_scraper"]["has_balance"] is False
 
 
 async def test_connector_groups_return_the_reference_in_show_order(client):
@@ -63,14 +63,14 @@ async def test_unknown_connector_is_rejected_on_create(client):
 
 async def test_list_carries_status_and_balance_capability(client):
     await service.create_access(connector="tavily", values={"api_key": "sk-1"})
-    await service.create_access(connector="web_scrapper", values={})
+    await service.create_access(connector="simple_web_scraper", values={})
 
     r = await client.get(f"{BASE}/accesses")
 
     by_connector = {row["connector"]: row for row in r.json()}
     assert by_connector["tavily"]["status"]["status"] == "ok"
     assert by_connector["tavily"]["has_balance"] is True
-    assert by_connector["web_scrapper"]["has_balance"] is False
+    assert by_connector["simple_web_scraper"]["has_balance"] is False
     assert by_connector["tavily"]["balance"] is None  # без with_balance в сеть не ходим
 
 
@@ -148,6 +148,42 @@ async def test_a_too_long_connector_code_is_a_validation_error_not_a_db_failure(
     r = await client.post(f"{BASE}/accesses", json={"connector": "t" * 65, "values": {}})
 
     assert r.status_code == 422
+
+
+async def test_a_too_long_title_is_a_validation_error_not_a_db_failure(client):
+    r = await client.post(f"{BASE}/accesses", json={"connector": "tavily", "title": "t" * 97})
+
+    assert r.status_code == 422
+
+
+async def test_connection_titles_travel_through_the_api(client):
+    url = f"{BASE}/accesses"
+    await client.post(url, json={"connector": "simple_web_scraper", "title": "Напрямую"})
+    vpn = await client.post(url, json={"connector": "simple_web_scraper", "title": "Через VPN"})
+
+    renamed = await client.put(f"{url}/{vpn.json()['id']}", json={"title": "VPN, Европа"})
+    assert renamed.json()["title"] == "VPN, Европа"
+
+    listed = (await client.get(f"{url}?connector=simple_web_scraper")).json()
+    assert [row["title"] for row in listed] == ["Напрямую", "VPN, Европа"]
+
+
+async def test_a_request_cannot_move_the_default_off_the_first_connection(client):
+    # Умолчание — всегда первое подключение; поля, которым его можно было бы сдвинуть, нет
+    url = f"{BASE}/accesses"
+    first = await client.post(url, json={"connector": "tavily", "values": {"api_key": "1"}})
+    second = await client.post(
+        url, json={"connector": "tavily", "values": {"api_key": "2"}, "is_default": True}
+    )
+    await client.put(f"{url}/{second.json()['id']}", json={"is_default": True})
+    await client.put(f"{url}/{first.json()['id']}", json={"is_default": False})
+
+    listed = (await client.get(f"{url}?connector=tavily")).json()
+
+    assert [(row["id"], row["is_default"]) for row in listed] == [
+        (first.json()["id"], True),
+        (second.json()["id"], False),
+    ]
 
 
 async def test_dates_come_out_as_second_precise_strings(client):

@@ -1,5 +1,5 @@
 import { useI18n } from 'vue-i18n'
-import type { ConnectorGroup } from './api'
+import type { AccessRow, ConnectorGroup } from './api'
 
 // Group name/description live on the backend (`core_connectors/connectors/groups.py`), in
 // Russian. Same policy as settings fields (see AGENTS/docs/frontend/i18n.md): the backend
@@ -16,4 +16,18 @@ export function useGroupLabels() {
   }
 
   return { groupLabel }
+}
+
+// A connection without a title is called by its place among the connector's connections
+// («Подключение 2»): the list must tell them apart even before anyone named them.
+export function useConnectionLabels() {
+  const { t } = useI18n()
+
+  function connectionLabel(access: AccessRow, siblings: AccessRow[]): string {
+    if (access.title) return access.title
+    const place = siblings.findIndex(sibling => sibling.id === access.id) + 1
+    return t('core_connectors.connection.untitled', { n: place })
+  }
+
+  return { connectionLabel }
 }

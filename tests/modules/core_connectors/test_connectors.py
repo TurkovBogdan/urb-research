@@ -3,14 +3,18 @@
 Маппинг — чистые функции над реальными формами ответов (сверены живьём, см.
 `AGENTS/research/xai/INDEX.md` и docstrings коннекторов). Сеть не трогаем: зовём
 ``_parse_balance`` напрямую, а коннектор поднимаем на пустых значениях доступа —
-разбору ответа ключ не нужен.
+разбору ответа ключ не нужен. Запросы локального скрейпера проверяем на
+``httpx.MockTransport``: важны путь и тело, которые он принимает.
 """
 
 from __future__ import annotations
 
+import json
 from typing import Any, ClassVar
 
+import httpx
 import pytest
+from pydantic import ValidationError
 
 from src.core.settings import Field, StrField
 from src.modules.core_connectors.access.store import AccessValues
@@ -18,12 +22,16 @@ from src.modules.core_connectors.connectors import (
     BUILTIN_CONNECTORS,
     FirecrawlConnector,
     OpenRouterConnector,
+    SimpleWebScraperConnector,
     TavilyConnector,
     XaiConnector,
 )
 from src.modules.core_connectors.connectors.base import Connector, failure_text
 from src.modules.core_connectors.connectors.groups import group, groups
 from src.modules.core_connectors.connectors.passport import BalanceMetric, ConnectorBalance
+from src.modules.core_connectors.connectors.simple_web_scraper import (
+    SimpleWebScraperScrapBatchParams,
+)
 
 
 def _values(service: str, **values: str) -> AccessValues:
@@ -152,10 +160,89 @@ async def test_connector_without_balance_says_so_instead_of_leaking_notimplement
 @pytest.mark.pure
 async def test_the_daemon_connector_does_provide_its_own_probe():
     # Инвариант: коннектор без баланса не должен остаться и без пробы
-    from src.modules.core_connectors.connectors import WebScrapperConnector
+    assert SimpleWebScraperConnector.HAS_BALANCE is False
+    assert SimpleWebScraperConnector.check is not Connector.check
 
-    assert WebScrapperConnector.HAS_BALANCE is False
-    assert WebScrapperConnector.check is not Connector.check
+
+_SCRAPER = "http://scraper.test:19020"
+
+
+def _scraper(**values: str) -> SimpleWebScraperConnector:
+    return _connector(SimpleWebScraperConnector, base_url=_SCRAPER, **values)
+
+
+def _fake_network(monkeypatch, answer) -> list[httpx.Request]:
+    """Каждый ``httpx.AsyncClient`` отвечает функцией ``answer``; запросы копятся в списке."""
+    seen: list[httpx.Request] = []
+    real_client = httpx.AsyncClient
+
+    def _record(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return answer(request)
+
+    def _client(**kwargs: Any) -> httpx.AsyncClient:
+        return real_client(transport=httpx.MockTransport(_record), **kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", _client)
+    return seen
+
+
+@pytest.mark.pure
+async def test_simple_web_scraper_posts_a_batch_to_the_current_route(monkeypatch):
+    # Старый путь /api/1.0/scrap-batch скрейпер удалил 20.11.2026 — батч туда получает 404
+    native = {"results": [{"url": "https://a.com", "outcome": "ok"}], "elapsed_ms": 9}
+    seen = _fake_network(monkeypatch, lambda _request: httpx.Response(200, json=native))
+
+    answer = await _scraper(api_key="t0ken").scrap_batch(
+        SimpleWebScraperScrapBatchParams(urls=["https://a.com"], use_scroll=True, timeout=8)
+    )
+
+    assert answer == native
+    (request,) = seen
+    assert (request.method, str(request.url)) == ("POST", f"{_SCRAPER}/api/1.0/scrap/batch")
+    assert json.loads(request.content) == {"urls": ["https://a.com"], "use_scroll": True, "timeout": 8}
+    assert request.headers["Authorization"] == "Bearer t0ken"
+
+
+@pytest.mark.pure
+def test_simple_web_scraper_params_leave_the_defaults_to_the_daemon():
+    payload = SimpleWebScraperScrapBatchParams(urls=["https://a.com"]).to_payload()
+
+    assert payload == {"urls": ["https://a.com"]}
+    with pytest.raises(ValidationError):
+        SimpleWebScraperScrapBatchParams(urls=["https://a.com"], timeout=2.5)  # только целые секунды
+
+
+@pytest.mark.pure
+async def test_simple_web_scraper_check_probes_the_health_route(monkeypatch):
+    seen = _fake_network(monkeypatch, lambda _request: httpx.Response(200, json={"ok": True}))
+
+    check = await _scraper().check()
+
+    assert check.ok is True and check.latency_ms is not None
+    assert [str(request.url) for request in seen] == [f"{_SCRAPER}/health"]
+
+
+@pytest.mark.pure
+async def test_simple_web_scraper_check_fails_on_a_port_without_health(monkeypatch):
+    # Раньше проба считала признаком жизни любой ответ на порту, 404 включительно
+    _fake_network(monkeypatch, lambda _request: httpx.Response(404))
+
+    check = await _scraper().check()
+
+    assert check.ok is False and "404" in check.error
+
+
+@pytest.mark.pure
+async def test_simple_web_scraper_check_reports_a_stopped_daemon(monkeypatch):
+    def _refuse(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("Connection refused", request=request)
+
+    _fake_network(monkeypatch, _refuse)
+
+    check = await _scraper().check()
+
+    assert check.ok is False and "ConnectError" in check.error
 
 
 @pytest.mark.pure
@@ -174,8 +261,6 @@ async def test_check_reports_a_failing_call_as_a_diagnosis():
 
 @pytest.mark.pure
 def test_http_failure_is_shortened_to_a_code_and_a_host():
-    import httpx
-
     request = httpx.Request("GET", "https://management-api.x.ai/v1/billing")
     exc = httpx.HTTPStatusError("…", request=request, response=httpx.Response(403, request=request))
 

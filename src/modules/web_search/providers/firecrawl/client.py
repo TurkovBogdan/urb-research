@@ -17,7 +17,12 @@ from src.modules.core_connectors.connectors.firecrawl import (
     FirecrawlSearchParams,
 )
 from src.modules.core_connectors.service import open_connector
-from src.modules.web_search.providers.base import FetchEngine, SearchEngine
+from src.modules.web_search.providers.base import (
+    FetchedPage,
+    FetchEngine,
+    SearchEngine,
+    fetched,
+)
 from src.modules.web_search.providers.request import SearchRequest
 
 _TBS = {"day": "qdr:d", "week": "qdr:w", "month": "qdr:m", "year": "qdr:y"}
@@ -27,8 +32,8 @@ class FirecrawlEngine(SearchEngine, FetchEngine):
     code: ClassVar[str] = "firecrawl"
     pages_per_request: ClassVar[int] = 1
 
-    async def _connector(self) -> FirecrawlConnector:
-        return cast(FirecrawlConnector, await open_connector(self.code))
+    async def _connector(self, access: int | None = None) -> FirecrawlConnector:
+        return cast(FirecrawlConnector, await open_connector(self.code, access=access))
 
     async def search(self, request: SearchRequest) -> list[dict[str, Any]]:
         params = FirecrawlSearchParams(
@@ -49,13 +54,15 @@ class FirecrawlEngine(SearchEngine, FetchEngine):
             for rank, item in enumerate(web, 1)
         ]
 
-    async def fetch_pages(self, urls: list[str]) -> dict[str, str | None]:
-        connector = await self._connector()
-        by_url: dict[str, str | None] = {}
+    async def fetch_pages(
+        self, urls: list[str], *, access: int | None = None
+    ) -> dict[str, FetchedPage]:
+        connector = await self._connector(access)
+        pages: dict[str, FetchedPage] = {}
         for url in urls:
             data = await connector.scrape(FirecrawlScrapeParams(url=url, formats=["markdown"]))
-            by_url[url] = (data.get("data") or {}).get("markdown")
-        return by_url
+            pages[url] = fetched((data.get("data") or {}).get("markdown"))
+        return pages
 
 
 __all__ = ["FirecrawlEngine"]

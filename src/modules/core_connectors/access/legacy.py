@@ -32,6 +32,10 @@ LEGACY_IMPORT_MARK = "legacy_settings_import"
 _LEGACY_MODULE = "core_connectors"
 _ENABLED_SUFFIX = "_gateway_enabled"
 
+# Коннекторы, переименованные после отказа от старой схемы: их строки настроек так и лежат
+# под прежним кодом (``web_scrapper_base_url``), а запись заводится уже под нынешним.
+_RENAMED_SINCE = {"simple_web_scraper": "web_scrapper"}
+
 
 async def import_legacy_accesses(store: ModuleStore) -> dict[str, Any] | None:
     """Создать записи доступа по старым настройкам. ``None`` — импорт уже был."""
@@ -49,13 +53,18 @@ async def import_legacy_accesses(store: ModuleStore) -> dict[str, Any] | None:
         await crud.access_create(
             connector=connector.SERVICE,
             values=values,
-            enabled=legacy.get(f"{connector.SERVICE}{_ENABLED_SUFFIX}") != "false",
+            enabled=legacy.get(f"{_legacy_code(connector)}{_ENABLED_SUFFIX}") != "false",
         )
         imported.append(connector.SERVICE)
 
     mark = {"connectors": imported}
     await store.set(LEGACY_IMPORT_MARK, mark)
     return mark
+
+
+def _legacy_code(connector: type) -> str:
+    """Код, под которым коннектор жил в старых настройках."""
+    return _RENAMED_SINCE.get(connector.SERVICE, connector.SERVICE)
 
 
 def _legacy_values(connector: type, legacy: dict[str, str]) -> dict[str, str]:
@@ -66,7 +75,7 @@ def _legacy_values(connector: type, legacy: dict[str, str]) -> dict[str, str]:
     """
     values: dict[str, str] = {}
     for field in connector.FIELDS:
-        legacy_key = f"{connector.SERVICE}_{field.key}"
+        legacy_key = f"{_legacy_code(connector)}_{field.key}"
         value = (legacy.get(legacy_key) or os.environ.get(legacy_key.upper(), "")).strip()
         if value:
             values[field.key] = value
@@ -82,7 +91,7 @@ def _was_configured(connector: type, values: dict[str, str], legacy: dict[str, s
     """
     if values:
         return True
-    return not connector.REQUIRED and f"{connector.SERVICE}{_ENABLED_SUFFIX}" in legacy
+    return not connector.REQUIRED and f"{_legacy_code(connector)}{_ENABLED_SUFFIX}" in legacy
 
 
 __all__ = ["LEGACY_IMPORT_MARK", "import_legacy_accesses"]

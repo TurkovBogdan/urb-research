@@ -27,7 +27,12 @@ from src.modules.web_search.crud import query as query_crud
 from src.modules.web_search.crud import query_result as query_result_crud
 from src.modules.web_search.crud.page import page_code
 from src.modules.web_search.providers import registry
-from src.modules.web_search.providers.base import FetchEngine, SearchEngine
+from src.modules.web_search.providers.base import (
+    FetchedPage,
+    FetchEngine,
+    SearchEngine,
+    fetched,
+)
 from src.modules.web_search.providers.request import SearchRequest
 from src.modules.web_search.services import searcher
 from src.modules.web_search.services.searcher import Searcher
@@ -36,7 +41,7 @@ from src.modules.web_search.services.searcher import Searcher
 class _StubProvider(SearchEngine, FetchEngine):
     code = "stub"
 
-    async def available(self) -> bool:
+    async def available(self, access: int | None = None) -> bool:
         """У заглушки нет записи доступа в core_connectors — считаем её готовой."""
         return True
 
@@ -51,13 +56,15 @@ class _StubProvider(SearchEngine, FetchEngine):
             raise self._error
         return self._results
 
-    async def fetch_pages(self, urls: list[str]) -> dict[str, str | None]:
-        out: dict[str, str | None] = {}
+    async def fetch_pages(
+        self, urls: list[str], *, access: int | None = None
+    ) -> dict[str, FetchedPage]:
+        out: dict[str, FetchedPage] = {}
         for url in urls:
             value = self._pages.get(url)
             if isinstance(value, Exception):
                 raise value
-            out[url] = value
+            out[url] = fetched(value)
         return out
 
 
@@ -145,7 +152,7 @@ async def test_search_disabled_provider_errors_before_network(db, use_stub, monk
         called = True
         return []
 
-    async def _not_ready() -> bool:
+    async def _not_ready(access: int | None = None) -> bool:
         return False
 
     stub = use_stub(_StubProvider(results=[]))

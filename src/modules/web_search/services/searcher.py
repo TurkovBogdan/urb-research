@@ -9,11 +9,15 @@
   (HTTP-эндпойнт создания: клиент видит запрос в очереди, прогресс — поллингом списка).
 
 Обе роли — два движка: движок поиска (``search_engine``) отдаёт ссылки, движок контента
-(``fetch_engine``) по ним скачивает markdown. Прогон (``_run``): ``pending`` → ``processing``
-→ движок поиска → сохранение ссылок → фетч контента страниц (батчами по ``pages_per_request``,
-параллельно под семафором ``fetch_concurrency``) → ``done``. Очереди/планировщика/ретраев нет:
-сбой движка → запрос ``error`` (исключение не пробрасывается), сбой страницы → эта страница
-``error``. Движки — из runtime-настроек; вне загруженных настроек (скрипт/тест) — дефолты.
+по ним скачивает markdown. Прогон (``_run``): ``pending`` → ``processing`` → движок поиска →
+сохранение ссылок → фетч контента страниц (батчами по ``pages_per_request``, параллельно под
+семафором ``fetch_concurrency``) → ``done``. Контент качается по политике маршрутов
+(``services/fetch_routes.py``): страница из зоны — только своим маршрутом, прочие — основным,
+а не полученные им (кроме окончательного «страницы нет») — запасным. Явно названный движок
+запроса заменяет политику целиком: один маршрут, без запасного и зон. Очереди/планировщика
+нет: сбой движка поиска → запрос ``error`` (исключение не пробрасывается), страница, которую не
+получил ни один маршрут, → ``error`` с причиной. Движки — из runtime-настроек; вне
+загруженных настроек (скрипт/тест) — дефолты.
 Движок без готового доступа в ``core_connectors`` (записи нет, выключена или не заполнена)
 ловится до сети: запрос сразу ``error`` (``error="search_engine_disabled"``).
 
@@ -39,10 +43,21 @@ from src.modules.web_search.crud import query as query_crud
 from src.modules.web_search.crud import query_result as query_result_crud
 from src.modules.web_search.models.page import WebSearchPage
 from src.modules.web_search.models.query import WebSearchQuery
-from src.modules.web_search.providers import FetchEngine, SearchEngine
+from src.modules.web_search.providers import SearchEngine
 from src.modules.web_search.providers import fetch_engines as fetch_engine_registry
 from src.modules.web_search.providers import search_engines as search_engine_registry
+from src.modules.web_search.providers.base import FETCH_FINAL_ERRORS, FetchedPage
 from src.modules.web_search.providers.request import SearchRequest
+from src.modules.web_search.services.fetch_routes import (
+    FetchPolicy,
+    FetchRoute,
+    explicit_policy,
+    load_policy,
+    split_route_code,
+)
+
+# Причина страницы, чей маршрут не может работать: подключения нет, оно выключено или не заполнено.
+_ROUTE_DISABLED = "fetch_engine_disabled"
 
 _SLOT_POLL_MIN_SECONDS = 0.5
 _SLOT_POLL_MAX_SECONDS = 1.5
@@ -83,7 +98,7 @@ class Searcher:
         time_range: str | None = None,
     ) -> WebSearchQuery:
         """Блокирующий прогон: выполнить целиком и вернуть завершённый запрос."""
-        row, request, engine, fetcher = await Searcher._prepare(
+        row, request, engine, policy = await Searcher._prepare(
             query,
             search_engine=search_engine,
             fetch_engine=fetch_engine,
@@ -92,7 +107,7 @@ class Searcher:
             exclude_domains=exclude_domains,
             time_range=time_range,
         )
-        await Searcher._run(row.code, request, engine, fetcher)
+        await Searcher._run(row.code, request, engine, policy)
         return await query_crud.query_get(row.code)
 
     @staticmethod
@@ -107,7 +122,7 @@ class Searcher:
         time_range: str | None = None,
     ) -> WebSearchQuery:
         """Fire-and-forget: создать запрос (``pending``), запустить прогон в фоне, вернуть строку сразу."""
-        row, request, engine, fetcher = await Searcher._prepare(
+        row, request, engine, policy = await Searcher._prepare(
             query,
             search_engine=search_engine,
             fetch_engine=fetch_engine,
@@ -116,7 +131,7 @@ class Searcher:
             exclude_domains=exclude_domains,
             time_range=time_range,
         )
-        _schedule(Searcher._run(row.code, request, engine, fetcher))
+        _schedule(Searcher._run(row.code, request, engine, policy))
         return row
 
     @staticmethod
@@ -129,9 +144,9 @@ class Searcher:
         include_domains: tuple[str, ...],
         exclude_domains: tuple[str, ...],
         time_range: str | None,
-    ) -> tuple[WebSearchQuery, SearchRequest, SearchEngine, FetchEngine]:
+    ) -> tuple[WebSearchQuery, SearchRequest, SearchEngine, FetchPolicy]:
         """Резолвит движки (падает ``KeyError`` на неизвестном коде ДО создания строки) и
-        создаёт запрос в ``pending`` со снимком обоих движков."""
+        создаёт запрос в ``pending`` со снимком движка поиска и основного маршрута контента."""
         request = SearchRequest(
             query=query,
             max_results=max_results if max_results is not None else settings.default_pages(),
@@ -140,22 +155,23 @@ class Searcher:
             time_range=time_range,
         )
         engine = search_engine_registry.get(search_engine or Searcher._default_search_engine())
-        fetcher = fetch_engine_registry.get(fetch_engine or Searcher._default_fetch_engine())
+        policy = await Searcher._fetch_policy(fetch_engine)
         row = await query_crud.query_create(
             search_engine=engine.code,
-            fetch_engine=fetcher.code,
+            fetch_engine=fetch_engine or Searcher._default_fetch_engine(),
             query=request.query,
             params=request.to_params(),
         )
-        return row, request, engine, fetcher
+        return row, request, engine, policy
 
     @staticmethod
     async def _run(
-        code: str, request: SearchRequest, engine: SearchEngine, fetcher: FetchEngine
+        code: str, request: SearchRequest, engine: SearchEngine, policy: FetchPolicy
     ) -> None:
         """Прогон запроса ``code``: гейт слота → ``processing`` → поиск → сохранение → фетч → ``done``.
 
-        Сбой движка поиска → запрос ``error`` (без исключения); сбой фетча батча → его страницы ``error``.
+        Сбой движка поиска → запрос ``error`` (без исключения); страница, которую не получил
+        ни один маршрут, → ``error``.
         """
         if not await engine.available():
             await query_crud.query_mark_error(code, error="search_engine_disabled")
@@ -170,29 +186,43 @@ class Searcher:
             return
 
         pending = await _store_results(code, results)
-        await _fetch_pages(fetcher, pending)
+        await _fetch_pages(policy, pending)
         await query_crud.query_finish(code)
 
     @staticmethod
     async def refetch(page_codes: list[str], *, fetch_engine: str | None = None) -> None:
         """Повторно получить контент уже известных страниц (без поиска).
 
-        Единственный вход для «страница не скачалась — попробуем ещё раз»: фетч терминален и
-        сам не повторяется, а поисковый движок тут не участвует (слот-гейт не нужен, лимиты у
-        движка контента свои). Отключённый движок — ошибка до сети, а не сотня страниц в
-        ``error``; недоступный по сети — обычный исход, страница получает ``error``.
+        Единственный вход для «страница не скачалась — попробуем ещё раз»: фетч сам не
+        повторяется, а поисковый движок тут не участвует (слот-гейт не нужен, лимиты у
+        движка контента свои). Страницы идут по той же политике маршрутов, что и в поиске.
+        Ни одного готового маршрута — ошибка до сети, а не сотня страниц в ``error``;
+        недоступный по сети — обычный исход, страница получает ``error``.
         """
-        fetcher = fetch_engine_registry.get(fetch_engine or Searcher._default_fetch_engine())
-        if not await fetcher.available():
-            raise RuntimeError("fetch_engine_disabled")
-        await _fetch_pages(fetcher, await page_crud.pages_by_codes(page_codes))
+        policy = await Searcher._fetch_policy(fetch_engine)
+        if not policy.any_ready:
+            raise RuntimeError(_ROUTE_DISABLED)
+        await _fetch_pages(policy, await page_crud.pages_by_codes(page_codes))
 
     @staticmethod
     def refetch_chunk_size(*, fetch_engine: str | None = None) -> int:
-        """Сколько страниц просить за один ``refetch``, чтобы вышла ровно одна волна батчей."""
-        fetcher = fetch_engine_registry.get(fetch_engine or Searcher._default_fetch_engine())
-        one_wave = fetcher.pages_per_request * settings.fetch_concurrency()
-        return min(one_wave, REFETCH_CHUNK_MAX)
+        """Сколько страниц просить за один ``refetch``, чтобы основной маршрут сделал ровно
+        одну волну батчей."""
+        engine_code, _ = split_route_code(fetch_engine or Searcher._default_fetch_engine())
+        per_request = fetch_engine_registry.get(engine_code).pages_per_request
+        return min(per_request * settings.fetch_concurrency(), REFETCH_CHUNK_MAX)
+
+    @staticmethod
+    async def _fetch_policy(fetch_engine: str | None) -> FetchPolicy:
+        """Явный движок запроса — один маршрут; без него — политика из настроек."""
+        if fetch_engine:
+            return await explicit_policy(fetch_engine)
+        return await load_policy(
+            Searcher._default_fetch_engine(),
+            settings.fetch_engine_fallback(),
+            settings.fetch_engine_zones(),
+            settings.fetch_engine_fallback_zones(),
+        )
 
     @staticmethod
     def _default_search_engine() -> str:
@@ -261,33 +291,84 @@ async def _store_results(
     return list(unfetched.values())
 
 
-async def _fetch_pages(fetcher: FetchEngine, pages: list[WebSearchPage]) -> None:
-    """Дотянуть контент ``pending``-страниц: батчи по ``pages_per_request``, семафор."""
+async def _fetch_pages(policy: FetchPolicy, pages: list[WebSearchPage]) -> None:
+    """Дотянуть контент страниц по политике маршрутов.
+
+    Первый проход — каждая страница своим маршрутом (зона или основной); второй — запасной
+    для тех, кого основной не получил и кому запасной разрешён. Семафор ``fetch_concurrency``
+    один на оба прохода и на все маршруты.
+    """
     if not pages:
         return
-    per_request = fetcher.pages_per_request
-    batches = [pages[i:i + per_request] for i in range(0, len(pages), per_request)]
     semaphore = asyncio.Semaphore(settings.fetch_concurrency())
+    by_route: dict[FetchRoute | None, list[WebSearchPage]] = {}
+    may_fall_back: set[str] = set()
+    for page in pages:
+        route, fallback_allowed = policy.route_for(page.domain)
+        by_route.setdefault(route, []).append(page)
+        if fallback_allowed:
+            may_fall_back.add(page.code)
+
+    first_pass = await asyncio.gather(
+        *(
+            _fetch_route(route, group, semaphore, may_fall_back=may_fall_back)
+            for route, group in by_route.items()
+        )
+    )
+    left_over = [page for group in first_pass for page in group]
+    if left_over:
+        await _fetch_route(policy.fallback, left_over, semaphore, may_fall_back=set())
+
+
+async def _fetch_route(
+    route: FetchRoute | None,
+    pages: list[WebSearchPage],
+    semaphore: asyncio.Semaphore,
+    *,
+    may_fall_back: set[str],
+) -> list[WebSearchPage]:
+    """Получить страницы одним маршрутом; вернуть те, что остались для запасного.
+
+    Страница, которую маршрут не получил, остаётся без итога, только если ей разрешён
+    запасной и причина не окончательная (``FETCH_FINAL_ERRORS``); прочие получают ``error``
+    сразу. Неготовый маршрут в сеть не ходит — его страницы не получены по ``_ROUTE_DISABLED``.
+    """
+    left_over: list[WebSearchPage] = []
+
+    async def settle(page: WebSearchPage, result: FetchedPage) -> None:
+        if result.content:
+            await page_crud.page_set_body(page.code, body=result.content)
+        elif page.code in may_fall_back and result.error not in FETCH_FINAL_ERRORS:
+            left_over.append(page)
+        else:
+            await page_crud.page_set_error(page.code, error=result.error or "empty")
+
+    if route is None or not route.ready:
+        for page in pages:
+            await settle(page, FetchedPage(error=_ROUTE_DISABLED))
+        return left_over
+
+    per_request = route.engine.pages_per_request
+    batches = [pages[i:i + per_request] for i in range(0, len(pages), per_request)]
 
     async def run(batch: list[WebSearchPage]) -> None:
         async with semaphore:
             await page_crud.pages_mark_processing(
-                [p.code for p in batch], fetch_engine=fetcher.code
+                [p.code for p in batch],
+                fetch_engine=route.engine.code,
+                fetch_access_id=route.access_id,
             )
             try:
-                contents = await fetcher.fetch_pages([p.url for p in batch])
-            except Exception as exc:  # noqa: BLE001 — сбой контента → страницы error (без повторов)
-                for page in batch:
-                    await page_crud.page_set_error(page.code, error=type(exc).__name__)
-                return
+                results = await route.engine.fetch_pages(
+                    [p.url for p in batch], access=route.access_id
+                )
+            except Exception as exc:  # noqa: BLE001 — сбой батча — причина для каждой его страницы
+                results = {p.url: FetchedPage(error=type(exc).__name__) for p in batch}
             for page in batch:
-                body = contents.get(page.url)
-                if body:
-                    await page_crud.page_set_body(page.code, body=body)
-                else:
-                    await page_crud.page_set_error(page.code, error="empty")
+                await settle(page, results.get(page.url, FetchedPage(error="empty")))
 
     await asyncio.gather(*(run(batch) for batch in batches))
+    return left_over
 
 
 __all__ = ["REFETCH_CHUNK_MAX", "Searcher"]
