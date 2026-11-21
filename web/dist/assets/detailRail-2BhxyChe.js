@@ -1,0 +1,1 @@
+import{bi as n,bf as l,bh as o,bj as u,bO as s,bo as f,bu as i}from"./index-CnJWcYyq.js";const e=i(null);function r(){return e}function v(t){const a=f(!1);n(()=>{a.value=!0}),l(()=>{a.value=!0}),o(()=>{a.value=!1}),u(()=>{a.value=!1}),s(()=>{a.value&&(e.value=t())})}export{r as d,v as u};

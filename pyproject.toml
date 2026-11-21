@@ -1,6 +1,6 @@
 [project]
 name = "urb_research"
-version = "1.0.7"
+version = "1.1.0"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.111",
@@ -52,7 +52,7 @@ build = [
 [tool.urb_research]
 # Дата выпуска, который назван в `[project] version`. Ставится тем же коммитом, что и номер;
 # показывается на странице «О приложении». Стандартного поля под неё в pyproject нет.
-release_date = "2026-09-21"
+release_date = "2026-11-21"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
